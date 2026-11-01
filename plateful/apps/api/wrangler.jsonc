@@ -1,0 +1,32 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "along-api-local",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "vars": {
+    "APP_ENV": "local",
+    "DEMO_MODE": "true",
+    "LOCAL_JOURNAL_STORAGE": "false",
+    "WAITLIST_ENABLED": "false",
+    "WEB_ORIGIN": "http://localhost:5173"
+  },
+  "env": {
+    "staging": {
+      "name": "along-api-staging",
+      "workers_dev": false,
+      "vars": { "APP_ENV": "staging", "DEMO_MODE": "false", "WAITLIST_ENABLED": "false" }
+      // After account setup, add a staging-only D1 DB binding with migrations_dir:
+      // "d1_databases": [{"binding":"DB","database_name":"along-staging","database_id":"<real-id>","migrations_dir":"migrations"}]
+      // Enable a daily cron only together with approved waitlist collection:
+      // "triggers": {"crons":["0 3 * * *"]}
+    },
+    "production": {
+      "name": "along-api-production-disabled",
+      "workers_dev": false,
+      "vars": { "APP_ENV": "production", "DEMO_MODE": "false", "WAITLIST_ENABLED": "false" }
+    }
+  }
+}

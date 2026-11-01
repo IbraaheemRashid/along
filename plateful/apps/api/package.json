@@ -1,0 +1,10 @@
+{
+  "name": "@along/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node dev.mjs",
+    "test": "node --test ../../tests/api/*.test.mjs"
+  },
+  "engines": { "node": ">=22.18" }
+}
