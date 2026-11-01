@@ -75,6 +75,10 @@ struct Journal: Codable, Equatable {
     var unlockedAccessories: Set<Accessory> = [.leaf]
     var hasSampleData = false
     var startDate = Date()
+    // Optional additions allow journals written before expanded onboarding to
+    // decode unchanged. A design preview is never a subscription entitlement.
+    var onboardingPreferences: OnboardingDraft?
+    var isDesignPreview: Bool?
 
     mutating func save(_ entry: CheckIn, calendar: Calendar = .current) {
         if let index = checkIns.firstIndex(where: { calendar.isDate($0.day, inSameDayAs: entry.day) }) {
