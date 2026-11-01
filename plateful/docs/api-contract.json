@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "demo": true,
+  "routes": {
+    "GET /health": "public mode and service status",
+    "POST /api/auth/sign-in/anonymous": "Better Auth in live mode; local mock session in demo mode",
+    "GET /me/entitlements": "server entitlement, never a client-authorised real purchase",
+    "POST /meals/suggest": "{ingredients: string, appetite: small|regular, servings: 1...6, maxMinutes: 5|15|30, exclusions: string[]} -> {mode: demo|live, meals: Meal[], notice: string}",
+    "POST /events": "allowlisted metadata only; no prompts, ingredients, appetite, email or health details",
+    "POST /waitlist": "explicit consent and valid email, unavailable until configured"
+  },
+  "meal": {
+    "id": "chicken-rice-bowl",
+    "name": "Lemon chicken bowl",
+    "subtitle": "One familiar dinner, flexible portions",
+    "minutes": 15,
+    "protein": 32,
+    "fibre": 6,
+    "energy": 420,
+    "colour": "sage",
+    "symbol": "leaf.fill",
+    "tags": ["chicken", "rice", "peppers"],
+    "allergens": ["milk"],
+    "ingredients": [{"name":"Chicken breast","quantity":120,"unit":"g","aisle":"Protein"}],
+    "steps": ["Prepare the ingredients.","Cook thoroughly according to food packaging instructions."],
+    "householdTip": "Adjust each serving to preference.",
+    "nutritionNote": "Illustrative demo estimates per base serving. Not clinically reviewed."
+  }
+}
