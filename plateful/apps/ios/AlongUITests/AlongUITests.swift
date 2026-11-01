@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 final class AlongUITests: XCTestCase {
     private var app: XCUIApplication!
@@ -9,8 +10,20 @@ final class AlongUITests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
+        if (testRun?.failureCount ?? 0) > 0 {
+            capture("failure-\(name)")
+            let hierarchy = XCTAttachment(string: app.debugDescription)
+            hierarchy.name = "Failure hierarchy"; hierarchy.lifetime = .keepAlways; add(hierarchy)
+        }
         app.terminate()
         app = nil
+    }
+
+    private func navigationTab(_ title: String) -> XCUIElement {
+        if UIDevice.current.userInterfaceIdiom != .pad { return app.tabBars.buttons[title] }
+        // iPadOS presents the system tabs as top-bar buttons, not a TabBar.
+        let icons = ["Today": "sun.max", "Journey": "point.topleft.down.to.point.bottomright.curvepath", "Pip": "pawprint", "You": "person.crop.circle"]
+        return app.buttons.matching(identifier: icons[title] ?? title).matching(NSPredicate(format: "label == %@", title)).firstMatch
     }
 
     /// Every launch, including persistence checks, stays in the UI-test data directory.
@@ -33,14 +46,14 @@ final class AlongUITests: XCTestCase {
             // Keep the gesture inside visible content. At large text sizes the
             // fixed footer occupies much more of the screen; a keyboard also
             // makes screen-relative swipes miss the scroll view entirely.
-            let scroll = app.scrollViews.firstMatch
+            let scroll = app.scrollViews.allElementsBoundByIndex.last(where: { $0.isHittable }) ?? app.scrollViews.firstMatch
             let bounds = scroll.exists ? scroll.frame.intersection(app.frame) : app.frame
             let top = max(bounds.minY + 16, app.frame.minY + 100)
             var bottom = min(bounds.maxY - 16, app.frame.maxY - 100)
             if app.keyboards.firstMatch.exists { bottom = min(bottom, app.keyboards.firstMatch.frame.minY - 12) }
             for identifier in ["onboarding.continue", "onboarding.subscribe"] {
                 let action = app.buttons[identifier]
-                if action.exists { bottom = min(bottom, action.frame.minY - 16) }
+                if action.exists && action.isHittable { bottom = min(bottom, action.frame.minY - 16) }
             }
             if centerInScroll && element.exists && element.isHittable && element.frame.midY > top && element.frame.midY < bottom { return }
             let height = max(80, bottom - top)
@@ -67,13 +80,13 @@ final class AlongUITests: XCTestCase {
     private func assertOnboardingStep(_ step: Int, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(app.staticTexts["onboarding.step.\(step)"].waitForExistence(timeout: 10),
                       "Expected onboarding screen \(step)", file: file, line: line)
-        XCTAssertFalse(app.tabBars.buttons["Today"].exists, "Onboarding must not unlock the journal", file: file, line: line)
+        XCTAssertFalse(navigationTab("Today").exists, "Onboarding must not unlock the journal", file: file, line: line)
     }
 
     private func selectIfPresent(_ identifier: String) {
         let button = app.buttons[identifier]
         if button.exists && !button.isSelected {
-            reveal(button)
+            reveal(button, centerInScroll: true)
             button.tap()
         }
     }
@@ -83,7 +96,7 @@ final class AlongUITests: XCTestCase {
         guard field.exists else { return }
         let value = field.value as? String ?? ""
         guard value.isEmpty || value == field.placeholderValue else { return }
-        reveal(field)
+        reveal(field, centerInScroll: true)
         field.tap()
         field.typeText(text)
     }
@@ -120,7 +133,7 @@ final class AlongUITests: XCTestCase {
 
     private func launchSampleJourney() {
         launchSandbox(arguments: ["--sample-journey"])
-        XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 10))
+        XCTAssertTrue(navigationTab("Today").waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["How’s today feeling?"].waitForExistence(timeout: 5))
     }
 
@@ -136,12 +149,12 @@ final class AlongUITests: XCTestCase {
     func testCompanionDesignReview() {
         for (name, arguments) in [("light", [String]()), ("dark", ["--dark-review"]), ("large", ["--dark-review", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])] {
             launchSandbox(arguments: ["--sample-journey", "--pip-preview-days", "7"] + arguments)
-            XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 5))
+            XCTAssertTrue(navigationTab("Today").waitForExistence(timeout: 5))
             capture("today-\(name)")
             tap("How’s today feeling?")
             reveal(app.buttons["Save this moment"])
             app.buttons["Close"].tap()
-            app.tabBars.buttons["Pip"].tap()
+            navigationTab("Pip").tap()
             capture("pip-\(name)")
             tap("companion.accessory.scarf")
             XCTAssertTrue(app.buttons["companion.accessory.scarf"].isSelected)
@@ -151,9 +164,9 @@ final class AlongUITests: XCTestCase {
 
     func testRoomOpensCompanionAndKeepsakePersists() {
         launchSandbox(arguments: ["--sample-journey", "--pip-preview-days", "3"])
-        XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 10))
+        XCTAssertTrue(navigationTab("Today").waitForExistence(timeout: 10))
         tap("today.companion")
-        XCTAssertTrue(app.tabBars.buttons["Pip"].isSelected)
+        XCTAssertTrue(navigationTab("Pip").isSelected)
         tap("companion.accessory.scarf")
         XCTAssertTrue(app.buttons["companion.accessory.scarf"].isSelected)
         app.terminate()
@@ -182,7 +195,7 @@ final class AlongUITests: XCTestCase {
         XCTAssertTrue(discovery.exists)
         app.terminate()
         launchSandbox(reset: false)
-        app.tabBars.buttons["Pip"].tap()
+        navigationTab("Pip").tap()
         reveal(app.buttons["pet.discovery.window"])
         XCTAssertTrue(app.buttons["pet.discovery.window"].exists)
     }
@@ -193,7 +206,7 @@ final class AlongUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["pet.progress.count"].label, "0 recorded days", "Samples cannot earn progress")
         tap("companion.accessory.scarf")
         XCTAssertFalse(app.buttons["companion.accessory.scarf"].isSelected, "Locked keepsakes only preview")
-        app.tabBars.buttons["Today"].tap()
+        navigationTab("Today").tap()
         tap("today.routine.movement")
         XCTAssertTrue(app.buttons["today.routine.movement"].label.contains("recorded today"))
         XCTAssertTrue(app.buttons["today.checkIn"].label.contains("How’s today feeling?"), "Routine logging cannot invent a check-in")
@@ -215,7 +228,7 @@ final class AlongUITests: XCTestCase {
     func testRoutineHistoryCanBeEditedAndFound() {
         launchSampleJourney()
         tap("today.routine.movement")
-        app.tabBars.buttons["Journey"].tap()
+        navigationTab("Journey").tap()
         let search = app.textFields["journey.search"]
         reveal(search, centerInScroll: true); search.tap(); search.typeText("Moved\n")
         app.swipeUp()
@@ -224,13 +237,13 @@ final class AlongUITests: XCTestCase {
         capture("release-routine-record")
         tap("Moved in my own way")
         tap("Update routines")
-        app.tabBars.buttons["Pip"].tap()
+        navigationTab("Pip").tap()
         XCTAssertEqual(app.staticTexts["pet.progress.count"].label, "1 recorded day", "Editing routine history preserves cumulative progress")
     }
 
     func testBackupAndReminderScreensAreAvailableInPreview() {
         launchSampleJourney()
-        app.tabBars.buttons["You"].tap()
+        navigationTab("You").tap()
         reveal(app.staticTexts["reminders.status"])
         XCTAssertTrue(app.staticTexts["reminders.status"].label.contains("disabled"))
         XCTAssertFalse(app.buttons["reminders.save"].isEnabled, "Preview must never schedule real notifications")
@@ -241,15 +254,15 @@ final class AlongUITests: XCTestCase {
         capture("release-backup-controls")
         XCTAssertTrue(app.buttons["backup.export"].isEnabled)
         tap("Done")
-        XCTAssertTrue(app.tabBars.buttons["You"].isSelected)
+        XCTAssertTrue(navigationTab("You").isSelected)
     }
 
     func testDevLabCanPreviewEarnedRoomAndStories() {
         launchSandbox()
         tap("dev.open")
         tap("dev.scenario.allKeepsakes")
-        XCTAssertTrue(app.tabBars.buttons["Pip"].waitForExistence(timeout: 5))
-        app.tabBars.buttons["Pip"].tap()
+        XCTAssertTrue(navigationTab("Pip").waitForExistence(timeout: 5))
+        navigationTab("Pip").tap()
         XCTAssertEqual(app.staticTexts["pet.progress.count"].label, "60 recorded days")
         for item in ["notebook", "plant", "lantern", "stars"] {
             tap("pet.room.\(item)")
@@ -269,7 +282,7 @@ final class AlongUITests: XCTestCase {
         capture("release-unpaid-data-controls")
         tap("Backup & restore")
         XCTAssertTrue(app.navigationBars["Backup & restore"].waitForExistence(timeout: 5))
-        tap("Done")
+        app.navigationBars["Backup & restore"].buttons["Done"].tap()
         tap("Delete all local data")
         let confirm = app.sheets.buttons["Delete all local data"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
@@ -278,12 +291,12 @@ final class AlongUITests: XCTestCase {
 
     func testEditingPoundsDoesNotConvertTwice() {
         launchSampleJourney()
-        app.tabBars.buttons["You"].tap()
+        navigationTab("You").tap()
         let showWeight = app.switches["settings.showWeight"]
-        reveal(showWeight, centerInScroll: true); showWeight.tap()
-        tap("settings.weightUnit")
+        reveal(showWeight, centerInScroll: true)
+        if showWeight.value as? String == "0" { showWeight.tap() }
         tap("lb")
-        app.tabBars.buttons["Journey"].tap()
+        navigationTab("Journey").tap()
         let search = app.textFields["journey.search"]
         reveal(search, centerInScroll: true); search.tap(); search.typeText("Weight\n")
         let record = app.buttons.matching(identifier: "journey.weightRecord").firstMatch
@@ -301,7 +314,7 @@ final class AlongUITests: XCTestCase {
         launchSampleJourney()
         capture("style-today")
         for tab in ["Journey", "Pip", "You"] {
-            app.tabBars.buttons[tab].tap()
+            navigationTab(tab).tap()
             capture("style-\(tab.lowercased())")
         }
         tap("Privacy & your journal")
@@ -342,8 +355,8 @@ final class AlongUITests: XCTestCase {
             tap("dev.scenario.\(scenario.name)")
             let banner = app.descendants(matching: .any).matching(identifier: "dev.sandbox.banner").firstMatch
             XCTAssertTrue(banner.waitForExistence(timeout: 5), "Scenario must be visibly identified as a sandbox")
-            XCTAssertTrue(app.tabBars.buttons["Journey"].waitForExistence(timeout: 5))
-            app.tabBars.buttons["Journey"].tap()
+            XCTAssertTrue(navigationTab("Journey").waitForExistence(timeout: 5))
+            navigationTab("Journey").tap()
             if let days = scenario.days {
                 XCTAssertEqual(recordedDays(), days, "Unexpected fixture for \(scenario.name)")
             } else {
@@ -392,9 +405,11 @@ final class AlongUITests: XCTestCase {
         tap("Comfortable")
         XCTAssertTrue(app.buttons["Comfortable"].isSelected)
         capture("dev-check-in-answered")
+        reveal(app.buttons["Save this moment"], centerInScroll: true)
         tap("Save this moment")
+        capture("dev-check-in-after-save")
         tap("Back to my day")
-        app.tabBars.buttons["Journey"].tap()
+        navigationTab("Journey").tap()
         XCTAssertEqual(recordedDays(), 9, "The shortcut must save into its sample sandbox")
         tap("dev.sandbox.controls")
         tap("dev.reloadSaved")
@@ -408,7 +423,7 @@ final class AlongUITests: XCTestCase {
         assertOnboardingStep(1)
         tap("dev.open")
         tap("dev.resumeLast")
-        app.tabBars.buttons["Journey"].tap()
+        navigationTab("Journey").tap()
         XCTAssertEqual(recordedDays(), 9, "Resume must reopen saved edits rather than regenerate the fixture")
         capture("dev-resumed-sandbox")
         tap("dev.sandbox.close")
@@ -453,7 +468,7 @@ final class AlongUITests: XCTestCase {
             if step == 26 { XCTAssertFalse(cta.isEnabled, "Unconfigured purchases must stay disabled at every text size") }
             else { XCTAssertTrue(cta.isEnabled, "The primary action must remain usable with large text") }
             capture(String(format: "%02d-dark-xxxl-primary-action", step))
-            XCTAssertFalse(app.tabBars.buttons["Today"].exists, "Review fixtures must remain outside the personal journal")
+            XCTAssertFalse(navigationTab("Today").exists, "Review fixtures must remain outside the personal journal")
         }
     }
 
@@ -468,9 +483,9 @@ final class AlongUITests: XCTestCase {
         tap("onboarding.preview")
         let confirmation = app.alerts.buttons["Open design preview"]
         XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
-        XCTAssertFalse(app.tabBars.buttons["Today"].exists)
+        XCTAssertFalse(navigationTab("Today").exists)
         confirmation.tap()
-        XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 8))
+        XCTAssertTrue(navigationTab("Today").waitForExistence(timeout: 8))
         let badge = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[cd] %@", "design preview")).firstMatch
         XCTAssertTrue(badge.waitForExistence(timeout: 5), "Local preview must be conspicuously labelled")
         XCTAssertFalse(app.buttons["onboarding.subscribe"].exists)
@@ -486,13 +501,13 @@ final class AlongUITests: XCTestCase {
         for plan in ["onboarding.plan.monthly", "onboarding.plan.annual"] {
             tap(plan)
             XCTAssertFalse(app.buttons["onboarding.subscribe"].isEnabled, "No configured products means no checkout")
-            XCTAssertFalse(app.tabBars.buttons["Today"].exists)
+            XCTAssertFalse(navigationTab("Today").exists)
             assertOnboardingStep(26)
         }
 
         tap("onboarding.restore")
         XCTAssertTrue(app.staticTexts["membership.notice"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.tabBars.buttons["Today"].exists)
+        XCTAssertFalse(navigationTab("Today").exists)
         assertOnboardingStep(26)
 
         app.terminate()
@@ -520,9 +535,9 @@ final class AlongUITests: XCTestCase {
 
     func testSampleJourneyCheckInAndPersistence() {
         launchSampleJourney()
-        app.tabBars.buttons["Journey"].tap()
+        navigationTab("Journey").tap()
         let previousCount = recordedDays()
-        app.tabBars.buttons["Today"].tap()
+        navigationTab("Today").tap()
         tap("How’s today feeling?")
         tap("Pretty good")
         tap("Comfortable")
@@ -531,11 +546,11 @@ final class AlongUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Back to my day"].waitForExistence(timeout: 5))
         capture("journal-moment-saved")
         tap("Back to my day")
-        app.tabBars.buttons["Journey"].tap()
+        navigationTab("Journey").tap()
         XCTAssertTrue(app.staticTexts["Your last seven days"].waitForExistence(timeout: 5))
         XCTAssertEqual(recordedDays(), previousCount + 1)
         capture("journal-after-check-in")
-        app.tabBars.buttons["Pip"].tap()
+        navigationTab("Pip").tap()
         XCTAssertTrue(app.staticTexts["A little friend\nfor the everyday."].waitForExistence(timeout: 5))
         capture("journal-companion")
 
@@ -545,16 +560,16 @@ final class AlongUITests: XCTestCase {
         tap("View today’s check-in")
         tap("Update this moment")
         tap("Back to my day")
-        app.tabBars.buttons["Journey"].tap()
+        navigationTab("Journey").tap()
         XCTAssertEqual(recordedDays(), previousCount + 1, "Editing must not add a duplicate recorded day")
     }
 
     func testBlankJournalAndMilestone() {
         launchSampleJourney()
-        app.tabBars.buttons["You"].tap()
+        navigationTab("You").tap()
         tap("Start a blank journal")
         tap("Replace journal")
-        app.tabBars.buttons["Journey"].tap()
+        navigationTab("Journey").tap()
         XCTAssertTrue(app.staticTexts["Your story starts here"].waitForExistence(timeout: 5))
         tap("Add to your journey")
         tap("Personal milestone")
@@ -572,7 +587,7 @@ final class AlongUITests: XCTestCase {
 
     func testWeightAndDataReset() {
         launchSampleJourney()
-        app.tabBars.buttons["Journey"].tap()
+        navigationTab("Journey").tap()
         tap("Add to your journey")
         tap("Weight record (optional)")
         let weight = app.textFields["Weight value"]
@@ -587,7 +602,7 @@ final class AlongUITests: XCTestCase {
         XCTAssertTrue(chart.exists)
         capture("journal-weight-records")
 
-        app.tabBars.buttons["You"].tap()
+        navigationTab("You").tap()
         tap("Delete all local data")
         let confirmation = app.sheets.buttons["Delete all local data"]
         XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
@@ -600,12 +615,41 @@ final class AlongUITests: XCTestCase {
 
     func testWeeklyReflection() {
         launchSampleJourney()
-        app.tabBars.buttons["Journey"].tap()
+        navigationTab("Journey").tap()
         tap("Read your weekly reflection")
         XCTAssertTrue(app.navigationBars["Your weekly reflection"].waitForExistence(timeout: 5))
+        let period = app.staticTexts["reflection.period"]
+        let originalPeriod = period.label
+        tap("reflection.earlier")
+        XCTAssertNotEqual(period.label, originalPeriod)
+        tap("reflection.later")
+        XCTAssertEqual(period.label, originalPeriod)
         reveal(app.staticTexts["2 moments you kept"])
         capture("journal-weekly-reflection")
         tap("Done")
         XCTAssertTrue(app.navigationBars["Your journey"].waitForExistence(timeout: 5))
+    }
+
+    func testPreferencesSaveAndCancel() {
+        launchSampleJourney()
+        navigationTab("You").tap()
+        tap("Your preferences")
+        let wording = app.textFields["preferences.routine.movement"].exists ? app.textFields["preferences.routine.movement"] : app.textViews["preferences.routine.movement"]
+        reveal(wording, centerInScroll: true); wording.tap(); wording.typeText("A gentle walk")
+        tap("preferences.keyboardDone")
+        tap("preferences.encouragement.straightforward")
+        tap("preferences.save")
+        navigationTab("Today").tap()
+        let routine = app.buttons["today.routine.movement"]
+        reveal(routine)
+        XCTAssertTrue(routine.label.contains("A gentle walk"))
+        app.terminate(); launchSandbox(reset: false)
+        navigationTab("You").tap(); tap("Your preferences")
+        XCTAssertTrue(app.buttons["preferences.encouragement.straightforward"].isSelected)
+        tap("preferences.encouragement.celebratory")
+        tap("preferences.cancel")
+        tap("Your preferences")
+        XCTAssertTrue(app.buttons["preferences.encouragement.straightforward"].isSelected, "Cancel must preserve the saved preference")
+        capture("release-preferences")
     }
 }

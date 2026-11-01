@@ -63,7 +63,7 @@ struct TodayView: View {
                                 .background(Theme.lilac.opacity(0.4), in: Circle())
                         }.accessibilityLabel("Add a milestone")
                     }
-                    if let milestone = store.journal.milestones.max(by: { $0.date < $1.date }) { MilestoneCard(milestone: milestone) }
+                    if let milestone = store.journal.milestones.max(by: { $0.displayDate < $1.displayDate }) { MilestoneCard(milestone: milestone) }
                     else {
                         Button { showMilestone = true } label: {
                             QuietEmpty(symbol: "sparkles", title: "The little wins belong here", detail: "A walk, a new routine, or a moment of confidence. Save something that mattered to you.")
@@ -82,13 +82,13 @@ struct TodayView: View {
         // On iOS 26, the hidden navigation bar starts this scroll view behind
         // the 44-point development strip. Release builds have no strip.
         #if DEBUG
-        56
+        UIDevice.current.userInterfaceIdiom == .pad ? 12 : 56
         #else
         12
         #endif
     }
     private var dateLabel: some View {
-        Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)).uppercased())
+        Text(store.referenceDate.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)).uppercased())
             .font(.caption.weight(.medium)).tracking(1).foregroundStyle(Theme.secondaryInk)
     }
     private var daysLabel: some View {
@@ -96,7 +96,7 @@ struct TodayView: View {
             .font(.caption.weight(.medium)).foregroundStyle(Theme.accent)
     }
     private func routineRow(_ routine: Routine) -> some View {
-        let recorded = store.journal.recordedRoutines(on: .now).contains(routine)
+        let recorded = store.journal.recordedRoutines(on: store.referenceDate).contains(routine)
         return Button { _ = store.toggleRoutine(routine) } label: {
             HStack(spacing: 12) {
                 Image(systemName: routine.symbol).font(.title3).foregroundStyle(Theme.accent)
@@ -121,7 +121,7 @@ struct MilestoneCard: View {
         HStack(alignment: .top, spacing: 15) {
             Image(systemName: milestone.kind.symbol).font(.title2).foregroundStyle(Theme.ink).frame(width: 48, height: 48).background(Theme.gold.opacity(0.65), in: RoundedRectangle(cornerRadius: 15))
             VStack(alignment: .leading, spacing: 7) {
-                HStack { Text(milestone.date.formatted(.dateTime.day().month(.abbreviated)).uppercased()).tracking(1); if milestone.isSample { Text("· SAMPLE") } }.font(.caption2.weight(.medium)).foregroundStyle(Theme.secondaryInk)
+                HStack { Text(milestone.dateText(.dateTime.day().month(.abbreviated)).uppercased()).tracking(1); if milestone.isSample { Text("· SAMPLE") } }.font(.caption2.weight(.medium)).foregroundStyle(Theme.secondaryInk)
                 Text(milestone.title).font(.headline)
                 if !milestone.note.isEmpty { Text(milestone.note).font(.subheadline).foregroundStyle(Theme.secondaryInk) }
             }.frame(maxWidth: .infinity, alignment: .leading)
@@ -132,6 +132,13 @@ struct MilestoneCard: View {
 struct WeeklyRecapView: View {
     @Environment(JournalStore.self) private var store
     @Environment(\.dismiss) private var dismiss
+    @State private var weeksBack = 0
+    @State private var selectedEntry: CheckIn?
+    @State private var selectedMilestone: Milestone?
+    @State private var selectedRoutines: RoutineDay?
+    private var summary: WeekSummary {
+        WeekSummary(journal: store.journal, ending: Calendar.current.date(byAdding: .day, value: -7 * weeksBack, to: store.referenceDate)!)
+    }
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -139,22 +146,41 @@ struct WeeklyRecapView: View {
                     PipRoomView(accessory: store.journal.accessory, pose: .journal, height: 210).clipShape(RoundedRectangle(cornerRadius: 28))
                     DemoBadge()
                     Text("A week of little moments.").alongTitle(30)
-                    Text("The last seven days, from the entries you chose to keep.").foregroundStyle(Theme.secondaryInk)
+                    Text(summary.dateLabel).foregroundStyle(Theme.secondaryInk).accessibilityIdentifier("reflection.period")
+                    HStack {
+                        Button("Earlier week", systemImage: "chevron.left") { weeksBack += 1 }.disabled(weeksBack >= 5200).accessibilityIdentifier("reflection.earlier")
+                        Spacer()
+                        Button("Later week", systemImage: "chevron.right") { weeksBack -= 1 }.disabled(weeksBack == 0).accessibilityIdentifier("reflection.later")
+                    }.font(.subheadline).frame(minHeight: 44)
                     HStack(spacing: 14) {
-                        recapMetric("\(store.weekRecordedDays)", label: "days recorded", symbol: "book")
-                        recapMetric("\(store.routineCount)", label: "routine moments", symbol: "leaf")
+                        recapMetric("\(summary.recordedDays)", label: "days recorded", symbol: "book")
+                        recapMetric("\(summary.routineCount)", label: "routine moments", symbol: "leaf")
                     }
-                    Text(store.recap).font(.system(.body, design: .serif)).lineSpacing(6).frame(maxWidth: .infinity, alignment: .leading).card()
+                    Text(summary.reflection).font(.system(.body, design: .serif)).lineSpacing(6).frame(maxWidth: .infinity, alignment: .leading).card()
                     if let prompt = store.personalReflectionPrompt { SetupNote(text: prompt, symbol: "pencil.line") }
-                    if !store.weeklyMilestones.isEmpty {
-                        SectionLabel(title: "\(store.weeklyMilestones.count) moments you kept")
-                        ForEach(store.weeklyMilestones) { MilestoneCard(milestone: $0) }
+                    if !summary.milestones.isEmpty {
+                        SectionLabel(title: "\(summary.milestones.count) moments you kept")
+                        ForEach(summary.milestones) { milestone in Button { selectedMilestone = milestone } label: { MilestoneCard(milestone: milestone) }.buttonStyle(.plain) }
+                    }
+                    if !summary.checkIns.isEmpty || !summary.routineDays.isEmpty {
+                        SectionLabel(title: "Revisit your entries")
+                        ForEach(summary.checkIns) { entry in
+                            Button { selectedEntry = entry } label: {
+                                VStack(alignment: .leading, spacing: 6) { Text(entry.dayText()).font(.caption); Text(entry.mood.title).font(.headline); if !entry.note.isEmpty { Text(entry.note).font(.subheadline).lineLimit(3) } }.frame(maxWidth: .infinity, alignment: .leading).card()
+                            }.buttonStyle(.plain)
+                        }
+                        ForEach(summary.routineDays) { entry in
+                            Button { selectedRoutines = entry } label: { Label("\(entry.dayText()) · \(entry.routines.count) routines", systemImage: "checkmark.circle").frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).card() }.buttonStyle(.plain)
+                        }
                     }
                     Text("A journal summary, not a health assessment. This recap uses simple on-device counts; no AI service is connected.").font(.caption).foregroundStyle(Theme.secondaryInk)
                     PrimaryButton(title: "Keep going at my pace", symbol: "heart") { dismiss() }
                 }.padding(24).frame(maxWidth: 620)
             }.frame(maxWidth: .infinity).pageBackground().navigationTitle("Your weekly reflection").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+                .sheet(item: $selectedEntry) { CheckInView(entry: $0) }
+                .sheet(item: $selectedMilestone) { AddMilestoneView(entry: $0) }
+                .sheet(item: $selectedRoutines) { RoutineRecordView(entry: $0) }
         }
     }
     private func recapMetric(_ value: String, label: String, symbol: String) -> some View {

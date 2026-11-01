@@ -4,6 +4,18 @@ Updated 1 November 2026. Working name: Along; companion: Pip. The user approved 
 
 The native prototype is implemented and verified in Simulator. Local API and web verification are complete; live services and commercial validation remain pending. Results below distinguish source, local tests and unverified integrations.
 
+## Latest refinement — Pip retained, 1 November 2026
+
+Pip remains the original 2D companion. The app keeps plum, cream and apricot, all 26 onboarding screens and a hard membership gate with **no trial**. New work includes cumulative earned keepsakes and room decorations, one-tap routines, searchable/editable history, historical weekly reflections, editable personal preferences, local backup/restore, optional local reminders and the native Superwall/StoreKit purchase foundation.
+
+Journal writes are transactional. Restores cannot grant membership or revive stale setup ownership. Date-only records retain their civil dates after travel; untouched weight edits retain the exact stored measurement. Debug fixtures and reminder/purchase services remain isolated from real journal data.
+
+Current validation and exact result bundles are recorded in [release implementation](release-implementation.md). The final local check script passes **30 Node tests; 140 core Swift, 49 billing, 36 mocked-reminder, 56 Debug backup, 57 Release backup and 66 date checks; plus the Vite build**. The unsigned Release app compiles for iPhone hardware. Simulator integration and focused corrections provide passing evidence for all 24 UI cases across the recorded runs. The compact iPhone SE checks cover full onboarding, the largest-text dark paywall, earned rewards, preferences Save/Cancel/relaunch and historical reflections. The iPad mini whole-app/navigation and largest-text dark checks also pass after moving its Debug toolbar below content. Full physical-device/VoiceOver review remains open.
+
+[Review the app and 26-screen gallery](screenshots/release-refinement/index.html) · [Pip comparison](screenshots/release-refinement/pip-comparison.html).
+
+This is a working local implementation, **not a public paid release**. Real App Store products/Superwall settings, signing, published legal/support information, sandbox subscriptions, physical-device accessibility/notification review and market validation remain open. No deployment, purchase, external message or submission occurred. Older sections below are historical and describe earlier prototype states.
+
 ## Phase 0: Find and validate the niche — ⚠️ partially done
 
 - [x] Ask about audience access, repeated prompts, complaints and paid apps. User response: investigate; no existing audience confirmed.

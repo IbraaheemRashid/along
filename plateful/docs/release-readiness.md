@@ -6,6 +6,12 @@ Audit date: 1 November 2026. Source baseline: `dedfb28`. This document records t
 
 The release product is an **adult GLP-1 personal record with Pip**, in plum, cream and apricot. Keep the original 2D character, 26-screen setup and hard no-trial offer. The product does not prescribe nutrition or medication, diagnose, interpret symptoms, or serve children with diabetes.
 
+## Integrated status after this audit
+
+The implementation now includes earned Pip development, transactional editing, versioned backup/restore, stable dates, reminder scheduling, editable preferences, earlier weekly reflections and a pinned Superwall/StoreKit billing foundation. Use [the current implementation record](release-implementation.md) for actual test evidence. The baseline table below is preserved as the audit trail, not a description of the current source.
+
+R1/R2 remain open for real configured product and sandbox purchase evidence. R6/R9 need physical-device notification/accessibility verification. R8/R10/R11 need final legal/support/privacy/signing/brand ownership inputs. R12 has no observed commercial results. Passing local tests does not close these gates. Native billing uses Superwall's direct purchase API; remote dashboard placements are only required if a remote paywall is later introduced.
+
 ## Screen jobs: onboarding
 
 Each row is an acceptance condition, not a claim that the baseline already satisfies it. Names correspond to `OnboardingView.titles`; source indices are zero-based but user-facing steps below are one-based.

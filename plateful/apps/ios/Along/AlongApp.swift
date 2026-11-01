@@ -49,9 +49,10 @@ struct RootView: View {
             else { OnboardingView() }
         }
         .task(id: ObjectIdentifier(billing)) { await billing.start() }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await billing.refresh() } } }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { store.referenceDate = .now; Task { await billing.refresh() } } }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in store.referenceDate = .now }
         #if DEBUG
-        .safeAreaInset(edge: .top, spacing: 0) {
+        .safeAreaInset(edge: UIDevice.current.userInterfaceIdiom == .pad ? .bottom : .top, spacing: 0) {
             if showsDevTools {
                 HStack {
                     Text("LOCAL DEVELOPMENT").font(.system(size: 9, weight: .semibold)).tracking(1)

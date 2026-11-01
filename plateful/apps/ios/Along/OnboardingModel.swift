@@ -53,7 +53,7 @@ struct OnboardingDraft: Codable, Equatable {
         switch index {
         case 1: return Self.validText(name, limit: 30)
         case 2: return Self.validText(stage, limit: 80, required: true)
-        case 3: return !hasStartDate || (startDate.timeIntervalSinceReferenceDate.isFinite && Calendar.current.startOfDay(for: startDate) <= Calendar.current.startOfDay(for: .now))
+        case 3: return !hasStartDate || JournalValidation.recordDate(startDate)
         case 4: return Self.validText(priority, limit: 80, required: true)
         case 5: return Self.validText(obstacle, limit: 80, required: true)
         case 7: return (1...3).contains(progressAreas.count) && progressAreas.allSatisfy { Self.validText($0, limit: 80, required: true) }

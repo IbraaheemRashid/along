@@ -142,7 +142,7 @@ struct OnboardingView: View {
             heading("If you’ve started treatment, when did your journey begin? An approximate date is fine.")
             Toggle("Add my start date", isOn: binding(\.hasStartDate)).font(.headline).padding(18).background(Theme.card, in: RoundedRectangle(cornerRadius: 18))
             if draft.hasStartDate {
-                DatePicker("Journey start date", selection: binding(\.startDate), in: ...Date.now, displayedComponents: .date).datePickerStyle(.graphical).padding(8).background(Theme.card, in: RoundedRectangle(cornerRadius: 20))
+                DatePicker("Journey start date", selection: binding(\.startDate), in: DayIdentity.date(for: "1900-01-01")!...Date.now, displayedComponents: .date).datePickerStyle(.graphical).padding(8).background(Theme.card, in: RoundedRectangle(cornerRadius: 20))
             } else { SetupHero(pose: .journal, height: 210) }
             SetupNote(text: "This simply adds context to your journal. You can leave it blank or change it later.", symbol: "calendar")
         }

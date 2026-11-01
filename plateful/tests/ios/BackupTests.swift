@@ -54,7 +54,7 @@ import Foundation
         func rejectContent(_ name: String, _ change: (inout [String: Any]) -> Void) {
             rejects(name) { _ = try JournalBackup.decode(try modifiedContent(change), now: now) }
         }
-        rejects("unsupported envelope schema") { _ = try JournalBackup.decode(try modified { $0["schemaVersion"] = 2 }, now: now) }
+        rejects("unsupported envelope schema") { _ = try JournalBackup.decode(try modified { $0["schemaVersion"] = JournalBackup.currentSchema + 1 }, now: now) }
         rejects("incorrect archive signature") { _ = try JournalBackup.decode(try modified { $0["format"] = "other-app" }, now: now) }
         rejects("invalid timezone") { _ = try JournalBackup.decode(try modified { $0["timeZoneID"] = "not/a/timezone" }, now: now) }
         rejects("future export time") { _ = try JournalBackup.decode(try modified { $0["exportedAt"] = now.addingTimeInterval(86400).timeIntervalSinceReferenceDate }, now: now) }
@@ -128,7 +128,7 @@ import Foundation
         }
         rejectContent("future progress day") {
             var ledger = $0["pipProgress"] as! [String: Any]
-            ledger["recordedDays"] = ["2026-11-02"]; $0["pipProgress"] = ledger
+            ledger["recordedDays"] = ["2026-11-03"]; $0["pipProgress"] = ledger
         }
         rejectContent("invalid progress timezone") {
             var ledger = $0["pipProgress"] as! [String: Any]

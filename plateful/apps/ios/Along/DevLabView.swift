@@ -266,7 +266,7 @@ private struct DevSandboxView: View {
                         store.selectedTab = tab
                     }.accessibilityIdentifier("dev.reloadSaved")
                     Button("Preview save-error alert", systemImage: "exclamationmark.triangle") {
-                        store.error = "Simulated save-error preview. Your normal journal is untouched. Try saving again writes only this sandbox."
+                        store.error = "Simulated save-error preview. Close this alert to continue testing this sandbox."
                     }
                     Button("Reload this scenario", systemImage: "arrow.counterclockwise") { showReset = true }
                 } label: { Image(systemName: "slider.horizontal.3").frame(width: 44, height: 36) }

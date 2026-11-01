@@ -18,7 +18,7 @@ struct AddMilestoneView: View {
                     VStack(alignment: .leading, spacing: 9) { Text("Your moment").font(.headline); TextField("e.g. Enjoyed a walk with a friend", text: $title, axis: .vertical).lineLimit(1...3).alongField().focused($focusedField, equals: .title).accessibilityIdentifier("milestone.title").onChange(of: title) { title = String(title.prefix(80)) } }
                     VStack(alignment: .leading, spacing: 9) { Text("A little more about it").font(.headline); TextField("What made it meaningful? (optional)", text: $note, axis: .vertical).lineLimit(3...5).alongField().focused($focusedField, equals: .note).onChange(of: note) { note = String(note.prefix(300)) } }
                     Picker("Kind of moment", selection: $kind) { ForEach(MilestoneKind.allCases) { Text($0.title).tag($0) } }.pickerStyle(.menu).frame(minHeight: 44)
-                    DatePicker("When was it?", selection: $date, in: ...Date.now, displayedComponents: .date)
+                    DatePicker("When was it?", selection: $date, in: DayIdentity.date(for: "1900-01-01")!...max(Date.now, entry?.displayDate ?? .now), displayedComponents: .date)
                     PrimaryButton(title: entry == nil ? "Keep this moment" : "Update this moment", symbol: "sparkles") { if store.addMilestone(title: title, note: note, kind: kind, date: date, editing: entry?.id) { dismiss() } }.disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).opacity(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
                 }.padding(24).frame(maxWidth: 620)
             }.frame(maxWidth: .infinity).pageBackground().scrollDismissesKeyboard(.interactively).navigationTitle("A personal milestone").navigationBarTitleDisplayMode(.inline)
@@ -26,7 +26,7 @@ struct AddMilestoneView: View {
                     ToolbarItem(placement: .topBarTrailing) { Button("Cancel") { dismiss() } }
                     ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { focusedField = nil }.accessibilityIdentifier("milestone.keyboardDone") }
                 }
-        }.onAppear { if let entry { title = entry.title; note = entry.note; kind = entry.kind; date = entry.date } }
+        }.onAppear { if let entry { title = entry.title; note = entry.note; kind = entry.kind; date = entry.displayDate } }
     }
 }
 
@@ -51,13 +51,14 @@ struct AddWeightView: View {
                             if let parsed { value = String(format: "%.1f", newUnit.display(unit.kilograms(parsed))) }
                             unit = newUnit
                         })) { ForEach(WeightUnit.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
-                        DatePicker("Date", selection: $date, in: ...Date.now, displayedComponents: .date).frame(minHeight: 44).disabled(entry != nil)
+                        if let entry { LabeledContent("Date", value: entry.dateText()).frame(minHeight: 44) }
+                        else { DatePicker("Date", selection: $date, in: DayIdentity.date(for: "1900-01-01")!...Date.now, displayedComponents: .date).frame(minHeight: 44) }
                     }.card()
                     SetupNote(text: "One weight record per day. A new value for the same date replaces it.", symbol: "book.closed")
                     PrimaryButton(title: "Save weight record", symbol: "checkmark") {
                         if let entry, !valueWasEdited {
-                            if store.addWeight(value: entry.kilograms, unit: .kg, date: date) { dismiss() }
-                        } else if let parsed, store.addWeight(value: parsed, unit: unit, date: date) { dismiss() }
+                            if store.addWeight(value: entry.kilograms, unit: .kg, date: date, editing: entry.id) { dismiss() }
+                        } else if let parsed, store.addWeight(value: parsed, unit: unit, date: date, editing: entry?.id) { dismiss() }
                     }.disabled(parsed == nil || !JournalValidation.weight(unit.kilograms(parsed ?? 0)))
                         .opacity(parsed == nil || !JournalValidation.weight(unit.kilograms(parsed ?? 0)) ? 0.5 : 1)
                 }.padding(22).frame(maxWidth: 620)
@@ -65,7 +66,7 @@ struct AddWeightView: View {
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Cancel") { dismiss() } } }
         }.onAppear {
             unit = store.journal.weightUnit
-            if let entry { date = entry.date; value = String(format: "%.1f", unit.display(entry.kilograms)) }
+            if let entry { date = entry.displayDate; value = String(format: "%.1f", unit.display(entry.kilograms)) }
         }
     }
 }
@@ -80,7 +81,7 @@ struct RoutineRecordView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("Little things you made room for.").alongTitle(28)
-                    Text(entry.day.formatted(date: .complete, time: .omitted)).foregroundStyle(Theme.secondaryInk)
+                    Text(entry.dayText(.init(date: .complete, time: .omitted))).foregroundStyle(Theme.secondaryInk)
                     ForEach(Routine.allCases) { routine in
                         SetupChoice(title: store.routineTitle(routine), symbol: routine.symbol, selected: routines.contains(routine)) {
                             if routines.contains(routine) { routines.remove(routine) } else { routines.insert(routine) }

@@ -6,6 +6,7 @@ struct SettingsView: View {
     @Environment(BillingStore.self) private var billing
     @State private var showPrivacy = false
     @State private var showBackup = false
+    @State private var showPreferences = false
     @State private var showPaywall = false
     @State private var showOnboardingReview = false
     @State private var resetAction: String?
@@ -28,10 +29,14 @@ struct SettingsView: View {
                         ForEach(Routine.allCases) { routine in
                             Toggle(isOn: Binding(get: { store.journal.routines.contains(routine) }, set: { enabled in store.updateJournal { if enabled { $0.routines.insert(routine) } else { $0.routines.remove(routine) } } })) { Label(routine.shortTitle, systemImage: routine.symbol).font(.subheadline) }.frame(minHeight: 44)
                         }
+                        SettingsAction(title: "Your preferences", symbol: "slider.horizontal.3") { showPreferences = true }
                     }
                     AlongSection(title: "Optional records") {
                         Toggle("Show weight in my journey", isOn: Binding(get: { store.journal.showWeight }, set: { value in store.updateJournal { $0.showWeight = value } })).frame(minHeight: 44).accessibilityIdentifier("settings.showWeight")
-                        Picker("Weight display", selection: Binding(get: { store.journal.weightUnit }, set: { value in store.updateJournal { $0.weightUnit = value } })) { ForEach(WeightUnit.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.frame(minHeight: 44).accessibilityIdentifier("settings.weightUnit")
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Weight display").font(.subheadline)
+                            Picker("Weight display", selection: Binding(get: { store.journal.weightUnit }, set: { value in store.updateJournal { $0.weightUnit = value } })) { ForEach(WeightUnit.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented).accessibilityIdentifier("settings.weightUnit")
+                        }
                         Text("Hiding weight leaves your records intact. It never changes your companion’s progress.").font(.caption).foregroundStyle(Theme.secondaryInk)
                     }
                     ReminderSettingsView(onboardingChoice: store.journal.onboardingPreferences?.reminder, reflectionDay: store.journal.onboardingPreferences?.reflectionDay)
@@ -60,6 +65,7 @@ struct SettingsView: View {
                 }.padding(22).frame(maxWidth: 650)
             }.frame(maxWidth: .infinity).pageBackground().scrollDismissesKeyboard(.interactively).navigationTitle("You").navigationBarTitleDisplayMode(.inline)
                 .sheet(isPresented: $showPrivacy) { PrivacyView() }
+                .sheet(isPresented: $showPreferences) { JourneyPreferencesView() }
                 .sheet(isPresented: $showBackup) { JournalBackupView(journal: { store.journal }, replace: store.restoreJournal) }
                 .sheet(isPresented: $showPaywall) { PaywallPreview() }
                 #if DEBUG

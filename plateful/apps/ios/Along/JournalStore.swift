@@ -18,6 +18,7 @@ private struct OnboardingArchive: Codable {
         didSet { if !loadingDraft { saveOnboardingDraft() } }
     }
     var selectedTab = 0
+    var referenceDate = Date.now
     var toast: String?
     var error: String?
     private static var writeOptions: Data.WritingOptions {
@@ -129,7 +130,7 @@ private struct OnboardingArchive: Codable {
             if migrated != journal, persist(migrated) { journal = migrated }
         }
     }
-    var today: CheckIn? { journal.checkIns.first { Calendar.current.isDateInToday($0.day) } }
+    var today: CheckIn? { journal.checkIn(on: referenceDate) }
     var onboardingEntry: CheckIn? {
         guard let id = onboardingArchive.entryID else { return nil }
         return journal.checkIns.first { $0.id == id }
@@ -137,28 +138,25 @@ private struct OnboardingArchive: Codable {
     #if DEBUG
     var developmentStorageDirectory: URL { url.deletingLastPathComponent() }
     #endif
-    var week: [CheckIn] { journal.week() }
+    var week: [CheckIn] { journal.week(ending: referenceDate) }
     var weekRecordedDays: Int {
         (0..<7).filter { offset in
-            let day = Calendar.current.date(byAdding: .day, value: -offset, to: .now)!
-            return week.contains { Calendar.current.isDate($0.day, inSameDayAs: day) } || !journal.recordedRoutines(on: day).isEmpty
+            let day = Calendar.current.date(byAdding: .day, value: -offset, to: referenceDate)!
+            return week.contains { $0.isOn(day) } || !journal.recordedRoutines(on: day).isEmpty
         }.count
     }
     var routineCount: Int {
         (0..<7).reduce(0) { total, offset in
-            let day = Calendar.current.date(byAdding: .day, value: -offset, to: .now)!
+            let day = Calendar.current.date(byAdding: .day, value: -offset, to: referenceDate)!
             return total + journal.recordedRoutines(on: day).count
         }
     }
     var weeklyMilestones: [Milestone] {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: .now)
-        let start = calendar.date(byAdding: .day, value: -6, to: today)!
-        let end = calendar.date(byAdding: .day, value: 1, to: today)!
-        return journal.milestones.filter { $0.date >= start && $0.date < end }.sorted { $0.date > $1.date }
+        guard let range = DayIdentity.range(ending: referenceDate) else { return [] }
+        return journal.milestones.filter { $0.dateKey.map { range.contains($0) } ?? false }.sorted { $0.displayDate > $1.displayDate }
     }
     var companionName: String { journal.companionName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Pip" : journal.companionName }
-    var daysTogether: Int { max(1, (Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: journal.startDate), to: Calendar.current.startOfDay(for: .now)).day ?? 0) + 1) }
+    var daysTogether: Int { max(1, (Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: journal.startDate), to: Calendar.current.startOfDay(for: referenceDate)).day ?? 0) + 1) }
     var recap: String {
         if weekRecordedDays == 0 { return "Your story starts with a moment. Check in whenever it feels useful, and your recorded moments will appear here." }
         let noun = weekRecordedDays == 1 ? "day" : "days"
@@ -231,9 +229,11 @@ private struct OnboardingArchive: Codable {
         }
         var candidate = journal
         let day = onboardingArchive.entryDate ?? now
-        guard JournalValidation.checkIn(note: onboardingDraft.note, day: day, now: now, calendar: calendar) else { error = "Check the date and note before saving your first entry."; return false }
+        let ownedEntry = candidate.checkIns.first { $0.id == onboardingArchive.entryID }
+        let validDate = ownedEntry.map { JournalValidation.storedRecordDate($0.day, key: $0.dayKey, now: now) } ?? JournalValidation.recordDate(day, now: now, calendar: calendar)
+        guard JournalValidation.text(onboardingDraft.note, limit: 500), validDate else { error = "Check the date and note before saving your first entry."; return false }
         if onboardingArchive.entryID == nil {
-            if let existing = candidate.checkIns.first(where: { calendar.isDate($0.day, inSameDayAs: day) && !$0.isSample }) {
+            if let existing = candidate.checkIns.first(where: { $0.isOn(day, calendar: calendar) && !$0.isSample }) {
                 // Reviewing setup must never overwrite somebody's existing day.
                 onboardingArchive.entryID = existing.id
                 onboardingArchive.entryDate = existing.day
@@ -245,29 +245,33 @@ private struct OnboardingArchive: Codable {
             }
         }
         if onboardingArchive.ownsEntry, let id = onboardingArchive.entryID, let date = onboardingArchive.entryDate {
-            let existingRoutines = candidate.recordedRoutines(on: date, calendar: calendar)
-            let entry = CheckIn(id: id, day: date, mood: mood, appetite: appetite, routines: existingRoutines, note: onboardingDraft.note.trimmingCharacters(in: .whitespacesAndNewlines), isSample: false)
+            let old = candidate.checkIns.first { $0.id == id }
+            let existingRoutines = old?.routines ?? candidate.recordedRoutines(on: date, calendar: calendar)
+            let entry = CheckIn(id: id, day: date, mood: mood, appetite: appetite, routines: existingRoutines, note: onboardingDraft.note.trimmingCharacters(in: .whitespacesAndNewlines), isSample: old?.isSample ?? false, dayKey: old?.dayKey ?? DayIdentity.key(for: date, timeZone: calendar.timeZone))
             if let index = candidate.checkIns.firstIndex(where: { $0.id == id }) { candidate.checkIns[index] = entry }
             else {
                 // Keep unrelated real records, even if added since this draft.
-                if !candidate.checkIns.contains(where: { calendar.isDate($0.day, inSameDayAs: date) && !$0.isSample }) {
-                    candidate.checkIns.removeAll { $0.isSample && calendar.isDate($0.day, inSameDayAs: date) }
-                    candidate.routineDays?.removeAll { calendar.isDate($0.day, inSameDayAs: date) }
+                if !candidate.checkIns.contains(where: { $0.isOn(date, calendar: calendar) && !$0.isSample }) {
+                    candidate.checkIns.removeAll { $0.isSample && $0.isOn(date, calendar: calendar) }
+                    candidate.routineDays?.removeAll { $0.isOn(date, calendar: calendar) }
                     candidate.checkIns.append(entry)
                 }
             }
         }
         if let kilograms = onboardingDraft.baselineKilograms, let date = onboardingArchive.entryDate {
+            let entryKey = candidate.checkIns.first(where: { $0.id == onboardingArchive.entryID })?.dayKey
+            let recordDay = entryKey.flatMap { DayIdentity.date(for: $0, timeZone: calendar.timeZone) } ?? date
             if onboardingArchive.weightID == nil {
-                if let existing = candidate.weights.first(where: { calendar.isDate($0.date, inSameDayAs: date) && !$0.isSample }) {
+                if let existing = candidate.weights.first(where: { $0.isOn(recordDay, calendar: calendar) && !$0.isSample }) {
                     onboardingArchive.weightID = existing.id; onboardingArchive.ownsWeight = false
                 } else { onboardingArchive.weightID = UUID(); onboardingArchive.ownsWeight = true }
             }
             if onboardingArchive.ownsWeight, let id = onboardingArchive.weightID {
-                let weight = WeightEntry(id: id, date: date, kilograms: kilograms, isSample: false)
+                let old = candidate.weights.first { $0.id == id }
+                let weight = WeightEntry(id: id, date: old?.date ?? date, kilograms: kilograms, isSample: old?.isSample ?? false, dateKey: old?.dateKey ?? entryKey ?? DayIdentity.key(for: date, timeZone: calendar.timeZone))
                 if let index = candidate.weights.firstIndex(where: { $0.id == id }) { candidate.weights[index] = weight }
-                else if !candidate.weights.contains(where: { calendar.isDate($0.date, inSameDayAs: date) && !$0.isSample }) {
-                    candidate.weights.removeAll { $0.isSample && calendar.isDate($0.date, inSameDayAs: date) }
+                else if !candidate.weights.contains(where: { $0.isOn(recordDay, calendar: calendar) && !$0.isSample }) {
+                    candidate.weights.removeAll { $0.isSample && $0.isOn(recordDay, calendar: calendar) }
                     candidate.weights.append(weight)
                 }
             }
@@ -344,25 +348,33 @@ private struct OnboardingArchive: Codable {
         selectedTab = 0
         saveOnboardingDraft()
     }
-    func saveCheckIn(day: Date, mood: Mood, appetite: Appetite, routines: Set<Routine>, note: String) -> Bool {
-        guard JournalValidation.checkIn(note: note, day: day) else { error = "Use today or an earlier date, with a note of up to 500 characters."; return false }
-        return updateJournal { $0.save(CheckIn(day: day, mood: mood, appetite: appetite, routines: routines, note: note.trimmingCharacters(in: .whitespacesAndNewlines))) }
+    func saveCheckIn(day: Date, mood: Mood, appetite: Appetite, routines: Set<Routine>, note: String, editing id: UUID? = nil) -> Bool {
+        let old = journal.checkIns.first { $0.id == id }
+        if id != nil && old == nil { error = "This check-in is no longer in your journal."; return false }
+        let validDate = old.map { JournalValidation.storedRecordDate($0.day, key: $0.dayKey) } ?? JournalValidation.recordDate(day)
+        guard JournalValidation.text(note, limit: 500), validDate else { error = "Use a supported date, with a note of up to 500 characters."; return false }
+        return updateJournal { $0.save(CheckIn(id: old?.id ?? UUID(), day: old?.day ?? day, mood: mood, appetite: appetite, routines: routines, note: note.trimmingCharacters(in: .whitespacesAndNewlines), isSample: old?.isSample ?? false, dayKey: old?.dayKey)) }
     }
     func addMilestone(title: String, note: String, kind: MilestoneKind, date: Date, editing id: UUID? = nil) -> Bool {
-        guard JournalValidation.milestone(title: title, note: note), Calendar.current.startOfDay(for: date) <= Calendar.current.startOfDay(for: .now) else { error = "Add a title of up to 80 characters, a note of up to 300, and a date no later than today."; return false }
-        if let id, !journal.milestones.contains(where: { $0.id == id }) { error = "This milestone is no longer in your journal."; return false }
+        let old = journal.milestones.first { $0.id == id }
+        if id != nil && old == nil { error = "This milestone is no longer in your journal."; return false }
+        let unchangedDate = old.map { $0.isOn(date) || $0.displayDate == date } ?? false
+        let validDate = unchangedDate ? JournalValidation.storedRecordDate(old!.date, key: old!.dateKey) : JournalValidation.recordDate(date)
+        guard JournalValidation.milestone(title: title, note: note), validDate else { error = "Add a title of up to 80 characters, a note of up to 300, and a supported date no later than today."; return false }
         guard updateJournal({ value in
-            let old = value.milestones.first { $0.id == id }
-            let item = Milestone(id: old?.id ?? UUID(), date: date, title: title.trimmingCharacters(in: .whitespacesAndNewlines), note: note, kind: kind, isSample: old?.isSample ?? false)
+            let item = Milestone(id: old?.id ?? UUID(), date: unchangedDate ? old!.date : date, title: title.trimmingCharacters(in: .whitespacesAndNewlines), note: note, kind: kind, isSample: old?.isSample ?? false, dateKey: unchangedDate ? old!.dateKey : DayIdentity.key(for: date))
             if let index = value.milestones.firstIndex(where: { $0.id == id }) { value.milestones[index] = item }
             else { value.milestones.append(item) }
         }) else { return false }
         showToast("A moment worth keeping"); return true
     }
-    func addWeight(value: Double, unit: WeightUnit, date: Date) -> Bool {
+    func addWeight(value: Double, unit: WeightUnit, date: Date, editing id: UUID? = nil) -> Bool {
         let kg = unit.kilograms(value)
-        guard JournalValidation.weight(kg), Calendar.current.startOfDay(for: date) <= Calendar.current.startOfDay(for: .now) else { error = "Enter a valid weight and a date no later than today."; return false }
-        guard updateJournal({ $0.save(WeightEntry(date: date, kilograms: kg)); $0.showWeight = true }) else { return false }
+        let old = journal.weights.first { $0.id == id }
+        if id != nil && old == nil { error = "This weight record is no longer in your journal."; return false }
+        let validDate = old.map { JournalValidation.storedRecordDate($0.date, key: $0.dateKey) } ?? JournalValidation.recordDate(date)
+        guard JournalValidation.weight(kg), validDate else { error = "Enter a valid weight and a supported date."; return false }
+        guard updateJournal({ $0.save(WeightEntry(id: old?.id ?? UUID(), date: old?.date ?? date, kilograms: kg, isSample: old?.isSample ?? false, dateKey: old?.dateKey)); $0.showWeight = true }) else { return false }
         showToast("Weight record saved"); return true
     }
     func removeCheckIn(_ id: UUID) { updateJournal { $0.checkIns.removeAll { $0.id == id } } }
@@ -379,16 +391,16 @@ private struct OnboardingArchive: Codable {
     }
     var exportText: String {
         var lines = ["Along — local journal export", journal.hasSampleData ? "Contains fictional sample records mixed with any entries added in this prototype." : "Entries recorded on this device.", "Name: \(journal.name)", "Companion: \(companionName)", ""]
-        for entry in journal.checkIns.sorted(by: { $0.day < $1.day }) {
-            lines.append("\(entry.isSample ? "[SAMPLE] " : "")\(entry.day.formatted(date: .abbreviated, time: .omitted)) · \(entry.mood.title) · Appetite: \(entry.appetite.title)")
+        for entry in journal.checkIns.sorted(by: { $0.displayDay < $1.displayDay }) {
+            lines.append("\(entry.isSample ? "[SAMPLE] " : "")\(entry.dayText()) · \(entry.mood.title) · Appetite: \(entry.appetite.title)")
             lines.append(entry.routines.sorted { $0.rawValue < $1.rawValue }.map(\.title).joined(separator: "; "))
             if !entry.note.isEmpty { lines.append(entry.note) }; lines.append("")
         }
-        for milestone in journal.milestones.sorted(by: { $0.date < $1.date }) { lines.append("\(milestone.isSample ? "[SAMPLE] " : "")Milestone · \(milestone.date.formatted(date: .abbreviated, time: .omitted)) · \(milestone.title)\n\(milestone.note)\n") }
-        for entry in (journal.routineDays ?? []).sorted(by: { $0.day < $1.day }) where !entry.routines.isEmpty {
-            lines.append("\(entry.isSample ? "[SAMPLE] " : "")Routines · \(entry.day.formatted(date: .abbreviated, time: .omitted)) · \(entry.routines.sorted { $0.rawValue < $1.rawValue }.map(\.title).joined(separator: "; "))")
+        for milestone in journal.milestones.sorted(by: { $0.displayDate < $1.displayDate }) { lines.append("\(milestone.isSample ? "[SAMPLE] " : "")Milestone · \(milestone.dateText()) · \(milestone.title)\n\(milestone.note)\n") }
+        for entry in (journal.routineDays ?? []).sorted(by: { $0.displayDay < $1.displayDay }) where !entry.routines.isEmpty {
+            lines.append("\(entry.isSample ? "[SAMPLE] " : "")Routines · \(entry.dayText()) · \(entry.routines.sorted { $0.rawValue < $1.rawValue }.map(\.title).joined(separator: "; "))")
         }
-        for entry in journal.weights.sorted(by: { $0.date < $1.date }) { lines.append("\(entry.isSample ? "[SAMPLE] " : "")Weight · \(entry.date.formatted(date: .abbreviated, time: .omitted)) · \(entry.kilograms.formatted(.number.precision(.fractionLength(1)))) kg") }
+        for entry in journal.weights.sorted(by: { $0.displayDate < $1.displayDate }) { lines.append("\(entry.isSample ? "[SAMPLE] " : "")Weight · \(entry.dateText()) · \(entry.kilograms.formatted(.number.precision(.fractionLength(1)))) kg") }
         for story in PipStory.all {
             if let answer = journal.companionDiscoveries?[story.id], let choice = story.choices.first(where: { $0.id == answer }) {
                 lines.append("Fictional companion discovery · \(choice.discovery)")

@@ -1,5 +1,7 @@
 # Local reminder implementation
 
+Current integration status: the root app now wires this module. See [release implementation](release-implementation.md) for the latest checks and remaining device/account verification. The original module-specific verification notes below remain historical.
+
 Implemented 1 November 2026. These files provide the scheduling and settings component; the main worktree must wire them into the app before the feature is usable. No notification permission was requested and no notification was sent during development.
 
 ## Integration contract

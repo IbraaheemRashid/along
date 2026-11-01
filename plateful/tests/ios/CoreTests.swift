@@ -33,6 +33,11 @@ import Foundation
         let sample = Journal.sample(now: now, calendar: calendar)
         expect(sample.hasSampleData && sample.checkIns.count == 8 && sample.milestones.count == 3, "Sample history is clearly identified")
         expect(sample.week(ending: now, calendar: calendar).count == 4, "Sample weekly recap counts actual records")
+        let thisWeek = WeekSummary(journal: sample, ending: now, calendar: calendar)
+        let previousWeek = WeekSummary(journal: sample, ending: now.addingTimeInterval(-7 * 86400), calendar: calendar)
+        expect(thisWeek.recordedDays == 4 && previousWeek.recordedDays == 4, "Weekly history counts each selected seven-day period")
+        expect(Set(thisWeek.checkIns.map(\.id)).isDisjoint(with: Set(previousWeek.checkIns.map(\.id))), "Adjacent weekly reflections do not repeat boundary records")
+        expect(thisWeek.milestones.count == 2 && previousWeek.milestones.count == 1, "Each reflection keeps its own milestone dates")
         expect(sample.checkIns.allSatisfy { !calendar.isDate($0.day, inSameDayAs: now) }, "Demo begins with today available for user's first action")
         expect(sample.checkIns.allSatisfy(\.isSample) && sample.milestones.allSatisfy(\.isSample) && sample.weights.allSatisfy(\.isSample), "Sample provenance survives mixed user/demo history")
         var editedSample = sample
@@ -151,6 +156,7 @@ import Foundation
         existing.milestones = [Milestone(date: entryTime, title: "My existing moment", note: "Keep it", kind: .other)]
         let journalURL = legacyDirectory.appendingPathComponent("journal-v1.json")
         try JSONEncoder().encode(existing).write(to: journalURL)
+        existing.normalizeDayKeys() // Loading stamps legacy milestones without changing their content.
         let existingStore = JournalStore(directory: legacyDirectory, arguments: [], clearCredentials: {})
         existingStore.onboardingDraft = readyDraft()
         existingStore.onboardingDraft.showWeight = true; existingStore.onboardingDraft.weightValue = "75"
@@ -221,9 +227,9 @@ import Foundation
         progression.save(realDay, calendar: calendar)
         progression.reconcileProgress(now: now)
         expect(progression.recordedDayCount == 2, "Deleting and readding the same day cannot farm progress")
-        progression.save(CheckIn(day: now.addingTimeInterval(86400), mood: .steady, appetite: .comfortable, routines: [], note: "Future"), calendar: calendar)
+        progression.save(CheckIn(day: now.addingTimeInterval(172800), mood: .steady, appetite: .comfortable, routines: [], note: "Future"), calendar: calendar)
         progression.reconcileProgress(now: now)
-        expect(progression.recordedDayCount == 2, "Future records cannot earn progress")
+        expect(progression.recordedDayCount == 2, "A day beyond the latest possible civil date cannot earn progress")
         var travel = PipProgress(timeZoneID: "Pacific/Kiritimati")
         travel.credit(id: realDay.id, day: now, now: now)
         travel.timeZoneID = "America/Los_Angeles"
@@ -280,6 +286,32 @@ import Foundation
         expect(routineRestore.journal.checkIns.first?.routines == [.movement] && (routineRestore.journal.routineDays ?? []).isEmpty, "Setup consolidates restored routines without inventing or dropping completion")
         _ = try JournalBackup.make(from: routineRestore.journal)
         expect(true, "Consolidated journal remains exportable")
+        let travelStore = JournalStore(directory: testRoot.appendingPathComponent("travel-edits"), arguments: [], clearCredentials: {})
+        let travelledTime = ISO8601DateFormatter().date(from: "2026-10-12T23:30:00Z")!
+        let travelledCheckIn = CheckIn(day: travelledTime, mood: .steady, appetite: .comfortable, routines: [], note: "Original", isSample: true, dayKey: "2026-10-13")
+        let travelledWeight = WeightEntry(date: travelledTime, kilograms: 93.8, isSample: true, dateKey: "2026-10-13")
+        expect(travelStore.updateJournal { $0.hasSampleData = true; $0.checkIns = [travelledCheckIn]; $0.weights = [travelledWeight] }, "Travelled records persist")
+        expect(travelStore.saveCheckIn(day: travelledCheckIn.displayDay, mood: .bright, appetite: .low, routines: [.movement], note: "Edited", editing: travelledCheckIn.id), "A travelled check-in can be edited by ID")
+        expect(travelStore.addWeight(value: 93.8, unit: .kg, date: travelledWeight.displayDate, editing: travelledWeight.id), "A travelled weight can be edited by ID")
+        expect(travelStore.journal.checkIns.count == 1 && travelStore.journal.checkIns[0].day == travelledTime && travelStore.journal.checkIns[0].dayKey == "2026-10-13" && travelStore.journal.checkIns[0].isSample, "Store edits preserve date identity and sample provenance")
+        expect(travelStore.journal.weights.count == 1 && travelStore.journal.weights[0] == travelledWeight, "Untouched weight edits preserve exact value, ID and civil date")
+        expect(!travelStore.saveCheckIn(day: .now, mood: .steady, appetite: .comfortable, routines: [], note: "", editing: UUID()), "An editor cannot resurrect a deleted check-in")
+        travelStore.referenceDate = DayIdentity.date(for: "2026-10-13")!
+        expect(travelStore.today?.id == travelledCheckIn.id, "Today resolves the recorded civil day")
+        travelStore.referenceDate = DayIdentity.date(for: "2026-10-14")!
+        expect(travelStore.today == nil && travelStore.weekRecordedDays == 1, "Day rollover clears Today while retaining the rolling recap")
+        _ = try JournalBackup.make(from: travelStore.journal)
+        expect(true, "Travelled store edits remain exportable")
+        let resumedTravel = JournalStore(directory: testRoot.appendingPathComponent("travel-setup"), arguments: [], clearCredentials: {})
+        resumedTravel.onboardingDraft = readyDraft()
+        var london = calendar; london.timeZone = TimeZone(identifier: "Europe/London")!
+        var newYork = calendar; newYork.timeZone = TimeZone(identifier: "America/New_York")!
+        expect(resumedTravel.saveOnboardingEntry(now: travelledTime, calendar: london), "Setup records the original civil day")
+        let preservedWeight = WeightEntry(date: travelledTime, kilograms: 91, dateKey: "2026-10-13")
+        expect(resumedTravel.updateJournal { $0.weights = [preservedWeight] }, "An independently recorded weight exists on the setup day")
+        resumedTravel.onboardingDraft.showWeight = true; resumedTravel.onboardingDraft.weightValue = "75"
+        expect(resumedTravel.saveOnboardingEntry(now: .now, calendar: newYork), "Setup resumes after travel")
+        expect(resumedTravel.journal.weights == [preservedWeight], "Travelled setup cannot duplicate or overwrite an independent same-day weight")
         print("PASS: \(checks) meaningful Along domain checks")
     }
 }

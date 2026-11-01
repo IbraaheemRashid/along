@@ -1,5 +1,7 @@
 # Along iOS membership integration
 
+Current integration status: the root app now wires this module. See [release implementation](release-implementation.md) for the latest checks and remaining device/account verification. The original module-specific verification notes below remain historical.
+
 Along sells an auto-renewing monthly or yearly membership with **no free trial**. The billing service is implemented; the App Store Connect products, Superwall project, live legal URLs, and end-to-end Sandbox checks still need configuration. No purchase, account mutation, production deployment, or real entitlement was created by this work.
 
 ## Native architecture

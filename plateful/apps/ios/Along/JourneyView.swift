@@ -4,7 +4,8 @@ import Charts
 private enum JourneyMoment: Identifiable {
     case checkIn(CheckIn), milestone(Milestone), weight(WeightEntry), routines(RoutineDay)
     var id: UUID { switch self { case .checkIn(let item): item.id; case .milestone(let item): item.id; case .weight(let item): item.id; case .routines(let item): item.id } }
-    var date: Date { switch self { case .checkIn(let item): item.day; case .milestone(let item): item.date; case .weight(let item): item.date; case .routines(let item): item.day } }
+    var date: Date { switch self { case .checkIn(let item): item.displayDay; case .milestone(let item): item.displayDate; case .weight(let item): item.displayDate; case .routines(let item): item.displayDay } }
+    var dateText: String { switch self { case .checkIn(let item): item.dayText(); case .milestone(let item): item.dateText(); case .weight(let item): item.dateText(); case .routines(let item): item.dayText() } }
 }
 struct JourneyView: View {
     @Environment(JournalStore.self) private var store
@@ -59,15 +60,15 @@ struct JourneyView: View {
                     CompanionHeading(title: "Look how much you’ve lived.", detail: "The little things deserve a place, too.", accessory: store.journal.accessory)
                     let layout = textSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))
                     layout {
-                        stat("\(Set(store.journal.checkIns.map { Calendar.current.startOfDay(for: $0.day) } + (store.journal.routineDays ?? []).filter { !$0.routines.isEmpty }.map { Calendar.current.startOfDay(for: $0.day) }).count)", label: "days recorded", symbol: "book")
+                        stat("\(Set(store.journal.checkIns.compactMap(\.dayKey) + (store.journal.routineDays ?? []).filter { !$0.routines.isEmpty }.compactMap(\.dayKey)).count)", label: "days recorded", symbol: "book")
                         stat("\(store.journal.milestones.count)", label: "moments kept", symbol: "sparkles")
                     }
                     VStack(alignment: .leading, spacing: 18) {
                         HStack { Text("Your last seven days").font(.headline); Spacer(); Image(systemName: "calendar").foregroundStyle(Theme.accent) }
                         HStack(spacing: 0) {
                             ForEach((-6...0), id: \.self) { offset in
-                                let date = Calendar.current.date(byAdding: .day, value: offset, to: Date.now)!
-                                let record = store.journal.checkIns.first { Calendar.current.isDate($0.day, inSameDayAs: date) }
+                                let date = Calendar.current.date(byAdding: .day, value: offset, to: store.referenceDate)!
+                                let record = store.journal.checkIn(on: date)
                                 let hasRoutine = !store.journal.recordedRoutines(on: date).isEmpty
                                 VStack(spacing: 9) {
                                     Text(date.formatted(.dateTime.weekday(.narrow))).font(.caption).foregroundStyle(Theme.secondaryInk)
@@ -97,7 +98,7 @@ struct JourneyView: View {
                                             Button("Edit entry", systemImage: "pencil") { edit(moment) }
                                             Button("Delete entry", systemImage: "trash", role: .destructive) { pendingDelete = moment }
                                         } label: { Label("Options", systemImage: "ellipsis").font(.caption).frame(minHeight: 44) }
-                                        .accessibilityLabel("Options for entry on \(moment.date.formatted(date: .abbreviated, time: .omitted))")
+                                        .accessibilityLabel("Options for entry on \(moment.dateText)")
                                     }
                                 }
                             }
@@ -134,7 +135,7 @@ struct JourneyView: View {
         case .checkIn(let item):
             Button { selectedEntry = item } label: {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack { Text(item.day.formatted(.dateTime.day().month(.abbreviated)).uppercased()).font(.caption2.weight(.medium)).tracking(1); if item.isSample { Text("· SAMPLE").font(.caption2.weight(.medium)) }; Spacer(); Image(systemName: item.mood.symbol) }.foregroundStyle(Theme.secondaryInk)
+                    HStack { Text(item.dayText(.dateTime.day().month(.abbreviated)).uppercased()).font(.caption2.weight(.medium)).tracking(1); if item.isSample { Text("· SAMPLE").font(.caption2.weight(.medium)) }; Spacer(); Image(systemName: item.mood.symbol) }.foregroundStyle(Theme.secondaryInk)
                     Text(item.mood.title).font(.headline)
                     if !item.note.isEmpty { Text(item.note).font(.subheadline).foregroundStyle(Theme.secondaryInk).multilineTextAlignment(.leading) }
                     HStack(spacing: 8) { ForEach(Routine.allCases.filter { item.routines.contains($0) }) { routine in Image(systemName: routine.symbol).font(.caption).foregroundStyle(Theme.accent).frame(width: 27, height: 27).background(Theme.softAccent, in: Circle()).accessibilityLabel(routine.shortTitle) }; Spacer(); Text("Check-in").font(.caption2).foregroundStyle(Theme.secondaryInk) }
@@ -143,7 +144,7 @@ struct JourneyView: View {
         case .routines(let item):
             Button { selectedRoutines = item } label: {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(item.day.formatted(date: .abbreviated, time: .omitted)).font(.caption).foregroundStyle(Theme.secondaryInk)
+                    Text(item.dayText()).font(.caption).foregroundStyle(Theme.secondaryInk)
                     Text("Room for little things").font(.headline)
                     ForEach(Routine.allCases.filter { item.routines.contains($0) }) { routine in
                         Label(store.routineTitle(routine), systemImage: routine.symbol).font(.subheadline).foregroundStyle(Theme.accent)
@@ -151,14 +152,14 @@ struct JourneyView: View {
                 }.frame(maxWidth: .infinity, alignment: .leading).card(padding: 18)
             }.buttonStyle(.plain).accessibilityIdentifier("journey.routineRecord")
         case .weight(let item):
-            Button { selectedWeight = item } label: { HStack { Image(systemName: "chart.xyaxis.line").foregroundStyle(Theme.accent); VStack(alignment: .leading, spacing: 6) { Text("\(store.journal.weightUnit.display(item.kilograms).formatted(.number.precision(.fractionLength(1)))) \(store.journal.weightUnit.rawValue)").font(.headline); Text(item.date.formatted(date: .abbreviated, time: .omitted)).font(.caption).foregroundStyle(Theme.secondaryInk) }; Spacer(); Text(item.isSample ? "Sample" : "Recorded").font(.caption).foregroundStyle(Theme.secondaryInk) }.card(padding: 18) }.buttonStyle(.plain).accessibilityIdentifier("journey.weightRecord")
+            Button { selectedWeight = item } label: { HStack { Image(systemName: "chart.xyaxis.line").foregroundStyle(Theme.accent); VStack(alignment: .leading, spacing: 6) { Text("\(store.journal.weightUnit.display(item.kilograms).formatted(.number.precision(.fractionLength(1)))) \(store.journal.weightUnit.rawValue)").font(.headline); Text(item.dateText()).font(.caption).foregroundStyle(Theme.secondaryInk) }; Spacer(); Text(item.isSample ? "Sample" : "Recorded").font(.caption).foregroundStyle(Theme.secondaryInk) }.card(padding: 18) }.buttonStyle(.plain).accessibilityIdentifier("journey.weightRecord")
         }
     }
 }
 
 struct WeightChartCard: View {
     @Environment(JournalStore.self) private var store
-    private var entries: [WeightEntry] { store.journal.weights.sorted { $0.date < $1.date } }
+    private var entries: [WeightEntry] { store.journal.weights.sorted { $0.displayDate < $1.displayDate } }
     private var domain: ClosedRange<Double> {
         let values = entries.map { store.journal.weightUnit.display($0.kilograms) }
         return ((values.min() ?? 0) - 1)...((values.max() ?? 0) + 1)
@@ -169,9 +170,9 @@ struct WeightChartCard: View {
             if entries.isEmpty { Text("No weight records yet. Add one from +, or hide this card in You.").font(.subheadline).foregroundStyle(Theme.secondaryInk) }
             else {
                 Chart(entries) { entry in
-                    LineMark(x: .value("Date", entry.date), y: .value("Weight", store.journal.weightUnit.display(entry.kilograms)), series: .value("Record type", entry.isSample ? "Sample" : "Your records"))
+                    LineMark(x: .value("Date", entry.displayDate), y: .value("Weight", store.journal.weightUnit.display(entry.kilograms)), series: .value("Record type", entry.isSample ? "Sample" : "Your records"))
                         .foregroundStyle(by: .value("Record type", entry.isSample ? "Sample" : "Your records")).lineStyle(StrokeStyle(lineWidth: 2.5, dash: entry.isSample ? [4, 3] : []))
-                    PointMark(x: .value("Date", entry.date), y: .value("Weight", store.journal.weightUnit.display(entry.kilograms)))
+                    PointMark(x: .value("Date", entry.displayDate), y: .value("Weight", store.journal.weightUnit.display(entry.kilograms)))
                         .foregroundStyle(by: .value("Record type", entry.isSample ? "Sample" : "Your records")).symbolSize(35)
                 }.chartForegroundStyleScale(["Sample": Color.secondary, "Your records": Theme.accent])
                     .chartYScale(domain: domain).frame(height: 190)

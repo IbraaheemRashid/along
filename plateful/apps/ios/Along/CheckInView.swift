@@ -3,7 +3,8 @@ import SwiftUI
 struct CheckInView: View {
     @Environment(JournalStore.self) private var store
     @Environment(\.dismiss) private var dismiss
-    var entry: CheckIn?
+    @State private var entry: CheckIn?
+    init(entry: CheckIn? = nil) { _entry = State(initialValue: entry) }
     @Environment(\.dynamicTypeSize) private var textSize
     @Environment(\.alongReducedMotion) private var reduceMotion
     @State private var day = Date()
@@ -29,7 +30,8 @@ struct CheckInView: View {
                         Button("See my journey") { store.selectedTab = 1; dismiss() }.frame(maxWidth: .infinity, minHeight: 44)
                     } else {
                         CompanionHeading(title: "How are you, really?", detail: "No right answers. No perfect days.", accessory: store.journal.accessory, pose: .welcome)
-                        DatePicker("This moment belongs to", selection: $day, in: ...Date.now, displayedComponents: .date).font(.subheadline).datePickerStyle(.compact).disabled(entry != nil)
+                        if let entry { LabeledContent("This moment belongs to", value: entry.dayText()) }
+                        else { DatePicker("This moment belongs to", selection: $day, in: DayIdentity.date(for: "1900-01-01")!...Date.now, displayedComponents: .date).font(.subheadline).datePickerStyle(.compact) }
                         VStack(spacing: 10) {
                             ForEach(Mood.allCases) { option in
                                 SetupChoice(title: option.title, symbol: option.symbol, selected: mood == option) { mood = option }
@@ -62,7 +64,7 @@ struct CheckInView: View {
                         }
                         PrimaryButton(title: entry == nil ? "Save this moment" : "Update this moment", symbol: "checkmark") {
                             guard let mood, let appetite else { return }
-                            if store.saveCheckIn(day: day, mood: mood, appetite: appetite, routines: routines, note: note) { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { saved = true } }
+                            if store.saveCheckIn(day: day, mood: mood, appetite: appetite, routines: routines, note: note, editing: entry?.id) { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { saved = true } }
                         }.disabled(mood == nil || appetite == nil).opacity(mood == nil || appetite == nil ? 0.5 : 1)
                         if mood == nil || appetite == nil { Text("Choose a feeling and appetite to save. Everything else is optional.").font(.caption).foregroundStyle(Theme.secondaryInk) }
                         Text("One check-in per day. Saving again for the same date updates that day’s entry.").font(.caption).foregroundStyle(Theme.secondaryInk)
@@ -73,11 +75,11 @@ struct CheckInView: View {
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Close") { dismiss() } } }
                 .sensoryFeedback(.success, trigger: saved)
         }.onAppear {
-            if let entry { day = entry.day; mood = entry.mood; appetite = entry.appetite; routines = entry.routines; note = entry.note }
+            if let entry { day = entry.displayDay; mood = entry.mood; appetite = entry.appetite; routines = entry.routines; note = entry.note }
             else { routines = store.journal.recordedRoutines(on: day) }
         }
             .onChange(of: day) {
-                if entry == nil, let existing = store.journal.checkIns.first(where: { Calendar.current.isDate($0.day, inSameDayAs: day) }) {
+                if entry == nil, let existing = store.journal.checkIn(on: day) {
                     mood = existing.mood; appetite = existing.appetite; routines = existing.routines; note = existing.note
                 } else if entry == nil {
                     mood = nil; appetite = nil; routines = store.journal.recordedRoutines(on: day); note = ""

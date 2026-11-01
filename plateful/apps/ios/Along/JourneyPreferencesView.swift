@@ -12,6 +12,7 @@ struct JourneyPreferencesView: View {
     @State private var originalStartDate = Date.now
     @State private var loaded = false
     @State private var saveError: String?
+    @FocusState private var focusedField: String?
 
     private let encouragementOptions = ["Gentle", "Straightforward", "Celebratory"]
     private var earliestStartDate: Date {
@@ -46,6 +47,7 @@ struct JourneyPreferencesView: View {
                                 Label(routine.shortTitle, systemImage: routine.symbol)
                                     .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent)
                                 TextField(routine.title, text: routineBinding(routine), axis: .vertical)
+                                    .focused($focusedField, equals: routine.rawValue)
                                     .lineLimit(1...3).alongField()
                                     .accessibilityLabel("\(routine.shortTitle) routine wording")
                                     .accessibilityIdentifier("preferences.routine.\(routine.rawValue)")
@@ -68,6 +70,7 @@ struct JourneyPreferencesView: View {
                         Text("An intention, in your own words. It can change as you do.")
                             .font(.subheadline).foregroundStyle(Theme.secondaryInk)
                         TextField("My intention (optional)", text: $intention, axis: .vertical)
+                            .focused($focusedField, equals: "intention")
                             .lineLimit(3...6).alongField()
                             .accessibilityLabel("Your intention, optional")
                             .accessibilityIdentifier("preferences.intention")
@@ -79,7 +82,7 @@ struct JourneyPreferencesView: View {
                             .datePickerStyle(.compact).frame(minHeight: 44)
                             .accessibilityIdentifier("preferences.startDate")
                             .onChange(of: startDate) { _, _ in saveError = nil }
-                        Text("An approximate date is fine. This is the start date shown in your profile; changing it doesn’t add a record or move your existing moments.")
+                        Text("An approximate date is fine. This sets the days together shown on Today; changing it doesn’t add a record or move your existing moments.")
                             .font(.caption).foregroundStyle(Theme.secondaryInk)
                     }
                     if let message = saveError ?? validationMessage {
@@ -94,6 +97,7 @@ struct JourneyPreferencesView: View {
             }.frame(maxWidth: .infinity).pageBackground().scrollDismissesKeyboard(.interactively)
                 .navigationTitle("Your preferences").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { focusedField = nil }.accessibilityIdentifier("preferences.keyboardDone") }
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Cancel") { dismiss() }.accessibilityIdentifier("preferences.cancel")
                     }

@@ -1,5 +1,9 @@
 # Local backup and restore integration
 
+Current archives use schema 2 with stable civil-date keys; schema 1 remains readable. See [date migration details](day-identity-integration.md).
+
+Current integration status: the root app now wires this module. See [release implementation](release-implementation.md) for the latest checks and remaining device/account verification. The original module-specific verification notes below remain historical.
+
 This feature saves a user-chosen, unencrypted JSON file and can restore that file after reinstalling or on another device. It does not turn on iCloud/device backups, create accounts, transfer credentials or grant membership. A file saved to a cloud provider in Files follows that provider's storage rules; the choice is explicit.
 
 ## Integration contract
