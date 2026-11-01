@@ -93,7 +93,7 @@ struct JourneyView: View {
     }
     private func isMilestone(_ moment: JourneyMoment) -> Bool { if case .milestone = moment { true } else { false } }
     private func stat(_ value: String, label: String, symbol: String) -> some View {
-        HStack(spacing: 12) { Image(systemName: symbol).font(.title3).foregroundStyle(Theme.accent); VStack(alignment: .leading, spacing: 4) { Text(value).font(.system(size: 28, weight: .medium, design: .serif)); Text(label).font(.caption).foregroundStyle(.secondary) }; Spacer(minLength: 0) }.frame(maxWidth: .infinity, alignment: .leading).card(padding: 17)
+        HStack(spacing: 12) { Image(systemName: symbol).font(.title3).foregroundStyle(Theme.accent); VStack(alignment: .leading, spacing: 4) { Text(value).font(.system(size: 28, weight: .medium, design: .serif)).accessibilityIdentifier(label == "days recorded" ? "journey.daysRecorded" : "journey.momentsKept"); Text(label).font(.caption).foregroundStyle(.secondary) }; Spacer(minLength: 0) }.frame(maxWidth: .infinity, alignment: .leading).card(padding: 17)
     }
     @ViewBuilder private func momentView(_ moment: JourneyMoment) -> some View {
         switch moment {

@@ -24,7 +24,7 @@ The app records what someone chooses to report. It does not assess whether medic
 
 | Capability | Required behaviour |
 |---|---|
-| Onboarding | Preferred name, routine choices and explicit sample-data choice; no account needed for local use. |
+| Onboarding | 26 native screens: journey context, progress preferences, routines, Pip, a real first entry, personal preview, membership benefits and a direct paid offer. No trial. |
 | Daily check-in | Mood, appetite, selected routines and optional note persist after relaunch. Editing a day's check-in must not create extra reward credit. |
 | Journey | Chronological entries with readable dates; sample entries clearly identified. |
 | Optional weight | Store one canonical kilogram value per record; display kg or lb with conversion. Switching units must not change the stored measurement. No target date, predicted loss or judgement about direction. |
@@ -39,7 +39,7 @@ Build the native loop first using SwiftUI and platform APIs. The local experienc
 
 The proposed advantage is the quality and focus of the daily ritual: quick recording, calm presentation, a useful personal timeline and customisation that feels adult and welcoming. This must be tested against existing products; neither progress tracking nor a mascot is unique. Reference evidence and screen mappings are in [references.md](references.md).
 
-**Price hypothesis: US$29.99/year.** Any pricing screen is a conspicuous non-purchasable preview, ideally available after the first useful result or from settings. There is no real trial, charge, entitlement or renewal. Do not show a successful purchase or restore when none occurred. Trial length and paid/free feature boundaries remain research questions. The playbook's default three-day trial is not a promise made by this prototype.
+**Pricing direction: US$29.99/year or US$5.99/month, with no trial.** The user approved a hard paywall after the first useful personal result. Billing starts immediately after a successful purchase in the intended production flow. The local prototype does not take payments or create entitlements; it shows an unavailable-purchase alert and offers a separately confirmed DEBUG-only design preview. See `design-plan-v2.md` for the screen sequence.
 
 Distribution begins with ten short demonstrations and an honest waitlist test, described in [validation-kit.md](validation-kit.md). No testimonials, outcome statistics or paid-demand claims are invented. The base funnel assumption produces about $2.29 per download after a modelled 15% store fee and before other costs, not $2.70 profit. See the full sensitivity in [phase0-assessment.md](phase0-assessment.md).
 

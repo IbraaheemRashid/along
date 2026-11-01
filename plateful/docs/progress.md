@@ -71,17 +71,20 @@ No mock AI result is claimed as a model-backed feature. This is an explicit prod
 
 ## Phase 7: iOS — working local prototype
 
-- [x] SwiftUI onboarding, check-in, journey, optional weight, milestones, recap and Pip customisation.
+- [x] All 26 SwiftUI onboarding screens, resumable choices, an actual first entry, a direct paid offer with no trial, and a separate confirmed Debug preview route.
+- [x] Check-in, journey, optional weight, milestones, recap and Pip customisation. Five new transparent character renders are used throughout the native app.
 - [x] Local persistence, export and deletion; explicit fictional 14-day sample mode. Persistence and deletion are UI-tested; the export share-sheet destination has not been round-trip tested.
-- [x] Run 21 core checks, build the simulator target and inspect the running app. Four UI flows passed.
+- [x] Run domain checks, build the simulator target and inspect the running app. Latest onboarding verification is recorded below.
 - [ ] Staging API/auth connection, App Store Connect setup, Superwall and sandbox entitlements.
 - [ ] Android remains parked until the first platform is validated.
 
 ## Phase 8: Payments and entitlements — deferred
 
-- [ ] Decide real free/paid boundaries, trial and localised pricing.
+- [x] User chose a hard paywall with no trial. Direct paid pricing hypothesis: US$29.99/year or US$5.99/month; no free introductory period.
+- [ ] Configure localised App Store products and verified entitlements.
 - [ ] Superwall/Stripe sandbox setup; signed, idempotent webhooks and server-side entitlements.
-- [ ] Disclosures, real Restore Purchases and trial-ending reminders.
+- [x] Show immediate-charge/renewal disclosures, Terms and Privacy in the native offer.
+- [ ] Connect and verify real purchases and Restore Purchases. The local alerts do not unlock access or claim success.
 - [ ] Verify cross-platform sandbox entitlement behaviour.
 
 The $29.99/year display is a proposal only. No charge, trial or renewal occurs in the prototype.
@@ -103,7 +106,7 @@ The $29.99/year display is a proposal only. No charge, trial or renewal occurs i
 
 - [x] Verify factual weekly recaps, personal milestone inclusion and cumulative accessory retention without streak penalties.
 - [ ] Optional reminders/widget only after user value and permission; timezone/quiet-hour controls.
-- [ ] Welcome/trial emails and real trial reminder only when those services exist.
+- [ ] Optional welcome messages only if those services are later introduced; no trial or trial reminder is planned.
 - [ ] Measure return behaviour; no retention claim until a cohort matures.
 
 ## Phase 12: Launch — not started
@@ -117,13 +120,37 @@ The $29.99/year display is a proposal only. No charge, trial or renewal occurs i
 
 - [ ] Human-run content and creator test, attributed links and transparent spend accounting.
 - [ ] Sharing/referrals only if requested by users and with explicit privacy controls.
-- [ ] Measure downloads, activation, trial start, payment and acquisition cost separately.
+- [ ] Measure downloads, activation, paywall reach, direct purchase and acquisition cost separately.
 
 ## Phase 14: Grow to profit — not started
 
 - [ ] Weekly measured revenue, costs, errors and D7/D30 retention report.
 - [ ] Improve one demonstrated user problem and test one commercial change at a time.
 - [ ] Scale only when net economics and retention support it; no infrastructure expansion for hypothetical AI volume.
+
+## Onboarding, Pip and Dev Lab — 1 November 2026
+
+The 26-screen setup now persists answers and the first entry before a direct paid offer. There is no trial. The intended prices are US$29.99/year and US$5.99/month. Checkout and restore show honest unavailable-service alerts; the confirmed Debug preview does not create an entitlement. Five original transparent Pip renders replace the earlier drawn character throughout the app.
+
+Debug builds include **Dev Lab** from both onboarding and the main app. It provides the 26-screen catalogue; fresh/halfway/paywall setups; empty, 14-day, sparse and 30-day journals; direct feature shortcuts; appearance, text-size and reduced-motion controls; JSON inspection; a save-error alert preview; reset/reload controls; and a saved sandbox that can be resumed after restart. Each new scenario has its own protected storage, separate from the normal journal and credentials. Automated UI tests have a separate Dev Lab storage scope. Release builds exclude the tools.
+
+[Screen review and captures](onboarding-review.md) · [Pip art and provenance](pip-art-direction.md).
+
+Completed onboarding UI evidence:
+
+- `.build/onboarding-final-ui.xcresult`: all 26 screen captures, full setup-to-gate flow, interrupted-setup resume, unconnected purchase/restore, sample check-in/edit/relaunch, weekly reflection, weight entry and local deletion passed. The initial run also contained two failing scrolling checks.
+- `.build/onboarding-accessibility-final.xcresult`: the two follow-up cases passed after correcting gesture bounds, adding milestone keyboard dismissal, applying an explicit dark-review appearance and compacting the paywall footer at accessibility text sizes. These cover milestone creation and screens 21/26 with the largest Dynamic Type setting.
+- Native light/dark captures were inspected. Pip's ambient animation now transforms one render instead of crossfading two character poses.
+
+Final Dev Lab verification:
+
+- `.build/dev-lab-verified.xcresult`: three UI cases passed, covering empty/sample/sparse/month scenarios, the 26-screen catalogue, feature shortcuts, save/reload/restart/resume and preservation of the original onboarding.
+- `.build/dev-lab-setup.xcresult`: the fourth case passed for fresh, halfway and paywall shortcuts. [Dev Lab captures](onboarding-review.md#dev-lab) were exported unchanged and visually inspected.
+- Debug and Release native builds passed. The Release binary excludes the Dev Lab strings and controls. The initial sandbox reinitialization loop was fixed by creating its store once in the launch action; disposable directories from the failed test were removed.
+- All **83 domain checks passed directly in iOS Simulator**, using the existing `CoreTests.swift` compiled for `arm64-apple-ios17.0-simulator` and run with `simctl spawn`. The final macOS-host rerun encountered Cocoa 513/EPERM on protected writes while the Mac was locked; an ordinary temporary-file write succeeded. Production file protection and test assertions were retained.
+- All **30 Node checks** and the Vite production build passed. No live service, payment or deployment occurred.
+
+The existing four app tabs are Today, Journey, Pip and You. Live billing, cloud accounts, reminder delivery, analytics, real-device checks and market validation remain pending.
 
 ## Implementation verification log
 

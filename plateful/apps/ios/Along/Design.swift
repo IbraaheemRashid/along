@@ -1,15 +1,27 @@
 import SwiftUI
 
+private struct AlongForcedReducedMotion: EnvironmentKey {
+    static let defaultValue = false
+}
+extension EnvironmentValues {
+    var alongForcedReducedMotion: Bool {
+        get { self[AlongForcedReducedMotion.self] }
+        set { self[AlongForcedReducedMotion.self] = newValue }
+    }
+    var alongReducedMotion: Bool { accessibilityReduceMotion || alongForcedReducedMotion }
+}
+
 enum Theme {
     static let paper = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.10, green: 0.09, blue: 0.13, alpha: 1) : UIColor(red: 0.98, green: 0.97, blue: 0.95, alpha: 1) })
     static let card = Color(uiColor: .secondarySystemGroupedBackground)
-    static let plum = Color(red: 0.30, green: 0.23, blue: 0.40)
-    static let accent = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.79, green: 0.72, blue: 0.91, alpha: 1) : UIColor(red: 0.30, green: 0.23, blue: 0.40, alpha: 1) })
+    static let plum = Color(red: 0.24, green: 0.19, blue: 0.30)
+    static let accent = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.79, green: 0.72, blue: 0.91, alpha: 1) : UIColor(red: 0.24, green: 0.19, blue: 0.30, alpha: 1) })
     static let sage = Color(red: 0.79, green: 0.84, blue: 0.74)
     static let gold = Color(red: 0.95, green: 0.75, blue: 0.41)
     static let peach = Color(red: 0.85, green: 0.58, blue: 0.50)
     static let lilac = Color(red: 0.88, green: 0.84, blue: 0.93)
     static let ink = Color(red: 0.23, green: 0.20, blue: 0.28)
+    static let secondaryInk = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.73, green: 0.70, blue: 0.77, alpha: 1) : UIColor(red: 0.43, green: 0.40, blue: 0.46, alpha: 1) })
     static let line = Color.primary.opacity(0.07)
 }
 private struct AlongTitle: ViewModifier {
@@ -44,7 +56,7 @@ struct Pill: View {
 struct DemoBadge: View {
     @Environment(JournalStore.self) private var store
     var body: some View {
-        Text(store.journal.hasSampleData ? "SAMPLE JOURNEY" : "LOCAL PROTOTYPE")
+        Text(store.journal.hasSampleData ? "SAMPLE JOURNEY" : store.journal.isDesignPreview == true ? "DESIGN PREVIEW" : "LOCAL PROTOTYPE")
             .font(.system(size: 9, weight: .bold, design: .rounded)).tracking(1.1)
             .padding(.horizontal, 9).padding(.vertical, 6).foregroundStyle(Theme.accent)
             .background(Theme.lilac.opacity(0.35), in: Capsule())
@@ -84,49 +96,36 @@ struct QuietEmpty: View {
     }
 }
 
-// An original code-native character. No competitor art or external image assets.
+// Original rendered artwork. Asset prompts and provenance are in docs/pip-art-direction.md.
+enum PipPose: String {
+    case welcome = "PipWelcome"
+    case journal = "PipJournal"
+    case celebrate = "PipCelebrate"
+}
+struct PipArtwork: View {
+    var pose: PipPose = .welcome
+    var accessory: Accessory = .leaf
+    private var asset: String {
+        switch accessory {
+        case .leaf: return pose.rawValue
+        case .scarf: return "PipScarf"
+        case .flower: return "PipFlower"
+        }
+    }
+    var body: some View {
+        Image(asset).resizable().scaledToFit().accessibilityHidden(true)
+    }
+}
 struct PipView: View {
     var accessory: Accessory = .leaf
     var wave = false
-    var body: some View {
-        GeometryReader { geo in
-            let s = min(geo.size.width, geo.size.height)
-            ZStack {
-                Ellipse().fill(Theme.ink.opacity(0.10)).frame(width: s * 0.62, height: s * 0.075).offset(y: s * 0.38)
-                RoundedRectangle(cornerRadius: s * 0.1).fill(Color(red: 0.52, green: 0.58, blue: 0.40)).frame(width: s * 0.31, height: s * 0.38).rotationEffect(.degrees(-12)).offset(x: s * 0.25, y: s * 0.10)
-                Ellipse().fill(Color(red: 0.83, green: 0.55, blue: 0.42)).frame(width: s * 0.14, height: s * 0.27).rotationEffect(.degrees(wave ? -50 : -25)).offset(x: -s * 0.30, y: s * (wave ? -0.03 : 0.12))
-                Ellipse().fill(Color(red: 0.83, green: 0.55, blue: 0.42)).frame(width: s * 0.13, height: s * 0.26).rotationEffect(.degrees(25)).offset(x: s * 0.30, y: s * 0.12)
-                Capsule().fill(Color(red: 0.82, green: 0.53, blue: 0.40)).frame(width: s * 0.19, height: s * 0.14).offset(x: -s * 0.16, y: s * 0.32)
-                Capsule().fill(Color(red: 0.82, green: 0.53, blue: 0.40)).frame(width: s * 0.19, height: s * 0.14).offset(x: s * 0.16, y: s * 0.32)
-                Ellipse().fill(Color(red: 0.91, green: 0.68, blue: 0.53)).frame(width: s * 0.62, height: s * 0.70).offset(y: s * 0.02)
-                Ellipse().fill(Color(red: 0.98, green: 0.83, blue: 0.68)).frame(width: s * 0.40, height: s * 0.36).offset(y: s * 0.16)
-                ForEach([-1.0, 1.0], id: \.self) { side in
-                    Circle().fill(Color(red: 0.91, green: 0.68, blue: 0.53)).frame(width: s * 0.19).overlay(Circle().fill(Theme.peach.opacity(0.7)).padding(s * 0.04)).offset(x: side * s * 0.22, y: -s * 0.26)
-                }
-                Ellipse().fill(Color(red: 0.94, green: 0.73, blue: 0.58)).frame(width: s * 0.65, height: s * 0.49).offset(y: -s * 0.09)
-                ForEach([-1.0, 1.0], id: \.self) { side in
-                    Capsule().fill(Theme.ink).frame(width: s * 0.025, height: s * 0.041).offset(x: side * s * 0.105, y: -s * 0.105)
-                    Ellipse().fill(Theme.peach.opacity(0.8)).frame(width: s * 0.08, height: s * 0.045).offset(x: side * s * 0.18, y: -s * 0.045)
-                }
-                Ellipse().fill(Theme.ink).frame(width: s * 0.045, height: s * 0.033).offset(y: -s * 0.045)
-                Path { path in path.move(to: CGPoint(x: s * 0.46, y: s * 0.49)); path.addQuadCurve(to: CGPoint(x: s * 0.54, y: s * 0.49), control: CGPoint(x: s * 0.50, y: s * 0.53)) }.stroke(Theme.ink, style: StrokeStyle(lineWidth: 2, lineCap: .round)).frame(width: s, height: s)
-                if accessory == .leaf {
-                    Image(systemName: "leaf.fill").font(.system(size: s * 0.20)).rotationEffect(.degrees(-35)).foregroundStyle(Color(red: 0.39, green: 0.49, blue: 0.32)).offset(x: s * 0.04, y: -s * 0.35)
-                } else if accessory == .scarf {
-                    Capsule().fill(Theme.plum).frame(width: s * 0.45, height: s * 0.10).offset(y: s * 0.10)
-                    RoundedRectangle(cornerRadius: 5).fill(Theme.plum).frame(width: s * 0.09, height: s * 0.22).rotationEffect(.degrees(15)).offset(x: s * 0.12, y: s * 0.20)
-                } else {
-                    Image(systemName: "sun.max.fill").font(.system(size: s * 0.19)).foregroundStyle(Theme.gold).offset(x: s * 0.16, y: -s * 0.30)
-                }
-            }.frame(width: geo.size.width, height: geo.size.height)
-        }.accessibilityHidden(true)
-    }
+    var body: some View { PipArtwork(pose: .welcome, accessory: accessory).rotationEffect(.degrees(wave ? -2 : 0)) }
 }
 
 struct MeadowView: View {
     var accessory: Accessory = .leaf
     var compact = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.alongReducedMotion) private var reduceMotion
     @State private var floating = false
     var body: some View {
         GeometryReader { geo in

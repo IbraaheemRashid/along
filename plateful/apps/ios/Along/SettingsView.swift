@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Environment(JournalStore.self) private var store
     @State private var showPrivacy = false
     @State private var showPaywall = false
+    @State private var showOnboardingReview = false
     @State private var resetAction: String?
     var body: some View {
         @Bindable var store = store
@@ -32,13 +33,19 @@ struct SettingsView: View {
                 }
                 Section {
                     Button { showPaywall = true } label: { Label("Explore Along Plus — preview", systemImage: "star") }
-                    LabeledContent("Version", value: "0.1 · prototype")
+                    #if DEBUG
+                    Button { showOnboardingReview = true } label: { Label("Review all 26 onboarding screens", systemImage: "rectangle.stack") }
+                    #endif
+                    LabeledContent("Version", value: "0.2 · design preview")
                     LabeledContent("Storage", value: "This device only")
                     LabeledContent("AI & cloud services", value: "Not connected")
                 } footer: { Text("Along is an adult GLP-1 journey and routine prototype. It doesn’t prescribe, diagnose, evaluate nutrition adequacy or guide medication. Along and Pip are working names.") }
             }.scrollContentBackground(.hidden).pageBackground().navigationTitle("You").navigationBarTitleDisplayMode(.large)
                 .sheet(isPresented: $showPrivacy) { PrivacyView() }
                 .sheet(isPresented: $showPaywall) { PaywallPreview() }
+                #if DEBUG
+                .sheet(isPresented: $showOnboardingReview) { OnboardingCatalogView() }
+                #endif
                 .confirmationDialog(resetAction == "all" ? "Delete your local journal?" : resetAction == "sample" ? "Replace your journal with sample data?" : "Start a blank journal?", isPresented: Binding(get: { resetAction != nil }, set: { if !$0 { resetAction = nil } }), titleVisibility: .visible) {
                     Button(resetAction == "all" ? "Delete all local data" : "Replace journal", role: .destructive) {
                         switch resetAction { case "sample": store.loadSample(); case "blank": store.startBlank(); default: store.clearJournal() }; resetAction = nil
@@ -64,27 +71,28 @@ struct PrivacyView: View {
 struct PaywallPreview: View {
     @Environment(JournalStore.self) private var store
     @Environment(\.dismiss) private var dismiss
-    @State private var showRestoreInfo = false
+    @State private var plan: OnboardingPlan = .annual
+    @State private var showStoreInfo = false
+    @State private var showTerms = false
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    PipView(accessory: .flower, wave: true).frame(height: 200).frame(maxWidth: .infinity).background(Theme.lilac.opacity(0.35), in: RoundedRectangle(cornerRadius: 28))
-                    Pill(text: "PRICING CONCEPT · NO PURCHASE", symbol: "info.circle")
-                    Text("More room\nfor your journey.").alongTitle(35)
-                    Text("Along Plus is a proposed future plan. The local prototype is fully available without paying.").foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 18) {
-                        Label("Richer weekly reflections", systemImage: "book.pages")
-                        Label("More companion stories & looks", systemImage: "pawprint")
-                        Label("Private backup & sync", systemImage: "icloud")
-                    }.font(.subheadline.weight(.medium)).frame(maxWidth: .infinity, alignment: .leading).card()
-                    VStack(alignment: .leading, spacing: 8) { Text("$29.99 / year").font(.title2.weight(.semibold)); Text("Illustrative US price. No subscription, trial or charge starts here. These future features are not connected.").font(.caption).foregroundStyle(.secondary) }.card()
-                    PrimaryButton(title: "Keep exploring for free", symbol: "arrow.right") { dismiss() }
-                    Button("Restore purchases") { showRestoreInfo = true }.frame(maxWidth: .infinity, minHeight: 44)
-                }.padding(24).frame(maxWidth: 620)
-            }.frame(maxWidth: .infinity).pageBackground().navigationTitle("Along Plus preview").navigationBarTitleDisplayMode(.inline)
+                VStack(alignment: .leading, spacing: 22) {
+                    SetupHero(pose: .journal, accessory: store.journal.accessory, height: 200)
+                    Text("Keep your story growing.").alongTitle(34)
+                    Text("Your personal record, weekly reflections and a little company along the way.").foregroundStyle(.secondary)
+                    MembershipPlans(selection: $plan)
+                    MembershipDisclosure(plan: plan)
+                    PrimaryButton(title: plan == .annual ? "Subscribe for $29.99 / year" : "Subscribe for $5.99 / month", symbol: "lock.open") { showStoreInfo = true }
+                    Text("DESIGN PREVIEW · BILLING NOT CONNECTED").font(.caption2.weight(.medium)).foregroundStyle(.secondary)
+                    Text("No charge can be made in this local build.").font(.caption).foregroundStyle(.secondary)
+                    HStack { Button("Restore purchases") { showStoreInfo = true }; Spacer(); Button("Terms") { showTerms = true } }.font(.subheadline).frame(minHeight: 44)
+                }.padding(24).frame(maxWidth: 560)
+            }.frame(maxWidth: .infinity).pageBackground().navigationTitle("Along membership").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Close") { dismiss() } } }
-                .alert("No store is connected", isPresented: $showRestoreInfo) { Button("OK", role: .cancel) {} } message: { Text("This prototype cannot make or restore purchases. No subscription has been created.") }
+                .sheet(isPresented: $showTerms) { MembershipTermsView() }
+                .alert("Purchases aren’t connected", isPresented: $showStoreInfo) { Button("OK", role: .cancel) {} } message: { Text("This preview cannot make or restore purchases. No subscription has been created.") }
+                .onAppear { plan = store.journal.onboardingPreferences?.plan ?? .annual }
         }
     }
 }

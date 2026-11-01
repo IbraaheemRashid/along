@@ -45,7 +45,7 @@ struct CheckInView: View {
                                 SectionLabel(title: "Anything you made room for?", subtitle: "Optional. Leave these blank if you like.")
                                 ForEach(Routine.allCases.filter { store.journal.routines.contains($0) }) { routine in
                                     Button { if routines.contains(routine) { routines.remove(routine) } else { routines.insert(routine) } } label: {
-                                        HStack(spacing: 14) { Image(systemName: routine.symbol).frame(width: 24); Text(routine.title).font(.subheadline); Spacer(); Image(systemName: routines.contains(routine) ? "checkmark.circle.fill" : "circle").font(.title3) }.padding(17).background(Theme.card, in: RoundedRectangle(cornerRadius: 17))
+                                        HStack(spacing: 14) { Image(systemName: routine.symbol).frame(width: 24); Text(store.routineTitle(routine)).font(.subheadline); Spacer(); Image(systemName: routines.contains(routine) ? "checkmark.circle.fill" : "circle").font(.title3) }.padding(17).background(Theme.card, in: RoundedRectangle(cornerRadius: 17))
                                     }.buttonStyle(.plain).accessibilityAddTraits(routines.contains(routine) ? .isSelected : [])
                                 }
                             }

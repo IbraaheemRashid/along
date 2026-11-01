@@ -22,7 +22,7 @@ struct TodayView: View {
                         VStack(alignment: .leading, spacing: 16) {
                             HStack(alignment: .top, spacing: 10) {
                                 Image(systemName: "quote.opening").font(.title2).foregroundStyle(Theme.peach)
-                                Text(store.today == nil ? "No perfect days needed.\nJust a moment to notice this one." : "Today has a place in your story.\nI’m glad you stopped by.").font(.system(.body, design: .serif)).lineSpacing(4)
+                                Text(store.encouragementLine).font(.system(.body, design: .serif)).lineSpacing(4)
                             }
                             PrimaryButton(title: store.today == nil ? "How’s today feeling?" : "View today’s check-in", symbol: store.today == nil ? "arrow.right" : "checkmark.circle") { showCheckIn = true }
                         }.padding(20)
@@ -37,10 +37,10 @@ struct TodayView: View {
                                     Button { showCheckIn = true } label: {
                                         HStack(spacing: 13) {
                                             Image(systemName: routine.symbol).font(.title3).foregroundStyle(Theme.accent).frame(width: 40, height: 40).background(Theme.lilac.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
-                                            Text(routine.title).font(.subheadline.weight(.medium)); Spacer()
+                                            Text(store.routineTitle(routine)).font(.subheadline.weight(.medium)); Spacer()
                                             Image(systemName: store.today?.routines.contains(routine) == true ? "checkmark.circle.fill" : "circle").font(.title3).foregroundStyle(store.today?.routines.contains(routine) == true ? Theme.accent : .secondary.opacity(0.35))
                                         }.padding(.vertical, 11).contentShape(Rectangle())
-                                    }.buttonStyle(.plain).accessibilityLabel("\(routine.title), \(store.today?.routines.contains(routine) == true ? "recorded today" : "not recorded today")").accessibilityHint("Opens your check-in")
+                                    }.buttonStyle(.plain).accessibilityLabel("\(store.routineTitle(routine)), \(store.today?.routines.contains(routine) == true ? "recorded today" : "not recorded today")").accessibilityHint("Opens your check-in")
                                 }
                             }.card(padding: 17)
                         }
@@ -48,7 +48,7 @@ struct TodayView: View {
                     Button { showRecap = true } label: {
                         HStack(spacing: 16) {
                             Image(systemName: "book.closed").font(.title2).foregroundStyle(Theme.accent).frame(width: 50, height: 55).background(Theme.lilac.opacity(0.5), in: RoundedRectangle(cornerRadius: 14))
-                            VStack(alignment: .leading, spacing: 5) { Text("Your week, reflected").font(.headline); Text("\(store.week.count) days recorded · a little perspective").font(.caption).foregroundStyle(.secondary) }
+                            VStack(alignment: .leading, spacing: 5) { Text(store.reflectionSchedule ?? "Your week, reflected").font(.headline); Text("\(store.week.count) days recorded · a little perspective").font(.caption).foregroundStyle(.secondary) }
                             Spacer(minLength: 0); Image(systemName: "arrow.up.right").foregroundStyle(Theme.accent)
                         }.card()
                     }.buttonStyle(.plain)
@@ -98,6 +98,7 @@ struct WeeklyRecapView: View {
                         recapMetric("\(store.routineCount)", label: "routine moments", symbol: "leaf")
                     }
                     Text(store.recap).font(.system(.body, design: .serif)).lineSpacing(6).frame(maxWidth: .infinity, alignment: .leading).card()
+                    if let prompt = store.personalReflectionPrompt { SetupNote(text: prompt, symbol: "pencil.line") }
                     if !store.weeklyMilestones.isEmpty {
                         SectionLabel(title: "\(store.weeklyMilestones.count) moments you kept")
                         ForEach(store.weeklyMilestones) { MilestoneCard(milestone: $0) }

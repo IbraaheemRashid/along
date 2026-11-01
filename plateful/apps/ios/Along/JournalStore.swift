@@ -27,15 +27,24 @@ private struct OnboardingArchive: Codable {
     private var loadingDraft = true
     private var onboardingArchive = OnboardingArchive()
     private var toastTask: Task<Void, Never>?
+    let startupArguments: [String]
     init(directory: URL? = nil, arguments: [String] = ProcessInfo.processInfo.arguments, clearCredentials: @escaping () -> Void = TokenVault.clear) {
+        startupArguments = arguments
         var folder = "Along"
         #if DEBUG
-        if arguments.contains("--ui-testing") || arguments.contains("--onboarding-step") || arguments.contains("--review-onboarding") { folder = "AlongDesignReview" }
+        let isReviewSession = arguments.contains("--ui-testing") || arguments.contains("--onboarding-step") || arguments.contains("--review-onboarding")
+        if isReviewSession { folder = "AlongDesignReview" }
         #endif
         let directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(folder, isDirectory: true)
         url = directory.appendingPathComponent("journal-v1.json")
         draftURL = directory.appendingPathComponent("onboarding-draft-v1.json")
+        // Review storage must not share the real journal's credential lifecycle.
+        // A reset during screenshots or design review never clears its session.
+        #if DEBUG
+        self.clearCredentials = isReviewSession ? {} : clearCredentials
+        #else
         self.clearCredentials = clearCredentials
+        #endif
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             if FileManager.default.fileExists(atPath: url.path) {
@@ -67,6 +76,13 @@ private struct OnboardingArchive: Codable {
         #endif
     }
     var today: CheckIn? { journal.checkIns.first { Calendar.current.isDateInToday($0.day) } }
+    var onboardingEntry: CheckIn? {
+        guard let id = onboardingArchive.entryID else { return nil }
+        return journal.checkIns.first { $0.id == id }
+    }
+    #if DEBUG
+    var developmentStorageDirectory: URL { url.deletingLastPathComponent() }
+    #endif
     var week: [CheckIn] { journal.week() }
     var routineCount: Int { week.reduce(0) { $0 + $1.routines.count } }
     var weeklyMilestones: [Milestone] {

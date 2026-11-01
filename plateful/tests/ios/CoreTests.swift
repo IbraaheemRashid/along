@@ -104,6 +104,7 @@ import Foundation
         let storeDirectory = testRoot.appendingPathComponent("round-trip", isDirectory: true)
         let store = JournalStore(directory: storeDirectory, arguments: [], clearCredentials: {})
         store.onboardingDraft = readyDraft()
+        expect(store.onboardingEntry == nil, "Draft-only examples are not presented as persisted journal entries")
         store.onboardingDraft.step = 4
         store.onboardingDraft.name = "Ada B"
         let resumed = JournalStore(directory: storeDirectory, arguments: [], clearCredentials: {})
@@ -112,6 +113,7 @@ import Foundation
         let entryTime = Date()
         expect(resumed.saveOnboardingEntry(now: entryTime), "First real entry persists")
         expect(resumed.journal.checkIns.count == 1 && !resumed.journal.checkIns[0].isSample && !resumed.journal.hasOnboarded, "Saving a first entry does not grant app access or create sample history")
+        expect(resumed.onboardingEntry == resumed.journal.checkIns[0], "The onboarding card can read the actual persisted check-in")
         expect(resumed.journal.checkIns[0].routines.isEmpty, "Choosing future routines does not claim they were already completed")
         expect(resumed.journal.weights.isEmpty && resumed.journal.onboardingPreferences != nil, "An omitted baseline creates no fabricated weight")
         expect(resumed.journal.canUse(.flower), "The chosen starter accessory is actually available")
@@ -125,6 +127,7 @@ import Foundation
         nextDayStore.onboardingDraft.weightValue = "80.2"
         expect(nextDayStore.saveOnboardingEntry(now: entryTime.addingTimeInterval(86400)), "A resumed first entry can be edited after midnight")
         expect(nextDayStore.journal.checkIns.count == 1 && nextDayStore.journal.checkIns[0].id == firstEntryID && nextDayStore.journal.checkIns[0].day == originalEntryDay, "Repeated entry saves preserve both identity and original date")
+        expect(nextDayStore.onboardingEntry?.id == firstEntryID && nextDayStore.onboardingEntry?.day == originalEntryDay && nextDayStore.onboardingEntry?.note == "Added a little more.", "Resumed cards receive the saved entry and its original date instead of today's draft label")
         expect(nextDayStore.journal.weights.count == 1 && nextDayStore.journal.weights[0].id == firstWeightID && nextDayStore.journal.weights[0].kilograms == 80.2, "Baseline edits are idempotent")
         nextDayStore.onboardingDraft.showWeight = false
         expect(nextDayStore.saveOnboardingEntry(now: entryTime.addingTimeInterval(86400)) && nextDayStore.journal.weights.isEmpty, "Skipping removes only the baseline created by this setup")
@@ -153,6 +156,7 @@ import Foundation
         existingStore.onboardingDraft.showWeight = true; existingStore.onboardingDraft.weightValue = "75"
         expect(existingStore.saveOnboardingEntry(now: entryTime), "A legacy journal can acquire optional onboarding preferences")
         expect(existingStore.journal.checkIns == existing.checkIns && existingStore.journal.weights == existing.weights && existingStore.journal.milestones == existing.milestones, "Setup never overwrites unrelated existing history or same-day measurements")
+        expect(existingStore.onboardingEntry == existing.checkIns[0], "When an existing day is preserved, the card gets that actual record rather than unsaved draft answers")
         let savedJournal = try Data(contentsOf: journalURL)
         let corruptDraftURL = legacyDirectory.appendingPathComponent("onboarding-draft-v1.json")
         try Data("{broken draft".utf8).write(to: corruptDraftURL)
@@ -164,6 +168,21 @@ import Foundation
         expect(refusedCorruptDraft && unchangedJournalData == savedJournal, "Unreadable draft state cannot silently overwrite a healthy journal")
         protected.resetOnboarding()
         expect(protected.journal.checkIns == existing.checkIns && protected.saveOnboardingDraft(), "Explicitly restarting setup recovers the draft while preserving journal records")
+        #if DEBUG
+        for flag in ["--ui-testing", "--onboarding-step", "--review-onboarding"] {
+            var credentialClears = 0
+            let directory = testRoot.appendingPathComponent("credential-isolation-\(flag)", isDirectory: true)
+            let reviewStore = JournalStore(directory: directory, arguments: [flag, "0", "--reset-demo"], clearCredentials: { credentialClears += 1 })
+            expect(credentialClears == 0, "\(flag) startup reset does not clear the normal keychain session")
+            reviewStore.clearJournal()
+            expect(credentialClears == 0, "\(flag) explicit review-data deletion remains isolated from the normal keychain")
+        }
+        #endif
+        var ordinaryCredentialClears = 0
+        let ordinaryStore = JournalStore(directory: testRoot.appendingPathComponent("ordinary-clear", isDirectory: true), arguments: [], clearCredentials: { ordinaryCredentialClears += 1 })
+        expect(ordinaryCredentialClears == 0, "Opening a normal journal does not clear credentials")
+        ordinaryStore.clearJournal()
+        expect(ordinaryCredentialClears == 1, "Explicitly deleting normal local data still clears its own credentials once")
         print("PASS: \(checks) meaningful Along domain checks")
     }
 }

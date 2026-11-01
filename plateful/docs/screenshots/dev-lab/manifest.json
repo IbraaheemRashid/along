@@ -1,0 +1,62 @@
+[
+  {
+    "file": "dev-resumed-sandbox.png",
+    "test": "AlongUITests/testDevLabFeatureShortcutAndSavedSessionSurviveRestart()",
+    "source": "dev-lab-attachments",
+    "sha256": "c8f315dd0c7ea5e8d2f254f76d46319cc29c99142a542fe50c09f54aaaf436cd"
+  },
+  {
+    "file": "dev-onboarding-catalogue-paywall.png",
+    "test": "AlongUITests/testDevLabOnboardingCatalogueLeavesOriginalJourneyUntouched()",
+    "source": "dev-lab-attachments",
+    "sha256": "e20e62653a0d7168dd161b28bfb9299e371ad89869d49936a1c318570fc070f6"
+  },
+  {
+    "file": "dev-scenario-month.png",
+    "test": "AlongUITests/testDevLabScenariosDoNotChangeOriginalOnboarding()",
+    "source": "dev-lab-attachments",
+    "sha256": "724bedc162b3f572152a6ad7ec26c7e2ce7050b084b39f1e9ddd34d007086a30"
+  },
+  {
+    "file": "dev-scenario-sparse.png",
+    "test": "AlongUITests/testDevLabScenariosDoNotChangeOriginalOnboarding()",
+    "source": "dev-lab-attachments",
+    "sha256": "59551d23db92e25dcdc4eae7cabf18fe4f6141612f41f19b9519a0a568643a2c"
+  },
+  {
+    "file": "dev-scenario-sample.png",
+    "test": "AlongUITests/testDevLabScenariosDoNotChangeOriginalOnboarding()",
+    "source": "dev-lab-attachments",
+    "sha256": "6f625915fcb0a741c2d834585c176c83a09eb94a616aa9a6ce8b4d15eb3a7c6e"
+  },
+  {
+    "file": "dev-scenario-empty.png",
+    "test": "AlongUITests/testDevLabScenariosDoNotChangeOriginalOnboarding()",
+    "source": "dev-lab-attachments",
+    "sha256": "5dfe8040d07a80f5c3326d58674720c7cc631d89da5164d2ca1d134cc2cc7a6b"
+  },
+  {
+    "file": "dev-setup-paywall.png",
+    "test": "AlongUITests/testDevLabSetupShortcuts()",
+    "source": "dev-lab-setup-attachments",
+    "sha256": "c5215fc9c90d8d46c0c4f73a549343a2683690d1e2858636b3f38ca6bafd87d8"
+  },
+  {
+    "file": "dev-setup-resume.png",
+    "test": "AlongUITests/testDevLabSetupShortcuts()",
+    "source": "dev-lab-setup-attachments",
+    "sha256": "dce11ee342c8af20a7be75900009b5d8ad47b75cb1086c6fc24743461696f14b"
+  },
+  {
+    "file": "dev-setup-fresh.png",
+    "test": "AlongUITests/testDevLabSetupShortcuts()",
+    "source": "dev-lab-setup-attachments",
+    "sha256": "f1bfac5db722b6bfe82d3f1b941dbffdff2e79bb9833f9bea41ee1a5d31543c2"
+  },
+  {
+    "file": "dev-lab-menu.png",
+    "test": "AlongUITests/testDevLabSetupShortcuts()",
+    "source": "dev-lab-setup-attachments",
+    "sha256": "61e6e1bf67230df8a167d9f72127d55d5791b4e57a50225ada3d025fdc607ebf"
+  }
+]

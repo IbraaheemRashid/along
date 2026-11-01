@@ -29,9 +29,23 @@ final class AlongUITests: XCTestCase {
     private func reveal(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
         for _ in 0..<12 {
             if element.exists && element.isHittable { return }
-            let above = element.exists && element.frame.midY < app.frame.height * 0.2
-            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: above ? 0.4 : 0.70))
-            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: above ? 0.65 : 0.45))
+            // Keep the gesture inside visible content. At large text sizes the
+            // fixed footer occupies much more of the screen; a keyboard also
+            // makes screen-relative swipes miss the scroll view entirely.
+            let scroll = app.scrollViews.firstMatch
+            let bounds = scroll.exists ? scroll.frame.intersection(app.frame) : app.frame
+            let top = max(bounds.minY + 16, app.frame.minY + 100)
+            var bottom = min(bounds.maxY - 16, app.frame.maxY - 100)
+            if app.keyboards.firstMatch.exists { bottom = min(bottom, app.keyboards.firstMatch.frame.minY - 12) }
+            for identifier in ["onboarding.continue", "onboarding.subscribe"] {
+                let action = app.buttons[identifier]
+                if action.exists { bottom = min(bottom, action.frame.minY - 16) }
+            }
+            let height = max(80, bottom - top)
+            let above = element.exists && element.frame.midY < top
+            let origin = app.coordinate(withNormalizedOffset: .zero)
+            let start = origin.withOffset(CGVector(dx: app.frame.width * 0.5, dy: top + height * (above ? 0.25 : 0.85)))
+            let end = origin.withOffset(CGVector(dx: app.frame.width * 0.5, dy: top + height * (above ? 0.85 : 0.25)))
             start.press(forDuration: 0.05, thenDragTo: end)
         }
         XCTAssertTrue(element.exists && element.isHittable, "Expected visible control: \(element)", file: file, line: line)
@@ -115,6 +129,106 @@ final class AlongUITests: XCTestCase {
         return count ?? -1
     }
 
+    func testDevLabSetupShortcuts() {
+        launchSandbox()
+        tap("dev.open")
+        XCTAssertTrue(app.navigationBars["Dev Lab"].waitForExistence(timeout: 5))
+        capture("dev-lab-menu")
+        for (scenario, step) in [("fresh", 1), ("resume", 14), ("paywall", 26)] {
+            tap("dev.scenario.\(scenario)")
+            assertOnboardingStep(step)
+            XCTAssertTrue(app.staticTexts["dev.sandbox.banner"].exists)
+            capture("dev-setup-\(scenario)")
+            tap("dev.sandbox.close")
+        }
+        tap("dev.close")
+        assertOnboardingStep(1)
+    }
+
+    func testDevLabScenariosDoNotChangeOriginalOnboarding() {
+        launchSandbox()
+        assertOnboardingStep(1)
+
+        let scenarios: [(name: String, days: Int?)] = [
+            ("empty", nil), ("sample", 8), ("sparse", 2), ("month", 30)
+        ]
+        for scenario in scenarios {
+            tap("dev.open")
+            XCTAssertTrue(app.navigationBars["Dev Lab"].waitForExistence(timeout: 5))
+            tap("dev.scenario.\(scenario.name)")
+            let banner = app.descendants(matching: .any).matching(identifier: "dev.sandbox.banner").firstMatch
+            XCTAssertTrue(banner.waitForExistence(timeout: 5), "Scenario must be visibly identified as a sandbox")
+            XCTAssertTrue(app.tabBars.buttons["Journey"].waitForExistence(timeout: 5))
+            app.tabBars.buttons["Journey"].tap()
+            if let days = scenario.days {
+                XCTAssertEqual(recordedDays(), days, "Unexpected fixture for \(scenario.name)")
+            } else {
+                reveal(app.staticTexts["Your story starts here"])
+            }
+            capture("dev-scenario-\(scenario.name)")
+
+            tap("dev.sandbox.close")
+            XCTAssertTrue(app.navigationBars["Dev Lab"].waitForExistence(timeout: 5))
+            tap("dev.close")
+            assertOnboardingStep(1)
+        }
+
+        app.terminate()
+        launchSandbox(reset: false)
+        assertOnboardingStep(1)
+    }
+
+    func testDevLabOnboardingCatalogueLeavesOriginalJourneyUntouched() {
+        launchSandbox(arguments: ["--onboarding-step", "0"])
+        assertOnboardingStep(1)
+        tap("dev.open")
+        XCTAssertTrue(app.navigationBars["Dev Lab"].waitForExistence(timeout: 5))
+        tap("dev.onboarding")
+        XCTAssertTrue(app.navigationBars["Design review"].waitForExistence(timeout: 5))
+        tap("dev.onboarding.26")
+        assertOnboardingStep(26)
+        XCTAssertTrue(app.buttons["onboarding.subscribe"].exists)
+        capture("dev-onboarding-catalogue-paywall")
+
+        tap("dev.onboarding.close")
+        let catalogue = app.navigationBars["Design review"]
+        XCTAssertTrue(catalogue.waitForExistence(timeout: 5))
+        tap("dev.onboarding.catalogue.close")
+        XCTAssertTrue(app.navigationBars["Dev Lab"].waitForExistence(timeout: 5))
+        tap("dev.close")
+        assertOnboardingStep(1)
+    }
+
+    func testDevLabFeatureShortcutAndSavedSessionSurviveRestart() {
+        launchSandbox()
+        tap("dev.open")
+        tap("dev.feature.checkIn")
+        tap("Pretty good")
+        tap("Comfortable")
+        tap("Save this moment")
+        tap("Back to my day")
+        app.tabBars.buttons["Journey"].tap()
+        XCTAssertEqual(recordedDays(), 9, "The shortcut must save into its sample sandbox")
+        tap("dev.sandbox.controls")
+        tap("dev.reloadSaved")
+        XCTAssertEqual(recordedDays(), 9, "Reloading from disk must preserve the new entry")
+        tap("dev.sandbox.close")
+        tap("dev.close")
+        assertOnboardingStep(1)
+
+        app.terminate()
+        launchSandbox(reset: false)
+        assertOnboardingStep(1)
+        tap("dev.open")
+        tap("dev.resumeLast")
+        app.tabBars.buttons["Journey"].tap()
+        XCTAssertEqual(recordedDays(), 9, "Resume must reopen saved edits rather than regenerate the fixture")
+        capture("dev-resumed-sandbox")
+        tap("dev.sandbox.close")
+        tap("dev.close")
+        assertOnboardingStep(1)
+    }
+
     func testAll26OnboardingScreensHaveReviewScreenshots() {
         for step in 1...26 {
             if step > 1 { app.terminate() }
@@ -131,7 +245,7 @@ final class AlongUITests: XCTestCase {
             launchSandbox(arguments: [
                 "--onboarding-step", String(step - 1),
                 "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
-                "-AppleInterfaceStyle", "Dark"
+                "--dark-review"
             ])
             assertOnboardingStep(step)
             capture(String(format: "%02d-dark-xxxl-top", step))
@@ -259,10 +373,12 @@ final class AlongUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Your story starts here"].waitForExistence(timeout: 5))
         tap("Add to your journey")
         tap("Personal milestone")
-        let title = app.textFields["e.g. Enjoyed a walk with a friend"]
+        let title = app.textFields["milestone.title"]
         XCTAssertTrue(title.waitForExistence(timeout: 5))
         title.tap()
         title.typeText("A walk with Sam")
+        XCTAssertEqual(title.value as? String, "A walk with Sam")
+        if app.buttons["milestone.keyboardDone"].exists { tap("milestone.keyboardDone") }
         tap("Keep this moment")
         XCTAssertTrue(app.staticTexts["A walk with Sam"].waitForExistence(timeout: 5))
         capture("journal-first-milestone")

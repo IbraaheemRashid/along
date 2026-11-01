@@ -1,0 +1,163 @@
+{
+  "sourceResult": ".build/onboarding-final-ui.xcresult",
+  "device": "iPhone 17 Pro \u00b7 iOS 26.3",
+  "content": "Example answers; unmodified simulator screenshots",
+  "screens": [
+    {
+      "screen": 1,
+      "file": "01.png",
+      "source": "E7DCA016-8C5B-49F9-A817-D17CEA34E0D0.png",
+      "sha256": "9f0eb4025e9d82abec44695f6630a9d7c5065ddc2663b568df8d313efe08a2dd"
+    },
+    {
+      "screen": 2,
+      "file": "02.png",
+      "source": "1D1EB878-77AE-46B3-8BE9-E5DB0CB38FF6.png",
+      "sha256": "4b78c3185b6746049a2617b03f0b0fe508d6bb57f7bdbea369457b843f00a8df"
+    },
+    {
+      "screen": 3,
+      "file": "03.png",
+      "source": "3E53785E-74DB-41EA-B02D-AD5691212056.png",
+      "sha256": "dfbf248ea942fdb8cc048cd0bd01016b9d151ff27e9ee99f977734e8fd038d7c"
+    },
+    {
+      "screen": 4,
+      "file": "04.png",
+      "source": "126A68AE-C433-4F91-AC99-5B731DE23375.png",
+      "sha256": "cdfb0dc109b2935328f7aa4649d6cc2a0bcff241f897f6fdc86bffef399b2afe"
+    },
+    {
+      "screen": 5,
+      "file": "05.png",
+      "source": "DD61F632-5B74-4F98-852A-3428E680B873.png",
+      "sha256": "979853044b47b6089f5679bd7a3cdfd74f3b2c567dc59f5a4509b8d7adff1db5"
+    },
+    {
+      "screen": 6,
+      "file": "06.png",
+      "source": "516DEE49-9294-4F81-BAE7-328B7223C52C.png",
+      "sha256": "a3bfc592e9f49b2047a52fb4b309dca587c891f547a1a9bc199f17cbb8879c84"
+    },
+    {
+      "screen": 7,
+      "file": "07.png",
+      "source": "42FC4CA3-4B15-4F6E-A322-C9462A9728D0.png",
+      "sha256": "9bd49d8668c5a5f93863e4a147bbd8857b71a902534524f8533363000e93ada7"
+    },
+    {
+      "screen": 8,
+      "file": "08.png",
+      "source": "7247CC5B-847B-4D9B-A7A0-F2BFBDF7811E.png",
+      "sha256": "9a51e64166ca208de9ca74e00cadfbf57a26693530c0e04afbdc319224a1b7f5"
+    },
+    {
+      "screen": 9,
+      "file": "09.png",
+      "source": "D89737E5-0210-4E35-B8B2-291783514842.png",
+      "sha256": "a6e5f6f5f0c34ea18239387e5540903688eb52564ec68b877b0c2ced7857e258"
+    },
+    {
+      "screen": 10,
+      "file": "10.png",
+      "source": "69EDE539-7ECE-4ACF-9394-9E68AB0A19C0.png",
+      "sha256": "8c53a77a809d516a8753d30c992627380a4f345bd151bec5266fe8c72de95a20"
+    },
+    {
+      "screen": 11,
+      "file": "11.png",
+      "source": "3CD2D28E-237F-4422-B8F6-4976C237B22F.png",
+      "sha256": "2038a58ddd258d6741f4cd51bb32569daf19cb4fd63a9a1ae90ddb247a61f7c1"
+    },
+    {
+      "screen": 12,
+      "file": "12.png",
+      "source": "93C6B6E0-3706-4AAE-AEA3-E12AF5F8EF85.png",
+      "sha256": "75892d061f3e39d2a3d28a348231099914c62dcad95f8843a5aa41e1362caeb8"
+    },
+    {
+      "screen": 13,
+      "file": "13.png",
+      "source": "6151E6C3-74A7-4EF0-8560-C6958FE9F5DE.png",
+      "sha256": "6a6f91c9cc6f2e96ebc9a9cd14ef65f2f30447236bbb791c8aaba6bdc1f61987"
+    },
+    {
+      "screen": 14,
+      "file": "14.png",
+      "source": "AF8B3C6C-48DE-47BC-9861-47619F9A5E0E.png",
+      "sha256": "8faa6274303846155f55e1ecce2aca118f621d1c8f2572e39f5b01efa7f45587"
+    },
+    {
+      "screen": 15,
+      "file": "15.png",
+      "source": "D778A919-4D5B-4D42-BBFE-461F8A0B9C07.png",
+      "sha256": "039954a781538c5314f35f097cb358f9e2ab1e881c6217b727c924a6635474bc"
+    },
+    {
+      "screen": 16,
+      "file": "16.png",
+      "source": "8F9DAB76-AB3D-4EA6-B05E-D21E1120E5C6.png",
+      "sha256": "92c2aeea3576c6c7d608db275977a98e2fcfb0d7f8bef2040b0d27db57887406"
+    },
+    {
+      "screen": 17,
+      "file": "17.png",
+      "source": "B1C13EF3-6E3E-48CB-B786-06BBC20EC353.png",
+      "sha256": "0078d716ac11d31c5f9b3f280a367949d0a06c23f73fa9e3a0e5a09a9ee10372"
+    },
+    {
+      "screen": 18,
+      "file": "18.png",
+      "source": "EC38F52D-1E4B-433F-A8F6-79CAC5D0056F.png",
+      "sha256": "fc6c28029f0fda8b58d38bd69e37f399687e1ba5e45ed2a53902ff39d496badd"
+    },
+    {
+      "screen": 19,
+      "file": "19.png",
+      "source": "A3A1454D-8D2A-4FA5-8524-0A29034352F3.png",
+      "sha256": "7074b5bdda171e2e30031a230a6013d115eca52251abab2068c7c4cd5a4fa273"
+    },
+    {
+      "screen": 20,
+      "file": "20.png",
+      "source": "B9E6302D-1C9B-431A-B1D4-82889BD143B8.png",
+      "sha256": "bbc7b1e5c615017f94487ddfa01e8f3386050b68aaf7b466a77b58e40502fb92"
+    },
+    {
+      "screen": 21,
+      "file": "21.png",
+      "source": "0C6BBACE-933E-49DB-A0D4-F9518B3E7102.png",
+      "sha256": "e156369aa793504b73226253cd30164a7519b93c18034d33dd9f6678f568482b"
+    },
+    {
+      "screen": 22,
+      "file": "22.png",
+      "source": "7F7D2B8A-833E-40E6-8CBC-4CFD3077B669.png",
+      "sha256": "c65533b0b8aafa801f0a8673f9da46594670873f5ab11c2292ae3c167a649123"
+    },
+    {
+      "screen": 23,
+      "file": "23.png",
+      "source": "DEF7E01B-4C20-4CF7-9624-AE00D33C4D94.png",
+      "sha256": "b821c71c8f1b24a19481a05725eab319cf9e585197ef0ce80add47bf230f7325"
+    },
+    {
+      "screen": 24,
+      "file": "24.png",
+      "source": "65A3B1A0-8B54-4EBA-8039-F26924C46013.png",
+      "sha256": "5f61ac85a8ca95b548227e025f27d42ad0613b9e6f632149a2415b8c0729b437"
+    },
+    {
+      "screen": 25,
+      "file": "25.png",
+      "source": "E9794CBA-BEAB-447A-8E69-14075FA3BE15.png",
+      "sha256": "8f8d5f9ba95f05039407bcbaff78db51799163d65bf6db120d83b6fca3656595"
+    },
+    {
+      "screen": 26,
+      "file": "26.png",
+      "source": "FC6F7A30-0923-4EE6-8EB2-E6937AD82450.png",
+      "sha256": "483704c5f6fc4a492f0c0bf7409a7c3f9b223923471f7a93bbda50c3cf98a508"
+    }
+  ]
+}
