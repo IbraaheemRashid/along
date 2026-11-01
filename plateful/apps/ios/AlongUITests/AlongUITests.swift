@@ -39,8 +39,10 @@ final class AlongUITests: XCTestCase {
 
     private func tap(_ identifier: String, file: StaticString = #filePath, line: UInt = #line) {
         let button = app.buttons[identifier]
-        XCTAssertTrue(button.waitForExistence(timeout: 5), "Missing button: \(identifier)", file: file, line: line)
+        // A lazy Form may not mount an offscreen row until it scrolls into view.
+        // Waiting for existence before scrolling would fail on a valid control.
         reveal(button, file: file, line: line)
+        XCTAssertTrue(button.exists, "Missing button after scrolling: \(identifier)", file: file, line: line)
         XCTAssertTrue(button.isEnabled, "Disabled button: \(identifier)", file: file, line: line)
         button.tap()
     }
@@ -120,6 +122,34 @@ final class AlongUITests: XCTestCase {
             launchSandbox(arguments: ["--onboarding-step", String(step - 1)])
             assertOnboardingStep(step)
             capture(String(format: "%02d", step))
+        }
+    }
+
+    func testCheckInAndPaywallSupportDarkModeAndLargestAccessibilityText() {
+        for step in [21, 26] {
+            if step == 26 { app.terminate() }
+            launchSandbox(arguments: [
+                "--onboarding-step", String(step - 1),
+                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+                "-AppleInterfaceStyle", "Dark"
+            ])
+            assertOnboardingStep(step)
+            capture(String(format: "%02d-dark-xxxl-top", step))
+
+            if step == 26 {
+                for plan in ["annual", "monthly"] {
+                    let control = app.buttons["onboarding.plan.\(plan)"]
+                    reveal(control)
+                    XCTAssertTrue(control.isEnabled, "The \(plan) price control must remain usable with large text")
+                    capture("26-dark-xxxl-\(plan)-price")
+                }
+            }
+
+            let cta = app.buttons[step == 26 ? "onboarding.subscribe" : "onboarding.continue"]
+            reveal(cta)
+            XCTAssertTrue(cta.isEnabled, "The primary action must remain usable with large text")
+            capture(String(format: "%02d-dark-xxxl-primary-action", step))
+            XCTAssertFalse(app.tabBars.buttons["Today"].exists, "Review fixtures must remain outside the personal journal")
         }
     }
 
