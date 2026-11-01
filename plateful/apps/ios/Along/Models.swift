@@ -34,6 +34,7 @@ struct CheckIn: Codable, Identifiable, Equatable {
     var routines: Set<Routine>
     var note: String
     var isSample = false
+    var dayKey: String?
 }
 struct Milestone: Codable, Identifiable, Equatable {
     var id = UUID()
@@ -42,12 +43,14 @@ struct Milestone: Codable, Identifiable, Equatable {
     var note: String
     var kind: MilestoneKind
     var isSample = false
+    var dateKey: String?
 }
 struct WeightEntry: Codable, Identifiable, Equatable {
     var id = UUID()
     var date: Date
     var kilograms: Double
     var isSample = false
+    var dateKey: String?
 }
 enum WeightUnit: String, Codable, CaseIterable {
     case kg, lb
@@ -96,27 +99,42 @@ struct Journal: Codable, Equatable {
     }
 
     mutating func save(_ entry: CheckIn, calendar: Calendar = .current) {
-        routineDays?.removeAll { calendar.isDate($0.day, inSameDayAs: entry.day) }
-        if let index = checkIns.firstIndex(where: { calendar.isDate($0.day, inSameDayAs: entry.day) }) {
-            var replacement = entry
+        normalizeDayKeys(sourceTimeZone: legacyDayTimeZone(fallback: calendar.timeZone))
+        var replacement = entry
+        let existingID = checkIns.firstIndex { $0.id == entry.id }
+        replacement.dayKey = existingID.flatMap { checkIns[$0].dayKey } ?? entry.dayKey ?? DayIdentity.key(for: entry.day, timeZone: calendar.timeZone)
+        guard let key = replacement.dayKey, DayIdentity.isValid(key) else { return }
+        let sampleRoutine = routineDays?.contains { $0.dayKey == key && $0.isSample } ?? false
+        routineDays?.removeAll { $0.dayKey == key }
+        if let index = existingID ?? checkIns.firstIndex(where: { $0.dayKey == key }) {
             replacement.id = checkIns[index].id
             replacement.isSample = checkIns[index].isSample
+            replacement.day = checkIns[index].day
             checkIns[index] = replacement
-        } else { checkIns.append(entry) }
+        } else {
+            replacement.isSample = entry.isSample || sampleRoutine
+            checkIns.append(replacement)
+        }
     }
     mutating func save(_ entry: WeightEntry, calendar: Calendar = .current) {
-        if let index = weights.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: entry.date) }) {
-            var replacement = entry
+        normalizeDayKeys(sourceTimeZone: legacyDayTimeZone(fallback: calendar.timeZone))
+        var replacement = entry
+        let existingID = weights.firstIndex { $0.id == entry.id }
+        replacement.dateKey = existingID.flatMap { weights[$0].dateKey } ?? entry.dateKey ?? DayIdentity.key(for: entry.date, timeZone: calendar.timeZone)
+        guard let key = replacement.dateKey, DayIdentity.isValid(key) else { return }
+        if let index = existingID ?? weights.firstIndex(where: { $0.dateKey == key }) {
             replacement.id = weights[index].id
             replacement.isSample = weights[index].isSample
+            replacement.date = weights[index].date
             weights[index] = replacement
-        } else { weights.append(entry) }
+        } else { weights.append(replacement) }
     }
     func week(ending date: Date = .now, calendar: Calendar = .current) -> [CheckIn] {
-        let today = calendar.startOfDay(for: date)
-        let start = calendar.date(byAdding: .day, value: -6, to: today)!
-        let end = calendar.date(byAdding: .day, value: 1, to: today)!
-        return checkIns.filter { $0.day >= start && $0.day < end }
+        guard let range = DayIdentity.range(ending: date, timeZone: calendar.timeZone) else { return [] }
+        let source = legacyDayTimeZone(fallback: calendar.timeZone)
+        return checkIns.filter {
+            DayIdentity.resolved($0.dayKey, rawDate: $0.day, sourceTimeZone: source).map { range.contains($0) } ?? false
+        }
     }
     func canUse(_ accessory: Accessory) -> Bool { unlockedAccessories.contains(accessory) }
     static func sample(now: Date = .now, calendar: Calendar = .current) -> Journal {
@@ -145,16 +163,36 @@ struct Journal: Codable, Equatable {
         journal.weights = [(-13, 94.2), (-8, 94.0), (-4, 94.3), (-1, 93.8)].map { offset, weight in
             WeightEntry(date: calendar.date(byAdding: .day, value: offset, to: now)!, kilograms: weight, isSample: true)
         }
+        journal.normalizeDayKeys(sourceTimeZone: calendar.timeZone)
         return journal
     }
 }
 enum JournalValidation {
     static func checkIn(note: String, day: Date, now: Date = .now, calendar: Calendar = .current) -> Bool {
-        note.count <= 500 && calendar.startOfDay(for: day) <= calendar.startOfDay(for: now)
+        text(note, limit: 500) && recordDate(day, now: now, calendar: calendar)
+    }
+    static func recordDate(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> Bool {
+        guard let key = DayIdentity.key(for: date, timeZone: calendar.timeZone),
+              let today = DayIdentity.key(for: now, timeZone: calendar.timeZone) else { return false }
+        return key <= today
+    }
+    /// For an existing keyed record, including one created before a date-line
+    /// crossing. New date selections should use recordDate(_:now:calendar:).
+    static func storedRecordDate(_ date: Date, key: String?, now: Date = .now, sourceTimeZone: TimeZone = .current) -> Bool {
+        guard let resolved = DayIdentity.resolved(key, rawDate: date, sourceTimeZone: sourceTimeZone),
+              DayIdentity.isPlausible(resolved, for: date), DayIdentity.isNotFuture(resolved, now: now) else { return false }
+        // A date picker may retain a time later on its selected civil day.
+        // Its raw Date is not evidence of the time an activity occurred.
+        // Timestamp-only legacy archives still have an explicit source zone.
+        return key != nil || recordDate(date, now: now, calendar: DayIdentity.calendar(in: sourceTimeZone))
     }
     static func weight(_ value: Double) -> Bool { value.isFinite && value > 0 && value <= 500 }
     static func milestone(title: String, note: String) -> Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && title.count <= 80 && note.count <= 300
+        text(title, limit: 80, required: true) && text(note, limit: 300)
+    }
+    static func text(_ value: String, limit: Int, required: Bool = false) -> Bool {
+        value.count <= limit && (!required || !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            && !value.unicodeScalars.contains { CharacterSet.controlCharacters.contains($0) && $0 != "\n" && $0 != "\t" }
     }
 }
 

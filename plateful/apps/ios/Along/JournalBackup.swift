@@ -6,7 +6,7 @@ struct JournalBackup: Codable, Equatable {
     static let maximumBytes = 5 * 1024 * 1024
     static let maximumRecords = 10_000
     static let maximumCredits = 50_000
-    static let currentSchema = 1
+    static let currentSchema = 2
     private static let signature = "along-local-journal"
 
     let format: String
@@ -59,8 +59,10 @@ struct JournalBackup: Codable, Equatable {
     }
 
     static func make(from journal: Journal, now: Date = .now, timeZone: TimeZone = .current) throws -> JournalBackup {
+        var normalized = journal
+        normalized.normalizeDayKeys(sourceTimeZone: journal.legacyDayTimeZone(fallback: timeZone))
         let backup = JournalBackup(format: signature, schemaVersion: currentSchema,
-                                   exportedAt: now, timeZoneID: timeZone.identifier, content: Content(journal))
+                                   exportedAt: now, timeZoneID: timeZone.identifier, content: Content(normalized))
         try backup.validate(now: now)
         return backup
     }
@@ -82,7 +84,11 @@ struct JournalBackup: Codable, Equatable {
             try validateShape(data)
             let backup = try JSONDecoder().decode(Self.self, from: data)
             try backup.validate(now: now)
-            return backup
+            // Old archives have a known source timezone. Stamp missing keys
+            // before the journal reaches a device with a different timezone.
+            let normalized = try backup.restoring(into: Journal(), now: now)
+            return Self(format: backup.format, schemaVersion: currentSchema, exportedAt: backup.exportedAt,
+                        timeZoneID: backup.timeZoneID, content: Content(normalized))
         } catch let failure as Failure { throw failure }
         catch { throw Failure.invalidArchive }
     }
@@ -104,6 +110,7 @@ struct JournalBackup: Codable, Equatable {
         restored.pipProgress = content.pipProgress; restored.routineDays = content.routineDays
         restored.hasOnboarded = current.hasOnboarded
         restored.isDesignPreview = current.isDesignPreview
+        restored.normalizeDayKeys(sourceTimeZone: TimeZone(identifier: timeZoneID)!)
         return restored
     }
 
@@ -130,18 +137,23 @@ struct JournalBackup: Codable, Equatable {
 
     private func validate(now: Date) throws {
         guard format == Self.signature else { throw Failure.invalidArchive }
-        guard schemaVersion == Self.currentSchema, content.journalVersion == 1 else { throw Failure.unsupportedVersion }
+        guard [1, Self.currentSchema].contains(schemaVersion), content.journalVersion == 1 else { throw Failure.unsupportedVersion }
         guard let timeZone = TimeZone(identifier: timeZoneID), timeZoneID.count <= 100 else { throw Failure.invalidArchive }
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = timeZone
-        let lowerBound = Date(timeIntervalSince1970: -2_208_988_800) // 1900-01-01
+        // Earliest possible instant of the supported 1900-01-01 civil date.
+        let lowerBound = Date(timeIntervalSince1970: -2_208_988_800 - 14 * 3600)
         guard now.timeIntervalSinceReferenceDate.isFinite,
               let upperBound = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) else { throw Failure.invalidArchive }
         func validDate(_ date: Date) -> Bool {
             date.timeIntervalSinceReferenceDate.isFinite && date >= lowerBound && date < upperBound
         }
+        func recordKey(_ stored: String?, _ date: Date) -> String? {
+            guard let key = DayIdentity.resolved(stored, rawDate: date, sourceTimeZone: timeZone),
+                  JournalValidation.storedRecordDate(date, key: stored, now: now, sourceTimeZone: timeZone) else { return nil }
+            return key
+        }
         func validText(_ value: String, limit: Int, required: Bool = false) -> Bool {
-            value.count <= limit && (!required || !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                && !value.unicodeScalars.contains { CharacterSet.controlCharacters.contains($0) && $0 != "\n" && $0 != "\t" }
+            JournalValidation.text(value, limit: limit, required: required)
         }
         guard validDate(exportedAt), exportedAt <= now.addingTimeInterval(300), validDate(content.startDate),
               validText(content.name, limit: 30), validText(content.companionName, limit: 24),
@@ -150,23 +162,23 @@ struct JournalBackup: Codable, Equatable {
               content.milestones.count <= Self.maximumRecords, (content.routineDays?.count ?? 0) <= Self.maximumRecords else { throw Failure.invalidArchive }
 
         var identifiers = Set<UUID>()
-        var checkInDays = Set<Date>(), weightDays = Set<Date>(), routineDays = Set<Date>()
+        var checkInDays = Set<String>(), weightDays = Set<String>(), routineDays = Set<String>()
         func unique(_ id: UUID) -> Bool { identifiers.insert(id).inserted }
         for entry in content.checkIns {
-            guard unique(entry.id), validDate(entry.day), validText(entry.note, limit: 500),
-                  checkInDays.insert(calendar.startOfDay(for: entry.day)).inserted else { throw Failure.invalidArchive }
+            guard unique(entry.id), let key = recordKey(entry.dayKey, entry.day), validText(entry.note, limit: 500),
+                  checkInDays.insert(key).inserted else { throw Failure.invalidArchive }
         }
         for entry in content.weights {
-            guard unique(entry.id), validDate(entry.date), JournalValidation.weight(entry.kilograms),
-                  weightDays.insert(calendar.startOfDay(for: entry.date)).inserted else { throw Failure.invalidArchive }
+            guard unique(entry.id), let key = recordKey(entry.dateKey, entry.date), JournalValidation.weight(entry.kilograms),
+                  weightDays.insert(key).inserted else { throw Failure.invalidArchive }
         }
         for entry in content.milestones {
-            guard unique(entry.id), validDate(entry.date), validText(entry.title, limit: 80, required: true),
+            guard unique(entry.id), recordKey(entry.dateKey, entry.date) != nil, validText(entry.title, limit: 80, required: true),
                   validText(entry.note, limit: 300) else { throw Failure.invalidArchive }
         }
         for entry in content.routineDays ?? [] {
-            guard unique(entry.id), validDate(entry.day),
-                  routineDays.insert(calendar.startOfDay(for: entry.day)).inserted else { throw Failure.invalidArchive }
+            guard unique(entry.id), let key = recordKey(entry.dayKey, entry.day),
+                  routineDays.insert(key).inserted else { throw Failure.invalidArchive }
         }
         guard checkInDays.isDisjoint(with: routineDays) else { throw Failure.invalidArchive }
 
@@ -186,18 +198,11 @@ struct JournalBackup: Codable, Equatable {
             }
         }
         if let progress = content.pipProgress {
-            guard let zone = TimeZone(identifier: progress.timeZoneID), progress.timeZoneID.count <= 100,
+            guard TimeZone(identifier: progress.timeZoneID) != nil, progress.timeZoneID.count <= 100,
                   progress.recordedDays.count <= Self.maximumRecords, progress.creditedEntries.count <= Self.maximumCredits,
                   progress.recordedDays.count <= progress.creditedEntries.count else { throw Failure.invalidArchive }
-            var ledgerCalendar = Calendar(identifier: .gregorian); ledgerCalendar.timeZone = zone
             for key in progress.recordedDays {
-                let pieces = key.split(separator: "-", omittingEmptySubsequences: false)
-                guard key.utf8.count == 10, pieces.count == 3, pieces[0].count == 4, pieces[1].count == 2, pieces[2].count == 2,
-                      pieces.allSatisfy({ $0.utf8.allSatisfy { (48...57).contains($0) } }),
-                      let year = Int(pieces[0]), let month = Int(pieces[1]), let day = Int(pieces[2]), year >= 1900,
-                      let date = ledgerCalendar.date(from: DateComponents(year: year, month: month, day: day)),
-                      ledgerCalendar.dateComponents([.year, .month, .day], from: date) == DateComponents(year: year, month: month, day: day),
-                      date <= ledgerCalendar.startOfDay(for: now) else { throw Failure.invalidArchive }
+                guard DayIdentity.isNotFuture(key, now: now) else { throw Failure.invalidArchive }
             }
             // Legacy starter accessories are legitimate gifts, not earned days.
             for reward in progress.claimedRewards where progress.recordedDays.count < reward.requiredDays {
@@ -230,7 +235,11 @@ struct JournalBackup: Codable, Equatable {
             if key == "routineDays" && content[key] == nil { continue }
             guard let entries = content[key] as? [Any], entries.count <= maximumRecords else { throw Failure.invalidArchive }
             for raw in entries {
-                let entry = try object(raw, required: fields)
+                let dateField = fields.contains("day") ? "dayKey" : "dateKey"
+                let entry = try object(raw, required: fields, optional: [dateField])
+                if let rawKey = entry[dateField] {
+                    guard let dateKey = rawKey as? String, DayIdentity.isValid(dateKey) else { throw Failure.invalidArchive }
+                }
                 if fields.contains("routines") { try strings(entry["routines"]) }
             }
         }

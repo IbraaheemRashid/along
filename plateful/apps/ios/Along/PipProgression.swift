@@ -5,24 +5,28 @@ struct RoutineDay: Codable, Equatable, Identifiable {
     var day: Date
     var routines: Set<Routine>
     var isSample = false
+    var dayKey: String?
 }
 
-/// Permanent, cumulative progress. The first timezone is retained so travelling
-/// or editing a record cannot turn the same entry into another earned day.
+/// Permanent, cumulative progress. Existing credited IDs/dates never change.
+/// The original timezone is retained for legacy timestamp-only records.
 struct PipProgress: Codable, Equatable {
     var timeZoneID = TimeZone.current.identifier
     var recordedDays: Set<String> = []
     var creditedEntries: Set<UUID> = []
     var claimedRewards: Set<PipReward> = []
 
-    mutating func credit(id: UUID, day: Date, now: Date) {
+    mutating func credit(id: UUID, day: Date, now: Date, dayKey: String? = nil) {
         guard !creditedEntries.contains(id) else { return }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: timeZoneID) ?? TimeZone(secondsFromGMT: 0)!
-        guard day.timeIntervalSinceReferenceDate.isFinite,
-              calendar.startOfDay(for: day) <= calendar.startOfDay(for: now) else { return }
-        let parts = calendar.dateComponents([.year, .month, .day], from: day)
-        recordedDays.insert(String(format: "%04d-%02d-%02d", parts.year!, parts.month!, parts.day!))
+        let zone = TimeZone(identifier: timeZoneID) ?? TimeZone(secondsFromGMT: 0)!
+        guard let key = DayIdentity.resolved(dayKey, rawDate: day, sourceTimeZone: zone),
+              DayIdentity.isPlausible(key, for: day) else { return }
+        if dayKey != nil {
+            guard JournalValidation.storedRecordDate(day, key: key, now: now) else { return }
+        } else {
+            guard let today = DayIdentity.key(for: now, timeZone: zone), key <= today else { return }
+        }
+        recordedDays.insert(key)
         creditedEntries.insert(id)
     }
 }
@@ -65,6 +69,7 @@ extension Journal {
     var roomRewards: Set<PipReward> { pipProgress?.claimedRewards ?? [] }
 
     mutating func reconcileProgress(now: Date = .now) {
+        normalizeDayKeys()
         if pipProgress == nil {
             pipProgress = PipProgress()
             // A starter gift is a gift, never advertised later as something earned.
@@ -80,10 +85,10 @@ extension Journal {
             }
         }
         for entry in checkIns where !entry.isSample {
-            pipProgress?.credit(id: entry.id, day: entry.day, now: now)
+            pipProgress?.credit(id: entry.id, day: entry.day, now: now, dayKey: entry.dayKey)
         }
         for entry in routineDays ?? [] where !entry.isSample && !entry.routines.isEmpty {
-            pipProgress?.credit(id: entry.id, day: entry.day, now: now)
+            pipProgress?.credit(id: entry.id, day: entry.day, now: now, dayKey: entry.dayKey)
         }
         for accessory in Accessory.allCases where recordedDayCount >= accessory.requiredDays {
             unlockedAccessories.insert(accessory)
@@ -95,20 +100,22 @@ extension Journal {
     }
 
     func recordedRoutines(on day: Date, calendar: Calendar = .current) -> Set<Routine> {
-        if let entry = (routineDays ?? []).first(where: { calendar.isDate($0.day, inSameDayAs: day) }) { return entry.routines }
-        return checkIns.first(where: { calendar.isDate($0.day, inSameDayAs: day) })?.routines ?? []
+        if let entry = (routineDays ?? []).first(where: { $0.isOn(day, calendar: calendar) }) { return entry.routines }
+        return checkIn(on: day, calendar: calendar)?.routines ?? []
     }
 
     mutating func toggleRoutine(_ routine: Routine, on day: Date, calendar: Calendar = .current) {
-        if let index = checkIns.firstIndex(where: { calendar.isDate($0.day, inSameDayAs: day) }) {
+        normalizeDayKeys(sourceTimeZone: legacyDayTimeZone(fallback: calendar.timeZone))
+        guard let key = DayIdentity.key(for: day, timeZone: calendar.timeZone) else { return }
+        if let index = checkIns.firstIndex(where: { $0.dayKey == key }) {
             if checkIns[index].routines.contains(routine) { checkIns[index].routines.remove(routine) }
             else { checkIns[index].routines.insert(routine) }
         } else {
             var entries = routineDays ?? []
-            if let index = entries.firstIndex(where: { calendar.isDate($0.day, inSameDayAs: day) }) {
+            if let index = entries.firstIndex(where: { $0.dayKey == key }) {
                 if entries[index].routines.contains(routine) { entries[index].routines.remove(routine) }
                 else { entries[index].routines.insert(routine) }
-            } else { entries.append(RoutineDay(day: day, routines: [routine])) }
+            } else { entries.append(RoutineDay(day: day, routines: [routine], dayKey: key)) }
             routineDays = entries
         }
     }
