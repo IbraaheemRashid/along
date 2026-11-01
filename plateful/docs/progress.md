@@ -2,7 +2,7 @@
 
 Updated 1 November 2026. Working name: Along; companion: Pip. The user approved the progress-companion direction and explicitly authorised a SwiftUI prototype with mocks. The earlier pantry concept was rejected and is not the current brief. **Market Gate A is not passed.**
 
-This file records the research handoff. The implementation owner must append actual build, test and simulator results; none are inferred from a brief or source scaffold.
+The native prototype is implemented and verified in Simulator. Local API and web verification are complete; live services and commercial validation remain pending. Results below distinguish source, local tests and unverified integrations.
 
 ## Phase 0: Find and validate the niche — ⚠️ partially done
 
@@ -29,22 +29,23 @@ Money: no paid services or spending initiated by research; all funnel values are
 - [x] User approved the progress-companion direction.
 - [x] Map one reference pattern to each main screen.
 - [ ] Complete reference screenshots, full onboarding/paywall teardowns and visual comparison.
-- [ ] Review the built experience against the detailed brief on a device.
+- [x] Review the built experience against the brief in iPhone Simulator. Real-device review remains pending.
 
 Done: [brief](brief.md), [parked ideas](later.md). The brief specifies intended behaviour; implementation status is below.
 
 ## Phase 2: Accounts and repo — ⚠️ partially done
 
 - [x] Playbook cloned and read; separate contributor worktrees established.
-- [ ] Verify final repository scaffolding, commands, ignores and appropriate dependencies.
-- [ ] Run project checks and commit/push the assembled app. A research-document commit is not a pushed application release.
+- [x] Verify repository scaffolding, generated Xcode project, commands and ignores.
+- [x] Run native build, domain and simulator checks; assemble local commits.
+- [ ] Push to an authorised remote repository; no remote application release has occurred.
 - [ ] Configure only needed live accounts: Cloudflare/GitHub initially; Apple Developer and Superwall when preparing a real beta/payment test. Other services only when used.
 
 Account availability and login are not assumed. No production infrastructure is required for a local demo.
 
-## Phase 3: Backend and database — pending integration verification
+## Phase 3: Backend and database — local preview verified
 
-- [ ] Verify local Worker/D1 routes and migrations against the approved scope.
+- [x] Verify Worker fetch handlers and actual SQL migrations/queries using Node SQLite. Local HTTP smoke passed. Cloudflare/Wrangler runtime and a live D1 binding remain unverified.
 - [ ] Create staging bindings and deploy only after the appropriate account is available.
 - [ ] Verify staging health, parameterised SQL, error handling and restricted origins.
 - [ ] Production resources/migrations remain out of scope for this prototype.
@@ -62,17 +63,17 @@ Account availability and login are not assumed. No production infrastructure is 
 
 No mock AI result is claimed as a model-backed feature. This is an explicit product decision, not a completed playbook AI phase.
 
-## Phase 6: Web — pending implementation-owner results
+## Phase 6: Web — local validation preview verified
 
-- [ ] Verify React/Vite waitlist, honest demo/live state, consent and mobile layout.
-- [ ] Verify Worker/D1 signup persistence and duplicate handling locally/staging.
+- [x] Build React/Vite and verify an honest interactive preview at desktop and 390px mobile widths. The visible waitlist remains disabled; no email collection or consent claim is simulated.
+- [x] Verify signup adapter gates and API consent/challenge/duplicate/retention logic in local tests with SQLite and mocked Turnstile. Staging D1 and the real Turnstile service remain unverified.
 - [ ] Live signup, authentication and Stripe test checkout remain unverified; no real payment is intended now.
 
-## Phase 7: iOS — in progress; implementation owner to update
+## Phase 7: iOS — working local prototype
 
-- [ ] SwiftUI onboarding, check-in, journey, optional weight, milestones, recap and Pip customisation.
-- [ ] Local persistence, export and deletion; explicit fictional 14-day sample mode.
-- [ ] Run core-logic checks, build simulator target and inspect the running app.
+- [x] SwiftUI onboarding, check-in, journey, optional weight, milestones, recap and Pip customisation.
+- [x] Local persistence, export and deletion; explicit fictional 14-day sample mode. Persistence and deletion are UI-tested; the export share-sheet destination has not been round-trip tested.
+- [x] Run 21 core checks, build the simulator target and inspect the running app. Four UI flows passed.
 - [ ] Staging API/auth connection, App Store Connect setup, Superwall and sandbox entitlements.
 - [ ] Android remains parked until the first platform is validated.
 
@@ -87,19 +88,20 @@ The $29.99/year display is a proposal only. No charge, trial or renewal occurs i
 
 ## Phase 9: Analytics and errors — pending
 
-- [ ] Verify a minimal non-sensitive event schema; exclude record contents and health values.
+- [x] Verify a minimal non-sensitive API event schema; exclude record contents and health values. No native events are emitted and no live pipeline is connected.
 - [ ] Configure Tinybird pipeline and funnel/retention/error dashboards if moving to a live beta.
 - [ ] Test a complete staging event path and intentional error; distinguish sample/test sessions.
 
 ## Phase 10: Polish — pending device review
 
-- [ ] Verify first-run and empty/sample/populated states, loading/error handling and restart persistence.
-- [ ] Verify accessibility, Dynamic Type, VoiceOver, dark mode, reduced motion and tap targets.
+- [x] Verify first-run, empty/sample/populated states and restart persistence in Simulator. Save/read failures have explicit UI handling; filesystem fault injection remains pending.
+- [x] Inspect Today in dark mode and accessibility-extra-large text; fix title scaling and verify the result. Native controls and accessibility labels are present.
+- [ ] Complete all-screen VoiceOver, reduced-motion and real-device accessibility review.
 - [ ] Human reviews a real-device build and signs off on the experience.
 
 ## Phase 11: Retention — prototype loop specified, outcomes unknown
 
-- [ ] Verify factual weekly recaps and cumulative accessories without streak penalties.
+- [x] Verify factual weekly recaps, personal milestone inclusion and cumulative accessory retention without streak penalties.
 - [ ] Optional reminders/widget only after user value and permission; timezone/quiet-hour controls.
 - [ ] Welcome/trial emails and real trial reminder only when those services exist.
 - [ ] Measure return behaviour; no retention claim until a cohort matures.
@@ -125,4 +127,20 @@ The $29.99/year display is a proposal only. No charge, trial or renewal occurs i
 
 ## Implementation verification log
 
-Pending parent integration. Append exact commands, outcomes, simulator/device used, screenshots where useful, and remaining limitations. Do not promote a phase to complete solely because its files exist.
+Native: Xcode 26.3, iPhone 17 Pro simulator, iOS 26.3. Project: `apps/ios/Along.xcodeproj`, scheme Along. No signing or Apple Developer account needed for the simulator build.
+
+- `xcodebuild ... test` completed the three main UI flows with **0 failures**: blank onboarding/milestone, sample onboarding/check-in/edit/relaunch, optional weight/local-data deletion/relaunch. Result: `.build/AlongVerified2.xcresult`.
+- A focused fourth UI test of the completed weekly reflection and two sample milestones passed: `.build/AlongReflection.xcresult`.
+- `swiftc apps/ios/Along/Models.swift tests/ios/CoreTests.swift ...` and the resulting binary passed **21 checks**: same-day replacement and identity, date boundaries, routine removal, note/title limits, kg/lb conversion, persistent cosmetic unlocks, sample provenance and Codable round-trip.
+- The weight UI test initially scrolled past the chart. Smaller bidirectional scrolling corrected the test. The chart was also updated to separate fictional sample records from personal records, with a dashed sample series and legend.
+- Today was visually inspected in light/dark appearance and accessibility-extra-large text. Serif titles now use SwiftUI `ScaledMetric`; original simulator settings were restored. Full VoiceOver and device testing is still pending.
+- Screenshots: [Today](screenshots/along-today.png), [Journey](screenshots/along-journey.png), [Pip](screenshots/along-companion.png), [Welcome](screenshots/along-welcome.png), [dark](screenshots/along-dark.png), [large text](screenshots/along-large-type.png).
+
+API: 25 Node tests pass, including actual SQL migrations executed against in-memory SQLite. A parent-run localhost HTTP smoke test also passed: health 200 with `liveReady:false`, check-in response `stored:false`, disabled waitlist 503. No provider calls occurred. `apps/api/README.md` documents all activation boundaries.
+
+The app uses protected local JSON excluded from device backups. Failed reads do not silently overwrite the journal. Per-entry sample labels survive editing and export. Keychain/URLSession utilities exist as dormant seams; there is no account or cloud connection. Pricing is a non-purchasable preview. Live services, TestFlight and real market results remain unverified.
+
+
+Web: 5 Node checks pass; Vite 8.3.5 production bundle builds with pinned React/ReactDOM 19.3.1. Headless Chrome/Playwright verified desktop and 390px mobile layout, explicit mood/appetite choice, 500-character note cap, save/journey, same-day edit, milestone accuracy, reset cancellation/confirmation, disabled waitlist, no browser storage and no external requests. Screenshots were visually inspected. Browser-only state deliberately clears on refresh; native local persistence is separate. A test assertion was made case-insensitive to account for CSS text capitalisation.
+
+Run commands from `plateful`: `bash scripts/check.sh`, `bash scripts/dev-api.sh`, `bash scripts/dev-web.sh`. The web preview is localhost-only. All source is assembled on `codex/glp1-nutrition`; no remote push or publication occurred.

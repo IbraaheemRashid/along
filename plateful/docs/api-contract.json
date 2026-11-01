@@ -1,29 +1,37 @@
 {
+  "product": "Along",
   "version": 1,
-  "demo": true,
-  "routes": {
-    "GET /health": "public mode and service status",
-    "POST /api/auth/sign-in/anonymous": "Better Auth in live mode; local mock session in demo mode",
-    "GET /me/entitlements": "server entitlement, never a client-authorised real purchase",
-    "POST /meals/suggest": "{ingredients: string, appetite: small|regular, servings: 1...6, maxMinutes: 5|15|30, exclusions: string[]} -> {mode: demo|live, meals: Meal[], notice: string}",
-    "POST /events": "allowlisted metadata only; no prompts, ingredients, appetite, email or health details",
-    "POST /waitlist": "explicit consent and valid email, unavailable until configured"
+  "status": "local-development-only",
+  "notice": "The native prototype is local-only and does not call these routes automatically. Live account, AI, analytics and billing services fail closed. This replaces the abandoned pantry contract.",
+  "baseURL": "http://127.0.0.1:8787",
+  "checkIn": {
+    "id": "UUID string",
+    "day": "YYYY-MM-DD calendar date",
+    "mood": ["bright", "steady", "tough"],
+    "appetite": ["low", "comfortable", "hungry"],
+    "routines": "Unique array of nutrition, movement and/or reflection; empty permitted",
+    "note": "String up to 500 characters; empty permitted"
   },
-  "meal": {
-    "id": "chicken-rice-bowl",
-    "name": "Lemon chicken bowl",
-    "subtitle": "One familiar dinner, flexible portions",
-    "minutes": 15,
-    "protein": 32,
-    "fibre": 6,
-    "energy": 420,
-    "colour": "sage",
-    "symbol": "leaf.fill",
-    "tags": ["chicken", "rice", "peppers"],
-    "allergens": ["milk"],
-    "ingredients": [{"name":"Chicken breast","quantity":120,"unit":"g","aisle":"Protein"}],
-    "steps": ["Prepare the ingredients.","Cook thoroughly according to food packaging instructions."],
-    "householdTip": "Adjust each serving to preference.",
-    "nutritionNote": "Illustrative demo estimates per base serving. Not clinically reviewed."
-  }
+  "milestone": {
+    "id": "UUID string",
+    "date": "YYYY-MM-DD calendar date",
+    "title": "Nonblank string up to 80 characters",
+    "note": "String up to 300 characters; empty permitted",
+    "kind": ["everyday", "strength", "confidence", "other"]
+  },
+  "routes": [
+    {"method": "GET", "path": "/health", "response": {"service": "along-api", "version": 1, "mode": "demo", "status": "ok", "liveReady": false}, "other": "503 setup_required outside the explicitly enabled loopback demo"},
+    {"method": "GET", "path": "/journey", "response": {"mode": "demo", "storage": "sample | local-d1", "checkIns": "checkIn[]", "milestones": "milestone[]", "notice": "Human-readable storage disclosure"}},
+    {"method": "POST", "path": "/check-ins", "request": "checkIn", "response": {"mode": "demo", "stored": "boolean", "checkIn": "checkIn", "notice": "Storage disclosure"}, "behavior": "Local D1 upserts by calendar day and preserves the existing entry ID. Node preview returns stored:false; clients must not show cloud-save success."},
+    {"method": "POST", "path": "/milestones", "request": "milestone", "response": {"mode": "demo", "stored": "boolean", "milestone": "milestone", "notice": "Storage disclosure"}},
+    {"method": "POST", "path": "/weekly-reflection", "request": {"weekStart": "YYYY-MM-DD", "checkIns": "0–7 unique daily checkIns within that seven-day interval"}, "response": {"mode": "demo", "title": "string", "body": "Deterministic factual counts, not medical or AI advice", "checkedInDays": "integer", "routineCount": "integer"}},
+    {"method": "POST", "path": "/events", "request": {"name": "Allowlisted event name", "properties": "Allowlisted platform/feature/surface/result enum metadata only"}, "response": {"mode": "demo", "accepted": true, "stored": false}, "privacy": "No notes, weight, appetite, email, free text or health values. No live ingestion."},
+    {"method": "POST", "path": "/waitlist", "status": "Disabled by default. Requires configured consent/privacy text, D1 and verified Turnstile; no false success."},
+    {"method": "POST", "path": "/api/auth/sign-in/anonymous", "status": "Explicit local demo only; no live Better Auth identity"},
+    {"method": "GET", "path": "/me/entitlements", "status": "Demo entitlement only; no real subscription"},
+    {"method": "POST", "path": "/webhooks/superwall", "status": "Disabled until signed, idempotent production integration is implemented"},
+    {"method": "POST", "path": "/webhooks/stripe", "status": "Disabled until signed, idempotent production integration is implemented"}
+  ],
+  "errors": {"error": "machine-readable code", "message": "Safe message without provider, SQL, credential or request details"},
+  "deferred": ["real authentication", "account ownership", "cloud sync/conflict handling", "cloud deletion/export", "weight API", "live AI", "real entitlements", "production deployment"]
 }

@@ -12,3 +12,6 @@ dist/
 *.xcuserstate
 xcuserdata/
 .swiftpm/
+.pnpm-store/
+*.xcresult/
+apps/ios/Plateful/

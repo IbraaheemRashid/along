@@ -65,4 +65,4 @@ Production remains disabled; deployment is outside this prototype. Secrets belon
 
 The Node suite covers schema validation, sensitive-data rejection, fail-closed environment gates, CORS, body limits, sample/persisted semantics, deterministic reflection, webhook rejection, waitlist consent/challenge handling and bound SQL. A small D1-compatible test adapter executes the actual migrations and queries against Node's real in-memory SQLite database, including update/idempotency checks.
 
-25 tests pass. No external provider integration was exercised. Wrangler/Cloudflare runtime checks and live D1 have not been run. A socket-based local smoke test was blocked by the execution sandbox; direct Worker fetch-handler tests ran successfully.
+25 tests pass. No external provider integration was exercised. Wrangler/Cloudflare runtime checks and live D1 have not been run. Direct Worker fetch-handler tests passed. A parent-run local HTTP smoke test also passed for health, an honest `stored:false` check-in response and the disabled waitlist (503).

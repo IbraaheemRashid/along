@@ -1,6 +1,6 @@
 # Plateful agent guide
 
-Working name: Plateful. For adults using GLP-1 medication, turn available ingredients and food preferences into three practical meal options in seconds. This is a local prototype with sample meals, not a clinical service.
+Working name: Along; original mascot: Pip. On 1 November 2026 the user explicitly approved: "A personal record of your GLP-1 journey, with a companion that helps you notice progress and maintain the routines you choose." Build an adult progress-led companion. Core: short daily check-ins, optional routines, personal milestones, a chronological journey, optional weight records, a factual weekly recap and gentle mascot development. Nutrition and strength support the journey. No pantry-first workflow or pediatric diabetes product. The old apps/ios/Plateful files are abandoned experiments and must not be compiled into Along.
 
 Follow the cloned ai-app-playbook. The user explicitly authorised building an iOS Swift app with mocks where accounts are unavailable. Build and test the prototype; market Gate A remains unverified and no production release is authorised.
 
@@ -14,7 +14,7 @@ Follow the cloned ai-app-playbook. The user explicitly authorised building an iO
 
 ## Boundaries
 
-Demo mode must be conspicuous. Never present sample nutrition as verified, a mock trial as a real purchase, or local test data as real demand. No medication advice, symptom treatment, calorie prescriptions or diagnostic claims. Hard dietary exclusions must fail closed. No secrets in clients. Production routes remain disabled until configured and reviewed.
+Demo mode must be conspicuous. Never present sample records as real history, a mock trial as a real purchase, or local test data as real demand. No medication advice, symptom treatment, calorie prescriptions or diagnostic claims. The mascot never suffers, loses progress or rewards weight loss, under-eating, doses or glucose readings. No streak penalties. Missing records are unknown. No secrets in clients. Production routes remain disabled until configured and reviewed. AI is optional; do not invent an AI dependency to inflate the niche score.
 
 Use separate git worktrees for parallel API, iOS and research work, as chapter 01 instructs. Own only assigned paths. Do not modify another contributor's files.
 

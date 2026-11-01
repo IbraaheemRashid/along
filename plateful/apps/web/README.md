@@ -14,3 +14,5 @@ Run `pnpm install`, then `pnpm dev`. `pnpm build`, `pnpm check` and `pnpm test` 
 This is a prototype before market validation. No demand, health outcomes or conversion results are implied. No production deployment is configured or performed.
 
 Reference APIs: [React createRoot](https://react.dev/reference/react-dom/client/createRoot), [Vite guide](https://vite.dev/guide/).
+
+Verification: production build and five Node tests pass. `tests/web/browser-check.mjs` also passed in isolated headless Chrome at desktop and 390px mobile widths, covering selection, save/edit/reset, milestones, disabled signups, and absence of storage/external requests. It requires an installed Playwright module and Chrome, and installs neither automatically.
