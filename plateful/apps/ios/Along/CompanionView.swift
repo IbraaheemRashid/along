@@ -3,6 +3,8 @@ import SwiftUI
 struct CompanionView: View {
     @Environment(JournalStore.self) private var store
     @Environment(\.dynamicTypeSize) private var textSize
+    @State private var story: PipStory?
+    @State private var previewAccessory: Accessory?
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -11,16 +13,44 @@ struct CompanionView: View {
                         HStack { Text("\(store.companionName)’s place").alongTitle(27); Spacer(); DemoBadge() }
                         VStack(alignment: .leading, spacing: 8) { Text("\(store.companionName)’s place").alongTitle(27); DemoBadge() }
                     }
-                    PipRoomView(accessory: store.journal.accessory, height: 235)
-                        .clipShape(RoundedRectangle(cornerRadius: 28))
-                        .accessibilityElement().accessibilityLabel("\(store.companionName) wearing \(store.journal.accessory.title)")
+                    PipPlayground(name: store.companionName, accessory: previewAccessory ?? store.journal.accessory, message: "It’s lovely to see you.", height: 235)
                         .accessibilityIdentifier("companion.preview")
+                    if let previewAccessory {
+                        SetupNote(text: "Previewing \(previewAccessory.title). It becomes yours after \(previewAccessory.requiredDays) recorded days.", symbol: "eye")
+                        Button("Back to current look") { self.previewAccessory = nil }.frame(minHeight: 44)
+                    }
+                    Button {
+                        story = PipStory.all.first { store.journal.companionDiscoveries?[$0.id] == nil } ?? PipStory.all[0]
+                    } label: {
+                        HStack(spacing: 14) {
+                            AlongIcon(symbol: "bubble.left.and.bubble.right", apricot: true)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("A moment with \(store.companionName)").font(.system(.headline, design: .rounded))
+                                Text("A little story. Something new to notice.").font(.caption).foregroundStyle(Theme.secondaryInk)
+                            }
+                            Spacer(minLength: 0); Image(systemName: "chevron.right").font(.caption)
+                        }.card(padding: 16)
+                    }.buttonStyle(.plain).accessibilityIdentifier("pet.story.open")
                     VStack(alignment: .leading, spacing: 14) {
                         SectionLabel(title: "A little more personality", subtitle: "Keepsakes appear as you record days. Once unlocked, they’re yours.")
                         if textSize.isAccessibilitySize {
                             VStack(spacing: 12) { ForEach(Accessory.allCases) { keepsake($0, compact: false) } }
                         } else {
                             HStack(alignment: .top, spacing: 10) { ForEach(Accessory.allCases) { keepsake($0, compact: true) } }
+                        }
+                    }
+                    if let discoveries = store.journal.companionDiscoveries, !discoveries.isEmpty {
+                        SectionLabel(title: "Little discoveries", subtitle: "Things \(store.companionName) has noticed with you.")
+                        ForEach(PipStory.all) { item in
+                            if let answer = discoveries[item.id], let choice = item.choices.first(where: { $0.id == answer }) {
+                                Button { story = item } label: {
+                                    HStack(spacing: 12) {
+                                        AlongIcon(symbol: item.symbol, apricot: true)
+                                        Text(choice.discovery).font(.subheadline.weight(.semibold))
+                                        Spacer(); Image(systemName: "chevron.right").font(.caption)
+                                    }.card(padding: 14)
+                                }.buttonStyle(.plain).accessibilityIdentifier("pet.discovery.\(item.id)")
+                            }
                         }
                     }
                     VStack(alignment: .leading, spacing: 8) {
@@ -45,6 +75,7 @@ struct CompanionView: View {
                 }.padding(22).padding(.bottom, 20).frame(maxWidth: 650)
             }.frame(maxWidth: .infinity).pageBackground()
                 .navigationTitle(store.companionName).navigationBarTitleDisplayMode(.inline)
+                .sheet(item: $story) { PipStoryView(story: $0) }
         }
     }
 
@@ -52,7 +83,8 @@ struct CompanionView: View {
         let available = store.journal.canUse(accessory)
         let selected = store.journal.accessory == accessory
         return Button {
-            guard available else { return }
+            guard available else { previewAccessory = accessory; return }
+            previewAccessory = nil
             store.journal.accessory = accessory
             store.persist()
             store.showToast("\(store.companionName)’s new look")
@@ -71,11 +103,11 @@ struct CompanionView: View {
                 }
                 if !compact { Spacer(minLength: 0) }
             }.frame(maxWidth: .infinity).padding(.horizontal, compact ? 8 : 16).padding(.vertical, 14)
-                .background(selected ? Theme.lilac.opacity(0.4) : Theme.card, in: RoundedRectangle(cornerRadius: 22))
+                .background(selected ? Theme.softAccent : Theme.card, in: RoundedRectangle(cornerRadius: 22))
                 .overlay(RoundedRectangle(cornerRadius: 22).stroke(selected ? Theme.accent : Theme.line, lineWidth: selected ? 2 : 1))
-        }.buttonStyle(.plain).disabled(!available)
+        }.buttonStyle(.plain)
             .accessibilityIdentifier("companion.accessory.\(accessory.rawValue)")
-            .accessibilityLabel("\(accessory.title), \(available ? (selected ? "selected" : "available") : "unlocks after \(accessory.requiredDays) recorded days")")
+            .accessibilityLabel("\(accessory.title), \(available ? (selected ? "selected" : "available") : "preview, unlocks after \(accessory.requiredDays) recorded days")")
             .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

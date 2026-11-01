@@ -30,7 +30,7 @@ struct OnboardingView: View {
             header
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 23) {
+                    VStack(alignment: .leading, spacing: 22) {
                         Color.clear.frame(height: 1).id("top")
                         screenContent
                     }.padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 24)
@@ -57,18 +57,18 @@ struct OnboardingView: View {
         VStack(spacing: 16) {
             HStack {
                 if step > 0 {
-                    Button(action: back) { Image(systemName: "arrow.left").font(.system(size: 19, weight: .medium)).frame(width: 44, height: 40).contentShape(Rectangle()) }
+                    Button(action: back) { Image(systemName: "arrow.left").font(.system(size: 17, weight: .semibold)).frame(width: 44, height: 44).background(Theme.softAccent, in: Circle()).contentShape(Circle()) }
                         .accessibilityLabel("Back").accessibilityIdentifier("onboarding.back")
                 } else { Text("along").font(.system(size: 28, weight: .semibold, design: .serif)).foregroundStyle(Theme.accent) }
                 Spacer()
-                Text("\(step + 1) / 26").font(.system(.caption, design: .rounded, weight: .medium)).monospacedDigit().foregroundStyle(Theme.secondaryInk)
+                Text("\(step + 1) / 26").font(.system(.caption, design: .rounded, weight: .medium)).monospacedDigit().foregroundStyle(Theme.accent).padding(.horizontal, 12).padding(.vertical, 8).background(Theme.softAccent, in: Capsule())
                     .accessibilityLabel("Screen \(step + 1) of 26").accessibilityIdentifier("onboarding.step.\(step + 1)")
                 if step == 25 {
                     Button { store.onboardingDraft.step = 23 } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .medium)).frame(width: 40, height: 40) }
                         .accessibilityLabel("Close membership offer").accessibilityIdentifier("onboarding.close")
                 }
             }
-            HStack(spacing: 5) { ForEach(0..<4) { index in Capsule().fill(index <= chapter ? Theme.accent : Theme.line).frame(height: 3) } }.accessibilityHidden(true)
+            HStack(spacing: 5) { ForEach(0..<4) { index in Capsule().fill(index <= chapter ? Theme.accent : Theme.softAccent).frame(height: 5) } }.accessibilityHidden(true)
         }.padding(.horizontal, 24).padding(.top, 7).padding(.bottom, 8).frame(maxWidth: 560).frame(maxWidth: .infinity)
     }
     @ViewBuilder private var screenContent: some View {
@@ -102,15 +102,25 @@ struct OnboardingView: View {
         }
     }
     private func heading(_ detail: String? = nil, eyebrow: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 13) {
-            Text(eyebrow ?? chapterNames[chapter]).font(.system(size: 10, weight: .bold, design: .rounded)).tracking(1.8).foregroundStyle(Theme.accent)
-            Text(Self.titles[step]).alongTitle(34).lineSpacing(1).fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
-            if let detail { Text(detail).font(.body).foregroundStyle(Theme.secondaryInk).lineSpacing(4).fixedSize(horizontal: false, vertical: true) }
+        VStack(alignment: .leading, spacing: 16) {
+            Text(eyebrow ?? chapterNames[chapter]).font(.system(.caption2, design: .rounded, weight: .bold))
+                .tracking(1.5).foregroundStyle(Theme.accent)
+                .padding(.horizontal, 11).padding(.vertical, 7).background(Theme.softApricot, in: Capsule())
+            Text(Self.titles[step]).alongTitle(31).lineSpacing(1).fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
+            if let detail {
+                HStack(alignment: .top, spacing: 12) {
+                    if ![0, 18, 19, 22, 24].contains(step) {
+                        PipArtwork(pose: .welcome, accessory: draft.accessory).frame(width: 45, height: 55)
+                    }
+                    Text(detail).font(.subheadline).foregroundStyle(Theme.secondaryInk).lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
+                }.padding(15).background(Theme.card, in: RoundedRectangle(cornerRadius: 22))
+            }
         }
     }
     private var welcome: some View {
         VStack(alignment: .leading, spacing: 20) {
-            SetupHero(height: 258, caption: "Hi, I’m Pip.")
+            PipPlayground(name: "Pip", accessory: .leaf, message: "Hi, I’m Pip.", height: 230)
             heading("A personal record of your GLP-1 journey. A little friend to help you notice the moments along the way.", eyebrow: "WELCOME TO ALONG")
             HStack(spacing: 18) { Label("Your progress", systemImage: "book.closed"); Label("Your pace", systemImage: "leaf") }.font(.caption.weight(.medium)).foregroundStyle(Theme.accent)
             Text("For adults · About 3–5 minutes to set up\nPaid membership required after setup.").font(.caption).foregroundStyle(Theme.secondaryInk).lineSpacing(4)
@@ -269,7 +279,7 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 24) {
             heading("Choose a day for a weekly look at the moments you’ve kept.")
             SetupHero(pose: .journal, height: 200)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: dynamicType.isAccessibilitySize ? 2 : 4), spacing: 10) {
                 ForEach([2, 3, 4, 5, 6, 7, 1], id: \.self) { day in
                     Button { store.onboardingDraft.reflectionDay = day } label: {
                         Text(Calendar.current.shortWeekdaySymbols[day - 1]).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).frame(minHeight: 58)
@@ -292,14 +302,16 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 18) {
             heading("Choose a first keepsake for \(companion). This one’s yours from the beginning.")
             SetupHero(accessory: draft.accessory, height: 240)
-            HStack(spacing: 10) {
+            let layout = dynamicType.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(alignment: .top, spacing: 10))
+            layout {
                 ForEach(Accessory.allCases) { accessory in
                     Button { store.onboardingDraft.accessory = accessory } label: {
                         VStack(spacing: 10) {
-                            Image(systemName: accessory == .leaf ? "leaf" : accessory == .scarf ? "wind" : "sun.max").font(.title2)
-                            Text(accessory.title).font(.caption.weight(.medium)).multilineTextAlignment(.center)
-                        }.foregroundStyle(Theme.accent).frame(maxWidth: .infinity).frame(minHeight: 92)
-                            .background(draft.accessory == accessory ? Theme.lilac.opacity(0.45) : Theme.card, in: RoundedRectangle(cornerRadius: 20))
+                            PipArtwork(accessory: accessory).frame(width: 74, height: 84)
+                            Text(accessory.title).font(.system(.caption, design: .rounded, weight: .semibold)).multilineTextAlignment(.center)
+                            Image(systemName: draft.accessory == accessory ? "checkmark.circle.fill" : "circle").font(.caption)
+                        }.foregroundStyle(Theme.accent).frame(maxWidth: .infinity).padding(.vertical, 14).frame(minHeight: 92)
+                            .background(draft.accessory == accessory ? Theme.softAccent : Theme.card, in: RoundedRectangle(cornerRadius: 20))
                             .overlay(RoundedRectangle(cornerRadius: 20).stroke(draft.accessory == accessory ? Theme.accent : Theme.line))
                     }.buttonStyle(.plain).accessibilityIdentifier("onboarding.accessory.\(accessory.rawValue)").accessibilityAddTraits(draft.accessory == accessory ? .isSelected : [])
                 }
@@ -309,20 +321,21 @@ struct OnboardingView: View {
     private var companionNameScreen: some View {
         VStack(alignment: .leading, spacing: 22) {
             heading("Pip is lovely. Something of your own is lovely, too.")
-            SetupHero(accessory: draft.accessory, height: 210)
             input("Companion name", placeholder: "Pip", value: binding(\.companionName, limit: 24), identifier: "onboarding.companionName")
+            PipPlayground(name: companion, accessory: draft.accessory, message: "A little company, at your pace.", height: 210)
         }
     }
     private var checkInScreen: some View {
         VStack(alignment: .leading, spacing: 16) {
             heading("There’s no right answer. Just how things feel right now.").padding(.bottom, 5)
             Text("How are you feeling?").font(.headline)
-            HStack(spacing: 9) {
+            let layout = dynamicType.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 9)) : AnyLayout(HStackLayout(spacing: 9))
+            layout {
                 ForEach(Mood.allCases) { mood in
                     Button { store.onboardingDraft.mood = mood } label: {
                         VStack(spacing: 10) { Image(systemName: mood.symbol).font(.system(size: 27, weight: .light)); Text(mood.shortTitle).font(.caption.weight(.semibold)) }
                             .foregroundStyle(Theme.accent).frame(maxWidth: .infinity).frame(minHeight: 98)
-                            .background(draft.mood == mood ? Theme.lilac.opacity(0.5) : Theme.card, in: RoundedRectangle(cornerRadius: 20))
+                            .background(draft.mood == mood ? Theme.softAccent : Theme.card, in: RoundedRectangle(cornerRadius: 20))
                             .overlay(RoundedRectangle(cornerRadius: 20).stroke(draft.mood == mood ? Theme.accent : Theme.line))
                     }.buttonStyle(.plain).accessibilityLabel(mood.title).accessibilityIdentifier("onboarding.mood.\(mood.rawValue)").accessibilityAddTraits(draft.mood == mood ? .isSelected : [])
                 }
@@ -389,12 +402,13 @@ struct OnboardingView: View {
                 Spacer(minLength: 0)
                 PipArtwork(pose: .journal, accessory: draft.accessory).frame(width: 108, height: 128)
             }
+            HStack { Pill(text: "No free trial", symbol: "checkmark"); Spacer() }
             Text("Your days, your progress, and a little company from \(companion).").font(.body).foregroundStyle(Theme.secondaryInk).lineSpacing(3)
             VStack(alignment: .leading, spacing: 14) {
                 Label("Your complete personal journey", systemImage: "book.closed")
                 Label("Reflections from your recorded days", systemImage: "sparkles")
                 Label("Your routines, at your own pace", systemImage: "leaf")
-            }.font(.subheadline.weight(.medium)).foregroundStyle(Theme.accent).padding(.vertical, 7)
+            }.font(.subheadline.weight(.medium)).foregroundStyle(Theme.accent).card(padding: 17)
             MembershipPlans(selection: binding(\.plan))
             MembershipDisclosure(plan: draft.plan)
             HStack(spacing: 22) {
@@ -416,7 +430,7 @@ struct OnboardingView: View {
                     Text(step == 25 && dynamicType.isAccessibilitySize ? "Subscribe" : primaryTitle).font(.system(.body, design: .rounded, weight: .semibold))
                     Image(systemName: step == 25 ? "lock.open" : "arrow.right").font(.system(size: 17, weight: .semibold))
                     Spacer(minLength: 0)
-                }.frame(minHeight: 56).padding(.horizontal, 12).foregroundStyle(.white)
+                }.padding(.vertical, 15).frame(minHeight: 56).padding(.horizontal, 12).foregroundStyle(.white)
                     .background(Theme.plum.opacity(draft.canContinue(at: step) ? 1 : 0.35), in: RoundedRectangle(cornerRadius: 20))
             }.buttonStyle(.plain).disabled(!draft.canContinue(at: step)).accessibilityLabel(primaryTitle).accessibilityIdentifier(step == 25 ? "onboarding.subscribe" : "onboarding.continue")
             if canSkip {
@@ -476,14 +490,14 @@ struct OnboardingView: View {
             Text(label).font(.subheadline.weight(.medium)).foregroundStyle(Theme.secondaryInk)
             TextField(placeholder, text: value).font(.title2).textInputAutocapitalization(.words).autocorrectionDisabled().focused($inputFocused)
                 .submitLabel(.continue).onSubmit { if draft.canContinue(at: step) { advance() } }
-                .padding(21).background(Theme.card, in: RoundedRectangle(cornerRadius: 20)).overlay(RoundedRectangle(cornerRadius: 20).stroke(Theme.line))
+                .alongField()
                 .accessibilityLabel(label).accessibilityIdentifier(identifier)
         }
     }
     private func multiline(_ label: String, placeholder: String, value: Binding<String>, identifier: String, limit: Int) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             TextField(placeholder, text: value, axis: .vertical).lineLimit(5...8).font(.system(.body, design: .serif)).lineSpacing(5).focused($inputFocused)
-                .padding(22).background(Theme.card, in: RoundedRectangle(cornerRadius: 20)).overlay(RoundedRectangle(cornerRadius: 20).stroke(Theme.line))
+                .alongField()
                 .accessibilityLabel(label).accessibilityIdentifier(identifier)
             Text("\(value.wrappedValue.count) / \(limit)").font(.caption2).foregroundStyle(Theme.secondaryInk).frame(maxWidth: .infinity, alignment: .trailing)
         }
@@ -523,14 +537,16 @@ struct MembershipTermsView: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
-            List {
-                Section("Local design preview") { Text("This build cannot take payments. The displayed US prices illustrate the proposed membership. No subscription is created by interacting with these screens.") }
-                Section("Proposed membership") {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                AlongSection(title: "Local design preview") { Text("This build cannot take payments. The displayed US prices illustrate the proposed membership. No subscription is created by interacting with these screens.") }
+                AlongSection(title: "Proposed membership") {
                     Text("Yearly: $29.99 charged at purchase and each annual renewal. Monthly: $5.99 charged at purchase and each monthly renewal. Billing starts immediately after a confirmed purchase. There is no free introductory period.")
                     Text("A production membership will renew automatically unless cancelled through the App Store subscription settings. Store pricing and final terms must be configured before purchases are enabled.")
                 }
-                Section("Your journal") { Text("Your saved entries remain on this device. Along supports personal reflection and routines; it does not give medical advice or medication instructions.") }
-            }.navigationTitle("Membership terms").navigationBarTitleDisplayMode(.inline)
+                AlongSection(title: "Your journal") { Text("Your saved entries remain on this device. Along supports personal reflection and routines; it does not give medical advice or medication instructions.") }
+                }.padding(22).frame(maxWidth: 650)
+            }.frame(maxWidth: .infinity).pageBackground().navigationTitle("Membership terms").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }
     }

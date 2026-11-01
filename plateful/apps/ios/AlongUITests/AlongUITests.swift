@@ -27,9 +27,9 @@ final class AlongUITests: XCTestCase {
         add(attachment)
     }
 
-    private func reveal(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+    private func reveal(_ element: XCUIElement, centerInScroll: Bool = false, file: StaticString = #filePath, line: UInt = #line) {
         for _ in 0..<12 {
-            if element.exists && element.isHittable { return }
+            if !centerInScroll && element.exists && element.isHittable { return }
             // Keep the gesture inside visible content. At large text sizes the
             // fixed footer occupies much more of the screen; a keyboard also
             // makes screen-relative swipes miss the scroll view entirely.
@@ -42,6 +42,7 @@ final class AlongUITests: XCTestCase {
                 let action = app.buttons[identifier]
                 if action.exists { bottom = min(bottom, action.frame.minY - 16) }
             }
+            if centerInScroll && element.exists && element.isHittable && element.frame.midY > top && element.frame.midY < bottom { return }
             let height = max(80, bottom - top)
             let above = element.exists && element.frame.midY < top
             let origin = app.coordinate(withNormalizedOffset: .zero)
@@ -49,6 +50,7 @@ final class AlongUITests: XCTestCase {
             let end = origin.withOffset(CGVector(dx: app.frame.width * 0.5, dy: top + height * (above ? 0.85 : 0.25)))
             start.press(forDuration: 0.05, thenDragTo: end)
         }
+        if centerInScroll { XCTFail("Expected control centre inside scrollable content: \(element)", file: file, line: line); return }
         XCTAssertTrue(element.exists && element.isHittable, "Expected visible control: \(element)", file: file, line: line)
     }
 
@@ -105,6 +107,7 @@ final class AlongUITests: XCTestCase {
     private func advanceThroughOnboarding(from first: Int = 1, through last: Int) {
         for step in first...last {
             assertOnboardingStep(step)
+            if step == 20 { capture("20") }
             if step == 4 {
                 tap("onboarding.skip") // A start date is optional.
             } else {
@@ -159,6 +162,44 @@ final class AlongUITests: XCTestCase {
         reveal(scarf)
         XCTAssertTrue(scarf.isSelected, "Chosen keepsake must survive restarting the app")
         capture("pip-selected-scarf")
+    }
+
+    func testPipPettingStoriesAndDiscoveryPersistence() {
+        launchSampleJourney()
+        tap("pet.greet")
+        XCTAssertEqual(app.buttons["pet.greet"].value as? String, "Hello, little friend.")
+        capture("pip-petting")
+        tap("today.companion")
+        tap("pet.story.open")
+        capture("pip-story-question")
+        tap("pet.story.rain")
+        XCTAssertTrue(app.staticTexts["Rainy-day rhythms"].waitForExistence(timeout: 5))
+        capture("pip-story-discovery")
+        tap("Back to Pip")
+        let discovery = app.buttons["pet.discovery.window"]
+        reveal(discovery)
+        XCTAssertTrue(discovery.exists)
+        app.terminate()
+        launchSandbox(reset: false)
+        app.tabBars.buttons["Pip"].tap()
+        reveal(app.buttons["pet.discovery.window"])
+        XCTAssertTrue(app.buttons["pet.discovery.window"].exists)
+    }
+
+    func testWholeAppStyleReview() {
+        launchSampleJourney()
+        capture("style-today")
+        for tab in ["Journey", "Pip", "You"] {
+            app.tabBars.buttons[tab].tap()
+            capture("style-\(tab.lowercased())")
+        }
+        tap("Privacy & your journal")
+        capture("style-privacy")
+        tap("Done")
+        tap("Explore Along Plus — preview")
+        capture("style-membership")
+        tap("Terms")
+        capture("style-terms")
     }
 
     func testDevLabSetupShortcuts() {
@@ -285,8 +326,10 @@ final class AlongUITests: XCTestCase {
             if step == 26 {
                 for plan in ["annual", "monthly"] {
                     let control = app.buttons["onboarding.plan.\(plan)"]
-                    reveal(control)
+                    reveal(control, centerInScroll: true)
                     XCTAssertTrue(control.isEnabled, "The \(plan) price control must remain usable with large text")
+                    control.tap()
+                    XCTAssertTrue(control.isSelected, "The \(plan) must be selectable with large text")
                     capture("26-dark-xxxl-\(plan)-price")
                 }
             }

@@ -23,8 +23,8 @@ struct OnboardingCatalogView: View {
                                 Text(String(format: "%02d", step + 1)).font(.caption.monospacedDigit()).foregroundStyle(Theme.accent).frame(width: 28)
                                 Text(OnboardingView.titles[step].replacingOccurrences(of: "\n", with: " ")).font(.subheadline).foregroundStyle(.primary)
                                 Spacer(); Image(systemName: "chevron.right").font(.caption).foregroundStyle(Theme.secondaryInk)
-                            }.padding(.vertical, 7)
-                        }.accessibilityIdentifier("dev.onboarding.\(step + 1)")
+                            }.padding(.vertical, 9)
+                        }.accessibilityIdentifier("dev.onboarding.\(step + 1)").listRowBackground(Theme.card)
                     }
                 }
             }.scrollContentBackground(.hidden).pageBackground().navigationTitle("Design review").navigationBarTitleDisplayMode(.inline)

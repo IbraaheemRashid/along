@@ -13,7 +13,9 @@ extension EnvironmentValues {
 
 enum Theme {
     static let paper = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.10, green: 0.09, blue: 0.13, alpha: 1) : UIColor(red: 0.98, green: 0.97, blue: 0.95, alpha: 1) })
-    static let card = Color(uiColor: .secondarySystemGroupedBackground)
+    static let card = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.15, green: 0.13, blue: 0.18, alpha: 1) : UIColor(red: 1, green: 0.995, blue: 0.98, alpha: 1) })
+    static let softAccent = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.24, green: 0.20, blue: 0.29, alpha: 1) : UIColor(red: 0.93, green: 0.89, blue: 0.95, alpha: 1) })
+    static let softApricot = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.29, green: 0.21, blue: 0.23, alpha: 1) : UIColor(red: 0.99, green: 0.91, blue: 0.85, alpha: 1) })
     static let plum = Color(red: 0.24, green: 0.19, blue: 0.30)
     static let accent = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.79, green: 0.72, blue: 0.91, alpha: 1) : UIColor(red: 0.24, green: 0.19, blue: 0.30, alpha: 1) })
     static let sage = Color(red: 0.79, green: 0.84, blue: 0.74)
@@ -38,8 +40,8 @@ struct PrimaryButton: View {
     var action: () -> Void
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 10) { Text(title).font(.headline); Spacer(minLength: 8); Image(systemName: symbol).font(.headline) }
-                .padding(.horizontal, 22).frame(minHeight: 56).foregroundStyle(.white)
+            HStack(spacing: 10) { Text(title).font(.system(.headline, design: .rounded)).fixedSize(horizontal: false, vertical: true); Spacer(minLength: 8); Image(systemName: symbol).font(.headline) }
+                .padding(.horizontal, 22).padding(.vertical, 16).frame(minHeight: 56).foregroundStyle(.white)
                 .background(Theme.plum, in: RoundedRectangle(cornerRadius: 19))
         }.buttonStyle(.plain)
     }
@@ -50,7 +52,7 @@ struct Pill: View {
     var body: some View {
         HStack(spacing: 5) { if let symbol { Image(systemName: symbol) }; Text(text) }
             .font(.caption.weight(.medium)).padding(.horizontal, 11).padding(.vertical, 7)
-            .background(.primary.opacity(0.055), in: Capsule())
+            .foregroundStyle(Theme.accent).background(Theme.softAccent, in: Capsule())
     }
 }
 struct DemoBadge: View {
@@ -67,8 +69,8 @@ struct SectionLabel: View {
     var subtitle: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.title3.weight(.semibold))
-            if let subtitle { Text(subtitle).font(.subheadline).foregroundStyle(.secondary) }
+            Text(title).font(.system(.title3, design: .rounded, weight: .semibold))
+            if let subtitle { Text(subtitle).font(.subheadline).foregroundStyle(Theme.secondaryInk) }
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -90,17 +92,17 @@ struct QuietEmpty: View {
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: symbol).font(.system(size: 28)).foregroundStyle(Theme.accent).frame(width: 68, height: 68).background(Theme.lilac.opacity(0.4), in: Circle())
-            Text(title).font(.title3.weight(.semibold))
-            Text(detail).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Text(title).font(.system(.title3, design: .rounded, weight: .semibold))
+            Text(detail).font(.subheadline).foregroundStyle(Theme.secondaryInk).multilineTextAlignment(.center)
         }.padding(10).frame(maxWidth: .infinity).card()
     }
 }
 
 // Original rendered artwork. Asset prompts and provenance are in docs/pip-art-direction.md.
 enum PipPose: String {
-    case welcome = "PipWelcome"
-    case journal = "PipJournal"
-    case celebrate = "PipCelebrate"
+    case welcome = "Pip2DWelcome"
+    case journal = "Pip2DJournal"
+    case celebrate = "Pip2DCelebrate"
 }
 struct PipArtwork: View {
     var pose: PipPose = .welcome
@@ -108,8 +110,8 @@ struct PipArtwork: View {
     private var asset: String {
         switch accessory {
         case .leaf: return pose.rawValue
-        case .scarf: return "PipScarf"
-        case .flower: return "PipFlower"
+        case .scarf: return "Pip2DScarf"
+        case .flower: return "Pip2DFlower"
         }
     }
     var body: some View {
@@ -125,25 +127,78 @@ struct PipView: View {
 struct MeadowView: View {
     var accessory: Accessory = .leaf
     var compact = false
-    @Environment(\.alongReducedMotion) private var reduceMotion
-    @State private var floating = false
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                LinearGradient(colors: [Color(red: 0.93, green: 0.91, blue: 0.88), Color(red: 0.88, green: 0.90, blue: 0.84)], startPoint: .top, endPoint: .bottom)
-                Circle().fill(Color(red: 0.98, green: 0.89, blue: 0.66)).frame(width: 60, height: 60).offset(x: geo.size.width * 0.30, y: -geo.size.height * 0.26)
-                Ellipse().fill(Color(red: 0.81, green: 0.85, blue: 0.74)).frame(width: geo.size.width * 1.5, height: geo.size.height * 0.75).offset(x: -geo.size.width * 0.2, y: geo.size.height * 0.48)
-                Ellipse().fill(Color(red: 0.73, green: 0.79, blue: 0.64)).frame(width: geo.size.width * 1.3, height: geo.size.height * 0.55).offset(x: geo.size.width * 0.3, y: geo.size.height * 0.49)
-                ForEach(0..<5) { index in
-                    Image(systemName: index.isMultiple(of: 2) ? "leaf.fill" : "sparkle")
-                        .font(.system(size: index.isMultiple(of: 2) ? 19 : 13)).foregroundStyle(index.isMultiple(of: 2) ? Color(red: 0.49, green: 0.60, blue: 0.39) : .white.opacity(0.9))
-                        .rotationEffect(.degrees(Double(index * 42)))
-                        .offset(x: CGFloat([-0.36, 0.29, 0.36, -0.27, -0.41][index]) * geo.size.width, y: CGFloat([0.22, 0.05, 0.32, -0.23, -0.01][index]) * geo.size.height)
-                }
-                PipView(accessory: accessory, wave: floating).frame(width: geo.size.height * 0.84, height: geo.size.height * 0.84).offset(y: floating && !reduceMotion ? 2 : 5)
-            }.frame(width: geo.size.width, height: geo.size.height).clipped()
+        GeometryReader { geometry in
+            PipRoomView(accessory: accessory, height: geometry.size.height)
+        }.accessibilityHidden(true)
+    }
+}
+
+struct AlongIcon: View {
+    var symbol: String
+    var apricot = false
+    var body: some View {
+        Image(systemName: symbol).font(.system(.title3, design: .rounded))
+            .foregroundStyle(Theme.accent).frame(width: 44, height: 44)
+            .background(apricot ? Theme.softApricot : Theme.softAccent, in: RoundedRectangle(cornerRadius: 14))
+            .accessibilityHidden(true)
+    }
+}
+
+struct CompanionHeading: View {
+    var title: String
+    var detail: String
+    var accessory: Accessory = .leaf
+    var pose: PipPose = .journal
+    @Environment(\.dynamicTypeSize) private var textSize
+    var body: some View {
+        let layout = textSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12)) : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
+        layout {
+            VStack(alignment: .leading, spacing: 9) {
+                Text(title).alongTitle(29).fixedSize(horizontal: false, vertical: true)
+                Text(detail).font(.subheadline).foregroundStyle(Theme.secondaryInk).fixedSize(horizontal: false, vertical: true)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+            PipArtwork(pose: pose, accessory: accessory).frame(width: 82, height: 98)
         }
-        .onAppear { if !reduceMotion { withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) { floating = true } } }
-        .accessibilityHidden(true)
+    }
+}
+
+struct AlongField: ViewModifier {
+    func body(content: Content) -> some View {
+        content.padding(18).background(Theme.card, in: RoundedRectangle(cornerRadius: 22))
+            .overlay(RoundedRectangle(cornerRadius: 22).stroke(Theme.line))
+    }
+}
+extension View {
+    func alongField() -> some View { modifier(AlongField()) }
+    func alongList() -> some View { scrollContentBackground(.hidden).background(Theme.paper) }
+}
+
+struct AlongSection<Content: View>: View {
+    var title: String
+    @ViewBuilder var content: () -> Content
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title).font(.system(.headline, design: .rounded)).foregroundStyle(Theme.accent)
+            VStack(alignment: .leading, spacing: 14, content: content)
+                .frame(maxWidth: .infinity, alignment: .leading).card(padding: 18)
+        }
+    }
+}
+
+struct SettingsAction: View {
+    var title: String
+    var symbol: String
+    var destructive = false
+    var action: () -> Void
+    var body: some View {
+        Button(role: destructive ? .destructive : nil, action: action) {
+            HStack(spacing: 12) {
+                AlongIcon(symbol: symbol, apricot: true)
+                Text(title).font(.subheadline.weight(.medium)).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.caption)
+            }.frame(minHeight: 48).contentShape(Rectangle())
+        }.buttonStyle(.plain).accessibilityLabel(title)
     }
 }

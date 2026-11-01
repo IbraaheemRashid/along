@@ -8,6 +8,7 @@ private enum JourneyMoment: Identifiable {
 }
 struct JourneyView: View {
     @Environment(JournalStore.self) private var store
+    @Environment(\.dynamicTypeSize) private var textSize
     @State private var filter = 0
     @State private var showMilestone = false
     @State private var showWeight = false
@@ -27,12 +28,21 @@ struct JourneyView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    DemoBadge()
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Look how much\nyou’ve lived.").alongTitle(35)
-                        Text("The little things deserve a place, too.").foregroundStyle(.secondary)
+                    HStack {
+                        DemoBadge()
+                        Spacer()
+                        Menu {
+                            Button("Check-in", systemImage: "square.and.pencil") { showNewCheckIn = true }
+                            Button("Personal milestone", systemImage: "sparkles") { showMilestone = true }
+                            Button("Weight record (optional)", systemImage: "chart.xyaxis.line") { showWeight = true }
+                        } label: {
+                            Image(systemName: "plus").font(.headline).frame(width: 44, height: 44)
+                                .background(Theme.softAccent, in: Circle())
+                        }.accessibilityLabel("Add to your journey")
                     }
-                    HStack(spacing: 12) {
+                    CompanionHeading(title: "Look how much you’ve lived.", detail: "The little things deserve a place, too.", accessory: store.journal.accessory)
+                    let layout = textSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))
+                    layout {
                         stat("\(store.journal.checkIns.count)", label: "days recorded", symbol: "book")
                         stat("\(store.journal.milestones.count)", label: "moments kept", symbol: "sparkles")
                     }
@@ -43,17 +53,17 @@ struct JourneyView: View {
                                 let date = Calendar.current.date(byAdding: .day, value: offset, to: Date.now)!
                                 let record = store.journal.checkIns.first { Calendar.current.isDate($0.day, inSameDayAs: date) }
                                 VStack(spacing: 9) {
-                                    Text(date.formatted(.dateTime.weekday(.narrow))).font(.caption).foregroundStyle(.secondary)
-                                    ZStack { Circle().fill(record == nil ? Color.primary.opacity(0.04) : Theme.lilac); if let record { Image(systemName: record.mood.symbol).font(.system(size: 14)).foregroundStyle(Theme.ink) } else { Circle().fill(.secondary.opacity(0.3)).frame(width: 4, height: 4) } }.frame(width: 33, height: 33)
-                                    Text(date.formatted(.dateTime.day())).font(.caption2).foregroundStyle(.secondary)
+                                    Text(date.formatted(.dateTime.weekday(.narrow))).font(.caption).foregroundStyle(Theme.secondaryInk)
+                                    ZStack { Circle().fill(record == nil ? Theme.paper : Theme.softApricot); if let record { Image(systemName: record.mood.symbol).font(.system(size: 14)).foregroundStyle(Theme.accent) } else { Circle().fill(.secondary.opacity(0.3)).frame(width: 4, height: 4) } }.frame(width: 33, height: 33)
+                                    Text(date.formatted(.dateTime.day())).font(.caption2).foregroundStyle(Theme.secondaryInk)
                                 }.frame(maxWidth: .infinity).accessibilityElement(children: .ignore).accessibilityLabel("\(date.formatted(date: .abbreviated, time: .omitted)): \(record?.mood.title ?? "No entry")")
                             }
                         }
-                        Text("A record, not a streak. Blank days are simply unrecorded.").font(.caption).foregroundStyle(.secondary)
+                        Text("A record, not a streak. Blank days are simply unrecorded.").font(.caption).foregroundStyle(Theme.secondaryInk)
                     }.card()
                     if store.journal.showWeight { WeightChartCard() }
                     Button { showRecap = true } label: {
-                        HStack { Label("Read your weekly reflection", systemImage: "text.book.closed").font(.subheadline.weight(.semibold)); Spacer(); Image(systemName: "arrow.right") }.padding(18).background(Theme.lilac.opacity(0.35), in: RoundedRectangle(cornerRadius: 18))
+                        HStack { Label("Read your weekly reflection", systemImage: "text.book.closed").font(.subheadline.weight(.semibold)); Spacer(); Image(systemName: "arrow.right") }.padding(18).background(Theme.softAccent, in: RoundedRectangle(cornerRadius: 18))
                     }.buttonStyle(.plain)
                     Picker("Journey view", selection: $filter) { Text("All moments").tag(0); Text("Milestones").tag(1) }.pickerStyle(.segmented)
                     if moments.isEmpty {
@@ -71,14 +81,9 @@ struct JourneyView: View {
                             }
                         }
                     }
-                    Text("Touch and hold an entry to remove it. Your record is yours to edit.").font(.caption).foregroundStyle(.secondary).padding(.bottom, 16)
+                    Text("Touch and hold an entry to remove it. Your record is yours to edit.").font(.caption).foregroundStyle(Theme.secondaryInk).padding(.bottom, 16)
                 }.padding(22).frame(maxWidth: 650)
             }.frame(maxWidth: .infinity).pageBackground().navigationTitle("Your journey").navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu { Button("Check-in", systemImage: "square.and.pencil") { showNewCheckIn = true }; Button("Personal milestone", systemImage: "sparkles") { showMilestone = true }; Button("Weight record (optional)", systemImage: "chart.xyaxis.line") { showWeight = true } } label: { Image(systemName: "plus").frame(width: 44, height: 44) }.accessibilityLabel("Add to your journey")
-                    }
-                }
                 .sheet(isPresented: $showMilestone) { AddMilestoneView() }
                 .sheet(isPresented: $showWeight) { AddWeightView() }
                 .sheet(isPresented: $showNewCheckIn) { CheckInView(entry: store.today) }
@@ -93,7 +98,7 @@ struct JourneyView: View {
     }
     private func isMilestone(_ moment: JourneyMoment) -> Bool { if case .milestone = moment { true } else { false } }
     private func stat(_ value: String, label: String, symbol: String) -> some View {
-        HStack(spacing: 12) { Image(systemName: symbol).font(.title3).foregroundStyle(Theme.accent); VStack(alignment: .leading, spacing: 4) { Text(value).font(.system(size: 28, weight: .medium, design: .serif)).accessibilityIdentifier(label == "days recorded" ? "journey.daysRecorded" : "journey.momentsKept"); Text(label).font(.caption).foregroundStyle(.secondary) }; Spacer(minLength: 0) }.frame(maxWidth: .infinity, alignment: .leading).card(padding: 17)
+        HStack(spacing: 12) { AlongIcon(symbol: symbol, apricot: true); VStack(alignment: .leading, spacing: 4) { Text(value).font(.system(size: 28, weight: .medium, design: .serif)).accessibilityIdentifier(label == "days recorded" ? "journey.daysRecorded" : "journey.momentsKept"); Text(label).font(.caption).foregroundStyle(Theme.secondaryInk) }; Spacer(minLength: 0) }.frame(maxWidth: .infinity, alignment: .leading).card(padding: 17)
     }
     @ViewBuilder private func momentView(_ moment: JourneyMoment) -> some View {
         switch moment {
@@ -101,14 +106,14 @@ struct JourneyView: View {
         case .checkIn(let item):
             Button { selectedEntry = item } label: {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack { Text(item.day.formatted(.dateTime.day().month(.abbreviated)).uppercased()).font(.caption2.weight(.medium)).tracking(1); if item.isSample { Text("· SAMPLE").font(.caption2.weight(.medium)) }; Spacer(); Image(systemName: item.mood.symbol) }.foregroundStyle(.secondary)
+                    HStack { Text(item.day.formatted(.dateTime.day().month(.abbreviated)).uppercased()).font(.caption2.weight(.medium)).tracking(1); if item.isSample { Text("· SAMPLE").font(.caption2.weight(.medium)) }; Spacer(); Image(systemName: item.mood.symbol) }.foregroundStyle(Theme.secondaryInk)
                     Text(item.mood.title).font(.headline)
-                    if !item.note.isEmpty { Text(item.note).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.leading) }
-                    HStack(spacing: 8) { ForEach(Routine.allCases.filter { item.routines.contains($0) }) { routine in Image(systemName: routine.symbol).font(.caption).foregroundStyle(Theme.accent).frame(width: 27, height: 27).background(Theme.lilac.opacity(0.35), in: Circle()).accessibilityLabel(routine.shortTitle) }; Spacer(); Text("Check-in").font(.caption2).foregroundStyle(.secondary) }
+                    if !item.note.isEmpty { Text(item.note).font(.subheadline).foregroundStyle(Theme.secondaryInk).multilineTextAlignment(.leading) }
+                    HStack(spacing: 8) { ForEach(Routine.allCases.filter { item.routines.contains($0) }) { routine in Image(systemName: routine.symbol).font(.caption).foregroundStyle(Theme.accent).frame(width: 27, height: 27).background(Theme.softAccent, in: Circle()).accessibilityLabel(routine.shortTitle) }; Spacer(); Text("Check-in").font(.caption2).foregroundStyle(Theme.secondaryInk) }
                 }.frame(maxWidth: .infinity, alignment: .leading).card(padding: 18)
             }.buttonStyle(.plain)
         case .weight(let item):
-            HStack { Image(systemName: "chart.xyaxis.line").foregroundStyle(Theme.accent); VStack(alignment: .leading, spacing: 6) { Text("\(store.journal.weightUnit.display(item.kilograms).formatted(.number.precision(.fractionLength(1)))) \(store.journal.weightUnit.rawValue)").font(.headline); Text(item.date.formatted(date: .abbreviated, time: .omitted)).font(.caption).foregroundStyle(.secondary) }; Spacer(); Text(item.isSample ? "Sample" : "Recorded").font(.caption).foregroundStyle(.secondary) }.card(padding: 18)
+            HStack { Image(systemName: "chart.xyaxis.line").foregroundStyle(Theme.accent); VStack(alignment: .leading, spacing: 6) { Text("\(store.journal.weightUnit.display(item.kilograms).formatted(.number.precision(.fractionLength(1)))) \(store.journal.weightUnit.rawValue)").font(.headline); Text(item.date.formatted(date: .abbreviated, time: .omitted)).font(.caption).foregroundStyle(Theme.secondaryInk) }; Spacer(); Text(item.isSample ? "Sample" : "Recorded").font(.caption).foregroundStyle(Theme.secondaryInk) }.card(padding: 18)
         }
     }
 }
@@ -122,8 +127,8 @@ struct WeightChartCard: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 17) {
-            HStack { Text("Weight, in perspective").font(.headline); Spacer(); Text(store.journal.weightUnit.rawValue).font(.caption).foregroundStyle(.secondary) }
-            if entries.isEmpty { Text("No weight records yet. Add one from +, or hide this card in You.").font(.subheadline).foregroundStyle(.secondary) }
+            HStack { Text("Weight, in perspective").font(.headline); Spacer(); Text(store.journal.weightUnit.rawValue).font(.caption).foregroundStyle(Theme.secondaryInk) }
+            if entries.isEmpty { Text("No weight records yet. Add one from +, or hide this card in You.").font(.subheadline).foregroundStyle(Theme.secondaryInk) }
             else {
                 Chart(entries) { entry in
                     LineMark(x: .value("Date", entry.date), y: .value("Weight", store.journal.weightUnit.display(entry.kilograms)), series: .value("Record type", entry.isSample ? "Sample" : "Your records"))
@@ -134,8 +139,8 @@ struct WeightChartCard: View {
                     .chartYScale(domain: domain).frame(height: 190)
                     .accessibilityLabel("Weight records, \(entries.count) entries. Latest \(store.journal.weightUnit.display(entries.last!.kilograms).formatted(.number.precision(.fractionLength(1)))) \(store.journal.weightUnit.rawValue). Individual records are listed in the timeline.")
             }
-            if entries.contains(where: \.isSample) { Text("Dashed records are fictional examples, kept separate from your own records.").font(.caption).foregroundStyle(.secondary) }
-            Text("One part of your story. No targets, forecasts or rewards tied to this number.").font(.caption).foregroundStyle(.secondary)
+            if entries.contains(where: \.isSample) { Text("Dashed records are fictional examples, kept separate from your own records.").font(.caption).foregroundStyle(Theme.secondaryInk) }
+            Text("One part of your story. No targets, forecasts or rewards tied to this number.").font(.caption).foregroundStyle(Theme.secondaryInk)
         }.card()
     }
 }

@@ -103,6 +103,12 @@ private struct OnboardingArchive: Codable {
     @discardableResult func persist() -> Bool {
         persist(journal)
     }
+    @discardableResult func rememberPipStory(_ story: PipStory, choice: String) -> Bool {
+        var candidate = journal
+        guard candidate.remember(story, choice: choice), persist(candidate) else { return false }
+        journal = candidate
+        return true
+    }
     private func persist(_ value: Journal) -> Bool {
         guard canSave else { error = "The existing journal could not be read. To protect it, saving is disabled. Reopen the app to retry, or explicitly reset local data in You."; return false }
         do {
@@ -260,6 +266,11 @@ private struct OnboardingArchive: Codable {
         }
         for milestone in journal.milestones.sorted(by: { $0.date < $1.date }) { lines.append("\(milestone.isSample ? "[SAMPLE] " : "")Milestone · \(milestone.date.formatted(date: .abbreviated, time: .omitted)) · \(milestone.title)\n\(milestone.note)\n") }
         for entry in journal.weights.sorted(by: { $0.date < $1.date }) { lines.append("\(entry.isSample ? "[SAMPLE] " : "")Weight · \(entry.date.formatted(date: .abbreviated, time: .omitted)) · \(entry.kilograms.formatted(.number.precision(.fractionLength(1)))) kg") }
+        for story in PipStory.all {
+            if let answer = journal.companionDiscoveries?[story.id], let choice = story.choices.first(where: { $0.id == answer }) {
+                lines.append("Fictional companion discovery · \(choice.discovery)")
+            }
+        }
         return lines.joined(separator: "\n")
     }
     func clearJournal() {

@@ -1,8 +1,47 @@
-# Pip rendered character assets
+# Pip character assets
 
-Created 1 November 2026 for Along's approved adult GLP-1 progress-companion prototype.
+## 2D Pip refresh — 1 November 2026
 
-## Art direction
+The user requested a 2D Pip and Finch-informed pet interactions. Pip keeps the original bear/sprout identity, apricot body, cream belly and muzzle, plum features and leaf tuft. The current artwork is a flat cartoon illustration with plum outlines; it is a set of PNG assets, not a skeletal animation model. Five transparent images support greeting, journal, happy reaction, scarf and flower states. An opaque square icon uses the same character.
+
+All six images were created with the built-in `image_gen.imagegen` tool. The first used the previous `PipWelcome` PNG as its edit target. Every subsequent image used the new 2D base as its reference. No CLI API or third-party image vendor was used. The five character PNGs were copied unchanged, preserving alpha; the opaque icon was resized to 1024×1024 with macOS `sips` for the asset catalogue. All outputs were visually inspected. The originals remain in the tool output directory.
+
+| Current native asset | Source in the tool output directory |
+| --- | --- |
+| `Pip2DWelcome.imageset/pip.png` | `exec-0bb57594-d148-4ddf-889e-77e97453f501.png` |
+| `Pip2DJournal.imageset/pip.png` | `exec-6f6c6d0a-881f-4f68-b105-2f259c3ff117.png` |
+| `Pip2DCelebrate.imageset/pip.png` | `exec-20c541f8-767e-46dc-8999-1ad9140f109c.png` |
+| `Pip2DScarf.imageset/pip.png` | `exec-c9618277-05ff-437e-9edd-e40b6555f743.png` |
+| `Pip2DFlower.imageset/pip.png` | `exec-2ad82bbd-3c38-4ced-a7e4-a3fe19c32b40.png` |
+| `AppIcon.appiconset/AppIcon.png` | `exec-118ab81c-3a88-4f52-a5c8-2d721b672d4f.png` |
+
+Asset paths are relative to `apps/ios/Along/Assets.xcassets`. Tool outputs are in `/Users/ibraaheemrashid/.codex/generated_images/01a19601-6588-74c0-9067-504d6feece4f`.
+
+### 2D prompt set
+
+Base (transparent):
+
+> Use case: style-transfer. Edit target: attached original Pip mascot for the Along iOS app. Redesign this same apricot bear-sprout character as a charming genuinely FLAT 2D vector-style mascot, suitable for a gentle adult journaling app. Keep the round bear ears, cream belly and muzzle, small plum eyes and nose, two small leaf sprouts on head, compact full-body shape. Replace all realistic fur, highlights, shadows, gradients and 3D rendering with simple solid colour shapes and a smooth medium-weight dark plum outline. Warm apricot body, cream belly/muzzle, plum outline/features, muted apricot blush, a small muted sage sprout as identity detail. Tiny simple oval eyes, friendly curved smile, relaxed stance, one paw raised in greeting. Flat editorial cartoon, confident simple silhouette, not a bird and no Finch branding. One character only, entire body and feet visible, centred with generous equal transparent margin on all sides. Genuine transparent background, no floor shadow, no scenery, no text, no accessories or props beyond the head sprout. This is the production base character, not a sheet of variations.
+
+Each variant used this common prefix and suffix around its change below, with transparency enabled:
+
+> Use case: precise-object-edit. Edit this exact original 2D Pip character into a matching production iOS asset. [CHANGE] Preserve the same flat cartoon design, smooth plum outlines, apricot body, cream muzzle and belly, leaf sprout, face identity, outline thickness and warm palette. Simple flat solid colours, no realistic shading, no texture or 3D. One character, full body entirely visible, centred at the SAME scale and same transparent margins as this reference. Genuine transparent alpha, no background, ground, cast shadow, text or watermark.
+
+- Journal change: “Change only the pose: Pip sits holding a small closed PLUM journal against the cream belly with both paws; relaxed friendly smile. Head sprout stays visible.”
+- Celebration change: “Change only the expression and pose: both little paws raised slightly in a friendly hello, eyes closed as happy curved arcs, small smile. No props, no confetti.”
+- Scarf change: “Change only this: add a short simple solid PLUM scarf around the neck with one short tail. Keep original greeting pose and all body proportions.”
+- Flower change: “Change only this: add a small simple golden five-petal flower beside the head sprout. Keep original greeting pose and all body proportions.”
+
+Icon (opaque):
+
+> Edit the attached original 2D Pip character into an iOS app icon for Along. Preserve the exact flat cartoon style, apricot face, small plum features, round ears and leaf sprout. Square 1024 by 1024 full-bleed warm cream background, no rounded outside corners. Large centred head and upper body with sprout fully visible and balanced generous margin, recognisable at small size. Flat colours and plum outlines. No text, letters, watermark, framing, 3D or photographic effects. Fully opaque image.
+
+
+## Earlier 3D render set — historical reference
+
+The following records the previous assets, which are retained as source history. `PipArtwork` uses the 2D set above.
+
+### Earlier art direction
 
 Pip is an original warm apricot, bear-like woodland companion with a cream muzzle and belly, deep-plum eyes, small rounded ears, rosy cheeks and a sage two-leaf tuft. Soft sculpted volume and velvety microtexture replace the initial code-drawn mascot's simple forms. The full-body silhouette, warm expression and visible feet are intended to remain readable at small iPhone onboarding sizes.
 

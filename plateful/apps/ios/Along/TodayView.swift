@@ -22,12 +22,14 @@ struct TodayView: View {
                         Text(store.journal.name.isEmpty ? "Your journey, at your pace." : "A little space for you, \(store.journal.name).")
                             .alongTitle(25).fixedSize(horizontal: false, vertical: true)
                     }
+                    PipPlayground(name: store.companionName, accessory: store.journal.accessory, message: store.encouragementLine)
                     Button { store.selectedTab = 2 } label: {
-                        PipRoomView(accessory: store.journal.accessory, message: store.encouragementLine)
-                            .clipShape(RoundedRectangle(cornerRadius: 28))
-                    }.buttonStyle(.plain).accessibilityLabel("Visit \(store.companionName)")
-                        .accessibilityValue(store.encouragementLine).accessibilityHint("Opens your companion and keepsakes")
-                        .accessibilityIdentifier("today.companion")
+                        HStack {
+                            Label("Visit \(store.companionName)’s place", systemImage: "pawprint")
+                            Spacer(); Image(systemName: "arrow.right")
+                        }.font(.system(.subheadline, design: .rounded, weight: .semibold)).foregroundStyle(Theme.accent)
+                            .padding(.horizontal, 16).frame(minHeight: 48).background(Theme.softAccent, in: RoundedRectangle(cornerRadius: 18))
+                    }.buttonStyle(.plain).accessibilityIdentifier("today.companion")
                     PrimaryButton(title: store.today == nil ? "How’s today feeling?" : "View today’s check-in", symbol: store.today == nil ? "arrow.right" : "checkmark.circle") { showCheckIn = true }
                         .accessibilityIdentifier("today.checkIn")
                     VStack(alignment: .leading, spacing: 10) {
@@ -116,9 +118,9 @@ struct MilestoneCard: View {
         HStack(alignment: .top, spacing: 15) {
             Image(systemName: milestone.kind.symbol).font(.title2).foregroundStyle(Theme.ink).frame(width: 48, height: 48).background(Theme.gold.opacity(0.65), in: RoundedRectangle(cornerRadius: 15))
             VStack(alignment: .leading, spacing: 7) {
-                HStack { Text(milestone.date.formatted(.dateTime.day().month(.abbreviated)).uppercased()).tracking(1); if milestone.isSample { Text("· SAMPLE") } }.font(.caption2.weight(.medium)).foregroundStyle(.secondary)
+                HStack { Text(milestone.date.formatted(.dateTime.day().month(.abbreviated)).uppercased()).tracking(1); if milestone.isSample { Text("· SAMPLE") } }.font(.caption2.weight(.medium)).foregroundStyle(Theme.secondaryInk)
                 Text(milestone.title).font(.headline)
-                if !milestone.note.isEmpty { Text(milestone.note).font(.subheadline).foregroundStyle(.secondary) }
+                if !milestone.note.isEmpty { Text(milestone.note).font(.subheadline).foregroundStyle(Theme.secondaryInk) }
             }.frame(maxWidth: .infinity, alignment: .leading)
         }.card()
     }
@@ -131,10 +133,10 @@ struct WeeklyRecapView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    MeadowView(accessory: store.journal.accessory).frame(height: 210).clipShape(RoundedRectangle(cornerRadius: 28))
+                    PipRoomView(accessory: store.journal.accessory, pose: .journal, height: 210).clipShape(RoundedRectangle(cornerRadius: 28))
                     DemoBadge()
-                    Text("A week of little moments.").alongTitle(34)
-                    Text("The last seven days, from the entries you chose to keep.").foregroundStyle(.secondary)
+                    Text("A week of little moments.").alongTitle(30)
+                    Text("The last seven days, from the entries you chose to keep.").foregroundStyle(Theme.secondaryInk)
                     HStack(spacing: 14) {
                         recapMetric("\(store.week.count)", label: "days recorded", symbol: "book")
                         recapMetric("\(store.routineCount)", label: "routine moments", symbol: "leaf")
@@ -145,7 +147,7 @@ struct WeeklyRecapView: View {
                         SectionLabel(title: "\(store.weeklyMilestones.count) moments you kept")
                         ForEach(store.weeklyMilestones) { MilestoneCard(milestone: $0) }
                     }
-                    Text("A journal summary, not a health assessment. This recap uses simple on-device counts; no AI service is connected.").font(.caption).foregroundStyle(.secondary)
+                    Text("A journal summary, not a health assessment. This recap uses simple on-device counts; no AI service is connected.").font(.caption).foregroundStyle(Theme.secondaryInk)
                     PrimaryButton(title: "Keep going at my pace", symbol: "heart") { dismiss() }
                 }.padding(24).frame(maxWidth: 620)
             }.frame(maxWidth: .infinity).pageBackground().navigationTitle("Your weekly reflection").navigationBarTitleDisplayMode(.inline)
@@ -153,6 +155,6 @@ struct WeeklyRecapView: View {
         }
     }
     private func recapMetric(_ value: String, label: String, symbol: String) -> some View {
-        VStack(alignment: .leading, spacing: 9) { Image(systemName: symbol).foregroundStyle(Theme.accent); Text(value).alongTitle(34); Text(label).font(.caption).foregroundStyle(.secondary) }.frame(maxWidth: .infinity, alignment: .leading).card()
+        VStack(alignment: .leading, spacing: 9) { Image(systemName: symbol).foregroundStyle(Theme.accent); Text(value).alongTitle(34); Text(label).font(.caption).foregroundStyle(Theme.secondaryInk) }.frame(maxWidth: .infinity, alignment: .leading).card()
     }
 }

@@ -159,7 +159,7 @@ struct DevLabView: View {
                 Section("Jump to a feature · sample data") {
                     feature("Today", symbol: "sun.max", tab: 0)
                     feature("Journey", symbol: "book", tab: 1)
-                    feature("Pip and keepsakes", symbol: "pawprint", tab: 2)
+                    feature("Pip, petting and stories", symbol: "pawprint", tab: 2)
                     feature("Settings, export and deletion", symbol: "gearshape", tab: 3)
                     feature("New check-in", symbol: "square.and.pencil", sheet: .checkIn)
                     feature("Personal milestone", symbol: "flag", sheet: .milestone)

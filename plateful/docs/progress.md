@@ -174,6 +174,31 @@ Verification for this pass:
 - `.build/finch-screen-captures.xcresult`: the design review case passed again with full-screen capture. The runner intermittently omitted native bars in Today captures; its light/dark comparison panes use the earlier `.build/finch-final.xcresult` captures, whose layout was checked against the final running app. Pip panes use the final screen-capture run. This is a capture limitation, not a claim of completed real-device review.
 - Release simulator build passed; log `.build/finch-release-delivery.log`. No payment, deployment or external service was activated.
 
+## Full app styling and 2D Pip — 1 November 2026
+
+This pass extends the confirmed plum, cream and apricot direction to all 26 onboarding screens, Journey, check-ins, milestones, optional weight entry, weekly reflections, You, Privacy and membership views. Shared components provide rounded choice cards, coloured icon tiles, consistent fields and companion headings. Existing records and the hard paywall remain intact: **no trial**. Checkout and restore are still disconnected and cannot grant access. Debug preview remains an explicitly labelled development route.
+
+Pip now uses five original transparent 2D illustrations and a matching opaque app icon. The reading nook remains native SwiftUI. The new interactions are:
+
+- Tap or hold Pip for a friendly reaction and haptic feedback. Reduced Motion suppresses movement. Petting has no effect on records or rewards.
+- Choose a reply in one of three original, scripted stories. A discovery is saved locally and can be revisited; it survives restarting, appears in export as fictional companion content and clears with local data. There is no live AI chat.
+- Preview locked keepsakes without equipping or unlocking them. Available keepsakes retain the existing recorded-day rules and persistence.
+
+References inspected through Mobbin: Finch’s [petting](https://mobbin.com/flows/3644cfb2-cfe3-42d4-b910-02eb4f8ce3b5), [chatting with a pet](https://mobbin.com/flows/6af44145-2846-4ab8-857a-3225dc3f8760), [outfit preview](https://mobbin.com/flows/8d11ddab-533c-4a91-aa43-1c5541c6fd33) and [onboarding](https://mobbin.com/flows/80ef83ef-f872-4825-b18d-6b193d60a9aa). Applied patterns are a visible companion, short story exchanges, saved discoveries and a character preview above visual choices. Artwork, writing, palette and room are Along’s. No Finch currency, energy or penalties were introduced. These are references from one product, not conversion or retention evidence.
+
+Review: [all 26 screens and app gallery](screenshots/whole-style/index.html), [onboarding review](onboarding-review.md), [2D artwork provenance and prompts](pip-art-direction.md).
+
+Verification for this pass:
+
+- `bash scripts/check.sh`: **30 Node tests, 91 Swift domain checks and the Vite production build passed**. The added domain checks cover discovery validation, persistence, replacement, export, reset and separation from health records and entitlement state. Log: `.build/whole-style-checks.log`.
+- `.build/whole-style-ui.xcresult`: 17 UI cases ran. Fourteen passed, including all 26 onboarding captures, petting/story/discovery persistence, keepsake persistence, journal editing, interrupted setup, weekly reflection, Dev Lab isolation and the disconnected purchase/restore gate. Three failures exposed two layout issues: the Journey add button was obscured by the Debug strip, and the companion name field sat too low above the fixed footer.
+- Moved the Journey menu into its page header and the companion name field above Pip’s room. `.build/whole-style-fixed.xcresult`: **all four focused cases passed**, covering milestone creation, complete onboarding to the hard gate, weight entry/deletion and refreshed app screenshots. Across the initial and focused runs, all 17 UI cases have passing results.
+- `.build/whole-style-accessibility.xcresult`: the dark-mode/largest-text case passed again with stronger assertions that both annual and monthly plans can actually be selected. The test scrolls their centres into the usable content area before tapping; the selected price also appears in the fixed footer.
+- Debug and final Release simulator builds passed. Release log: `.build/whole-style-release-final.log`. Inspected all 26 opening screens, app screens, story states and dark/large-text captures. Also inspected Today, Journey’s corrected add button and Pip directly in the running Simulator. Native bars are intermittently absent from XCTest screenshots; the captures are preserved unchanged, and the running app was checked separately.
+- [Pip comparison](screenshots/whole-style/pip-comparison.html) and [welcome comparison](screenshots/whole-style/welcome-comparison.html) embed their before/after screenshots and open independently. The complete gallery keeps the original screenshot files alongside its HTML. Screen 20 and Journey captures were refreshed after their fixes.
+
+Pip remains Along’s original companion. Live billing, cloud accounts, reminder delivery, analytics, full VoiceOver and real-device review remain pending. No payment, deployment or external service was activated.
+
 ## Implementation verification log
 
 Native: Xcode 26.3, iPhone 17 Pro simulator, iOS 26.3. Project: `apps/ios/Along.xcodeproj`, scheme Along. No signing or Apple Developer account needed for the simulator build.

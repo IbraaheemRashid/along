@@ -79,6 +79,17 @@ struct Journal: Codable, Equatable {
     // decode unchanged. A design preview is never a subscription entitlement.
     var onboardingPreferences: OnboardingDraft?
     var isDesignPreview: Bool?
+    // Optional for compatibility with journals saved before Pip's story chats.
+    // These are fictional pet preferences, separate from health/journal records.
+    var companionDiscoveries: [String: String]?
+
+    @discardableResult mutating func remember(_ story: PipStory, choice: String) -> Bool {
+        guard story.choices.contains(where: { $0.id == choice }) else { return false }
+        var discoveries = companionDiscoveries ?? [:]
+        discoveries[story.id] = choice
+        companionDiscoveries = discoveries
+        return true
+    }
 
     mutating func save(_ entry: CheckIn, calendar: Calendar = .current) {
         if let index = checkIns.firstIndex(where: { calendar.isDate($0.day, inSameDayAs: entry.day) }) {
@@ -140,4 +151,33 @@ enum JournalValidation {
     static func milestone(title: String, note: String) -> Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && title.count <= 80 && note.count <= 300
     }
+}
+
+struct PipStory: Identifiable {
+    struct Choice: Identifiable {
+        let id: String
+        let title: String
+        let reply: String
+        let discovery: String
+    }
+    let id: String
+    let title: String
+    let symbol: String
+    let prompt: String
+    let choices: [Choice]
+
+    static let all: [PipStory] = [
+        PipStory(id: "window", title: "A sound at the window", symbol: "cloud.rain", prompt: "I heard little taps on the window. The rain was making its own music! What should we listen for?", choices: [
+            Choice(id: "rain", title: "The rhythm of the rain", reply: "Tap, tap, pause. I like that every little drop gets its own turn.", discovery: "Rainy-day rhythms"),
+            Choice(id: "birds", title: "The birds between the showers", reply: "There they are! A tiny song between the raindrops. I’m glad we listened.", discovery: "Birdsong by the window")
+        ]),
+        PipStory(id: "book", title: "A page to turn", symbol: "book.closed", prompt: "I found an empty notebook on the shelf. There’s room for all sorts of things in here. Where should I begin?", choices: [
+            Choice(id: "drawing", title: "Draw something you noticed", reply: "I drew our little window. It’s a bit wonky, but it feels like home.", discovery: "Wonky little drawings"),
+            Choice(id: "word", title: "Start with one word", reply: "I chose ‘curious’. One little word can be a lovely beginning.", discovery: "Collecting little words")
+        ]),
+        PipStory(id: "garden", title: "A leaf on the doorstep", symbol: "leaf", prompt: "A little leaf landed by the door. It has so many tiny lines! What do you think it looks like?", choices: [
+            Choice(id: "map", title: "A map of tiny paths", reply: "A tiny map! I wonder where all those little paths would take us.", discovery: "Maps in fallen leaves"),
+            Choice(id: "heart", title: "A little heart", reply: "I can see it now. A little hello from the world outside.", discovery: "Hearts in everyday things")
+        ])
+    ]
 }

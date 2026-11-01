@@ -183,6 +183,19 @@ import Foundation
         expect(ordinaryCredentialClears == 0, "Opening a normal journal does not clear credentials")
         ordinaryStore.clearJournal()
         expect(ordinaryCredentialClears == 1, "Explicitly deleting normal local data still clears its own credentials once")
+        let petDirectory = testRoot.appendingPathComponent("pet-stories", isDirectory: true)
+        let petStore = JournalStore(directory: petDirectory, arguments: [], clearCredentials: {})
+        let beforePetStory = petStore.journal
+        expect(legacy.companionDiscoveries == nil, "Old journals decode without pet discoveries")
+        expect(!petStore.rememberPipStory(PipStory.all[0], choice: "invalid"), "Unknown story choices are rejected")
+        expect(petStore.rememberPipStory(PipStory.all[0], choice: "rain"), "A chosen fictional discovery persists")
+        let petReload = JournalStore(directory: petDirectory, arguments: [], clearCredentials: {})
+        expect(petReload.journal.companionDiscoveries?["window"] == "rain", "Pet discovery survives store restart")
+        expect(petReload.journal.checkIns == beforePetStory.checkIns && petReload.journal.weights == beforePetStory.weights && petReload.journal.unlockedAccessories == beforePetStory.unlockedAccessories && !petReload.journal.hasOnboarded, "Pet stories do not fabricate records, unlock keepsakes or bypass membership")
+        expect(petReload.rememberPipStory(PipStory.all[0], choice: "birds") && petReload.journal.companionDiscoveries?.count == 1, "Revisiting a story replaces its choice without duplicate progress")
+        expect(petReload.exportText.contains("Fictional companion discovery · Birdsong"), "Export distinguishes fictional pet discoveries")
+        petReload.clearJournal()
+        expect(petReload.journal.companionDiscoveries == nil, "Deleting local data removes pet memories too")
         print("PASS: \(checks) meaningful Along domain checks")
     }
 }

@@ -4,6 +4,7 @@ import SwiftUI
 /// The character assets remain the original Pip renders.
 struct PipRoomView: View {
     var accessory: Accessory
+    var pose: PipPose = .welcome
     var message: String? = nil
     var height: CGFloat = 250
     @Environment(\.colorScheme) private var scheme
@@ -33,7 +34,7 @@ struct PipRoomView: View {
                     Ellipse().stroke(Theme.paper.opacity(0.5), lineWidth: 2)
                         .frame(width: width * 0.46, height: roomHeight * 0.11)
                         .position(x: width * 0.55, y: roomHeight * 0.88)
-                    PipArtwork(accessory: accessory)
+                    PipArtwork(pose: pose, accessory: accessory)
                         .frame(width: roomHeight * (hasBubble ? 0.74 : 0.88), height: roomHeight * (hasBubble ? 0.74 : 0.88))
                         .position(x: width * 0.55, y: roomHeight * (hasBubble ? 0.64 : 0.57))
                 }.clipped().accessibilityHidden(true)
