@@ -11,7 +11,7 @@ struct OnboardingDraft: Codable, Equatable {
     var name = ""
     var stage = ""
     var hasStartDate = false
-    var startDate = Date()
+    var startDate = Calendar.current.startOfDay(for: .now)
     var priority = ""
     var obstacle = ""
     var progressAreas: Set<String> = []
@@ -85,7 +85,7 @@ struct OnboardingDraft: Codable, Equatable {
             && progressAreas.allSatisfy { Self.validText($0, limit: 80, required: true) }
             && Self.validText(intention, limit: 300)
             && Self.validText(weightValue, limit: 30)
-            && routines.count <= 2
+            && routines.count <= Routine.allCases.count
             && routineNames.count <= Routine.allCases.count
             && routineNames.allSatisfy { Routine(rawValue: $0.key) != nil && Self.validText($0.value, limit: 80) }
             && Self.validText(frequency, limit: 80)

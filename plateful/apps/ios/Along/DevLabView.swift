@@ -27,7 +27,7 @@ private enum DevTextSize: String, CaseIterable, Identifiable {
 }
 
 private enum DevScenario: String, CaseIterable, Identifiable {
-    case fresh, resume, paywall, empty, sample, sparse, month
+    case fresh, resume, paywall, empty, sample, sparse, firstKeepsake, month, allKeepsakes
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -38,6 +38,8 @@ private enum DevScenario: String, CaseIterable, Identifiable {
         case .sample: "14-day sample journey"
         case .sparse: "Sparse week"
         case .month: "30 recorded days"
+        case .firstKeepsake: "First keepsake ready"
+        case .allKeepsakes: "60-day Pip room"
         }
     }
     var detail: String {
@@ -48,7 +50,9 @@ private enum DevScenario: String, CaseIterable, Identifiable {
         case .empty: "Check empty states and create a first record."
         case .sample: "8 example check-ins, milestones and weight records."
         case .sparse: "2 recorded days; gaps remain unrecorded."
-        case .month: "A longer timeline and all three keepsakes."
+        case .month: "Synthetic 30-day progress, new stories and room keepsakes."
+        case .firstKeepsake: "Synthetic one-day progress. Try collecting the notebook."
+        case .allKeepsakes: "Synthetic 60-day progress. Collect each reward and preview the room."
         }
     }
     var symbol: String {
@@ -60,6 +64,8 @@ private enum DevScenario: String, CaseIterable, Identifiable {
         case .sample: "calendar"
         case .sparse: "calendar.badge.clock"
         case .month: "books.vertical"
+        case .firstKeepsake: "gift"
+        case .allKeepsakes: "sparkles"
         }
     }
 
@@ -70,7 +76,7 @@ private enum DevScenario: String, CaseIterable, Identifiable {
         case .fresh: break
         case .resume: store.onboardingDraft = OnboardingView.exampleDraft(at: 13)
         case .paywall: store.onboardingDraft = OnboardingView.exampleDraft(at: 25)
-        case .empty, .sample, .sparse, .month:
+        case .empty, .sample, .sparse, .month, .firstKeepsake, .allKeepsakes:
             var journal = self == .empty ? Journal() : Journal.sample()
             journal.name = "Alex"
             journal.hasOnboarded = true
@@ -92,6 +98,11 @@ private enum DevScenario: String, CaseIterable, Identifiable {
                             routines: index.isMultiple(of: 2) ? [.movement, .reflection] : [.nutrition],
                             note: "Example moment \(index). A little part of this fictional journey.", isSample: true)
                 }
+            }
+            journal.reconcileProgress()
+            if self == .month || self == .firstKeepsake || self == .allKeepsakes {
+                journal.pipProgress = .preview(days: self == .month ? 30 : self == .firstKeepsake ? 1 : 60)
+                journal.reconcileProgress()
             }
             store.journal = journal
         }
@@ -154,7 +165,7 @@ struct DevLabView: View {
                     ForEach([DevScenario.fresh, .resume, .paywall]) { scenario in scenarioButton(scenario) }
                 }
                 Section("Journal scenarios") {
-                    ForEach([DevScenario.empty, .sample, .sparse, .month]) { scenario in scenarioButton(scenario) }
+                    ForEach([DevScenario.empty, .sample, .sparse, .firstKeepsake, .month, .allKeepsakes]) { scenario in scenarioButton(scenario) }
                 }
                 Section("Jump to a feature · sample data") {
                     feature("Today", symbol: "sun.max", tab: 0)
@@ -177,7 +188,7 @@ struct DevLabView: View {
                     status("Local persistence", value: "Active in sandbox", symbol: "internaldrive")
                     status("App Store / Superwall", value: "Not connected · no charges", symbol: "creditcard")
                     status("Accounts and cloud sync", value: "Not connected", symbol: "icloud")
-                    status("Reminders", value: "Preferences only · no delivery", symbol: "bell")
+                    status("Reminders", value: "Local scheduling available · disabled in previews", symbol: "bell")
                     status("AI and analytics", value: "Not connected", symbol: "network")
                 }
             }.scrollContentBackground(.hidden).pageBackground()
@@ -219,6 +230,8 @@ private struct DevSandboxView: View {
     @Binding var textSize: DevTextSize
     @Binding var reduceMotion: Bool
     @State private var store: JournalStore
+    @State private var reminders = ReminderStore(deliveryEnabled: false)
+    @State private var billing = BillingStore(configuration: .unconfigured(["Isolated development preview"]))
     @State private var sheet: DevSheet?
     @State private var presentedInitialFeature = false
     @State private var showReset = false
@@ -260,13 +273,13 @@ private struct DevSandboxView: View {
                 .accessibilityLabel("Sandbox controls").accessibilityIdentifier("dev.sandbox.controls")
             }.font(.system(size: 14, weight: .medium)).padding(.horizontal, 16).padding(.vertical, 5).background(Theme.paper)
                 .dynamicTypeSize(.large)
-            RootView(showsDevTools: false).environment(store)
+            RootView(showsDevTools: false).environment(store).environment(reminders).environment(billing)
                 .id(ObjectIdentifier(store))
                 .dynamicTypeSize(textSize.size ?? systemTextSize)
                 .environment(\.alongForcedReducedMotion, reduceMotion)
         }.preferredColorScheme(appearance.scheme)
             .sheet(item: $sheet) { item in
-                sandboxSheet(item).environment(store)
+                sandboxSheet(item).environment(store).environment(reminders).environment(billing)
                     .dynamicTypeSize(textSize.size ?? systemTextSize)
                     .environment(\.alongForcedReducedMotion, reduceMotion)
                     .safeAreaInset(edge: .bottom) { Text("DEV SANDBOX · SAMPLE DATA").font(.system(size: 10, weight: .semibold)).padding(8).frame(maxWidth: .infinity).background(Theme.paper) }

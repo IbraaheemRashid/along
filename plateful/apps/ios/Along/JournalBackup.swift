@@ -69,8 +69,8 @@ struct JournalBackup: Codable, Equatable {
         try validate(now: now)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        // Foundation's default date representation preserves subsecond values
-        // exactly, including dates created by the existing local journal format.
+        // Foundation's default date representation retains subsecond precision
+        // using the same date representation as the local journal format.
         let data = try encoder.encode(self)
         guard data.count <= Self.maximumBytes else { throw Failure.tooLarge }
         return data

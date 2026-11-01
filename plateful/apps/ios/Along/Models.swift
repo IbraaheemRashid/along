@@ -74,7 +74,7 @@ struct Journal: Codable, Equatable {
     var accessory: Accessory = .leaf
     var unlockedAccessories: Set<Accessory> = [.leaf]
     var hasSampleData = false
-    var startDate = Date()
+    var startDate = Calendar.current.startOfDay(for: .now)
     // Optional additions allow journals written before expanded onboarding to
     // decode unchanged. A design preview is never a subscription entitlement.
     var onboardingPreferences: OnboardingDraft?
@@ -82,9 +82,13 @@ struct Journal: Codable, Equatable {
     // Optional for compatibility with journals saved before Pip's story chats.
     // These are fictional pet preferences, separate from health/journal records.
     var companionDiscoveries: [String: String]?
+    var pipProgress: PipProgress?
+    var routineDays: [RoutineDay]?
+    // Local restore boundary; never included in exported backup content.
+    var restoreGeneration: UUID?
 
     @discardableResult mutating func remember(_ story: PipStory, choice: String) -> Bool {
-        guard story.choices.contains(where: { $0.id == choice }) else { return false }
+        guard canRead(story), story.choices.contains(where: { $0.id == choice }) else { return false }
         var discoveries = companionDiscoveries ?? [:]
         discoveries[story.id] = choice
         companionDiscoveries = discoveries
@@ -92,6 +96,7 @@ struct Journal: Codable, Equatable {
     }
 
     mutating func save(_ entry: CheckIn, calendar: Calendar = .current) {
+        routineDays?.removeAll { calendar.isDate($0.day, inSameDayAs: entry.day) }
         if let index = checkIns.firstIndex(where: { calendar.isDate($0.day, inSameDayAs: entry.day) }) {
             var replacement = entry
             replacement.id = checkIns[index].id
@@ -165,6 +170,9 @@ struct PipStory: Identifiable {
     let symbol: String
     let prompt: String
     let choices: [Choice]
+    var requiredDays: Int {
+        switch id { case "window": 0; case "book": 3; case "garden": 7; case "plant": 14; case "light": 30; default: 60 }
+    }
 
     static let all: [PipStory] = [
         PipStory(id: "window", title: "A sound at the window", symbol: "cloud.rain", prompt: "I heard little taps on the window. The rain was making its own music! What should we listen for?", choices: [
@@ -178,6 +186,18 @@ struct PipStory: Identifiable {
         PipStory(id: "garden", title: "A leaf on the doorstep", symbol: "leaf", prompt: "A little leaf landed by the door. It has so many tiny lines! What do you think it looks like?", choices: [
             Choice(id: "map", title: "A map of tiny paths", reply: "A tiny map! I wonder where all those little paths would take us.", discovery: "Maps in fallen leaves"),
             Choice(id: "heart", title: "A little heart", reply: "I can see it now. A little hello from the world outside.", discovery: "Hearts in everyday things")
+        ]),
+        PipStory(id: "plant", title: "A new neighbour", symbol: "leaf", prompt: "There’s a tiny plant by the window now. I’ve been looking at the way its leaves turn towards the light. What should we name it?", choices: [
+            Choice(id: "fern", title: "Fern, a very leafy name", reply: "Fern it is. I think we’ll be good neighbours, even on the quiet days.", discovery: "A leafy neighbour called Fern"),
+            Choice(id: "sunny", title: "Sunny, for its favourite spot", reply: "Sunny has the window seat. I have the rug. There’s a place for both of us.", discovery: "A window friend called Sunny")
+        ]),
+        PipStory(id: "light", title: "An evening glow", symbol: "lamp.table", prompt: "Our little lamp makes soft shapes on the wall. I’ve been watching them change. What can you see?", choices: [
+            Choice(id: "mountain", title: "A tiny mountain range", reply: "Mountains made of light. An adventure we can have right here at home.", discovery: "Mountains in the lamplight"),
+            Choice(id: "cloud", title: "A sleepy cloud", reply: "It does look sleepy. I’ll leave a little space for it to float.", discovery: "Clouds in a cosy corner")
+        ]),
+        PipStory(id: "stars", title: "Our own constellation", symbol: "sparkles", prompt: "There are stars above the window! I’ve been joining the dots in my head. What picture should we make?", choices: [
+            Choice(id: "path", title: "A wandering path", reply: "Some turns, some pauses, and lots of little places to stop. I like our path.", discovery: "A path between the stars"),
+            Choice(id: "home", title: "A little house", reply: "A house with a bright window. Just like this one. I’m glad we’re here.", discovery: "A home among the stars")
         ])
     ]
 }

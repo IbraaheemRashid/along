@@ -58,7 +58,7 @@ struct Pill: View {
 struct DemoBadge: View {
     @Environment(JournalStore.self) private var store
     var body: some View {
-        Text(store.journal.hasSampleData ? "SAMPLE JOURNEY" : store.journal.isDesignPreview == true ? "DESIGN PREVIEW" : "LOCAL PROTOTYPE")
+        Text(store.journal.hasSampleData ? "SAMPLE JOURNEY" : store.journal.isDesignPreview == true ? "DESIGN PREVIEW" : "ON THIS DEVICE")
             .font(.system(size: 9, weight: .bold, design: .rounded)).tracking(1.1)
             .padding(.horizontal, 9).padding(.vertical, 6).foregroundStyle(Theme.accent)
             .background(Theme.lilac.opacity(0.35), in: Capsule())

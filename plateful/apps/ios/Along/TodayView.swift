@@ -22,7 +22,7 @@ struct TodayView: View {
                         Text(store.journal.name.isEmpty ? "Your journey, at your pace." : "A little space for you, \(store.journal.name).")
                             .alongTitle(25).fixedSize(horizontal: false, vertical: true)
                     }
-                    PipPlayground(name: store.companionName, accessory: store.journal.accessory, message: store.encouragementLine)
+                    PipPlayground(name: store.companionName, accessory: store.journal.accessory, message: store.encouragementLine, rewards: store.journal.roomRewards)
                     Button { store.selectedTab = 2 } label: {
                         HStack {
                             Label("Visit \(store.companionName)’s place", systemImage: "pawprint")
@@ -32,8 +32,9 @@ struct TodayView: View {
                     }.buttonStyle(.plain).accessibilityIdentifier("today.companion")
                     PrimaryButton(title: store.today == nil ? "How’s today feeling?" : "View today’s check-in", symbol: store.today == nil ? "arrow.right" : "checkmark.circle") { showCheckIn = true }
                         .accessibilityIdentifier("today.checkIn")
+                    PipProgressCard()
                     VStack(alignment: .leading, spacing: 10) {
-                        SectionLabel(title: "Little things, your way", subtitle: "Room for the routines you choose.")
+                        SectionLabel(title: "Little things, your way", subtitle: "Tap to record a routine. Tap again to undo.")
                         if store.journal.routines.isEmpty {
                             Text("A check-in can be enough. Add optional routines in You whenever you like.")
                                 .font(.subheadline).foregroundStyle(Theme.secondaryInk).frame(maxWidth: .infinity, alignment: .leading).card()
@@ -48,8 +49,8 @@ struct TodayView: View {
                             Image(systemName: "book.closed").font(.title2).foregroundStyle(Theme.accent)
                                 .frame(width: 44, height: 48).background(Theme.lilac.opacity(0.5), in: RoundedRectangle(cornerRadius: 14))
                             VStack(alignment: .leading, spacing: 5) {
-                                Text(store.reflectionSchedule ?? "Your week, reflected").font(.headline)
-                                Text("\(store.week.count) days recorded · a little perspective").font(.caption).foregroundStyle(Theme.secondaryInk)
+                                Text("Your week, reflected").font(.headline)
+                                Text("\(store.weekRecordedDays) days recorded · a little perspective").font(.caption).foregroundStyle(Theme.secondaryInk)
                             }
                             Spacer(minLength: 0)
                             Image(systemName: "arrow.up.right").foregroundStyle(Theme.accent)
@@ -95,20 +96,22 @@ struct TodayView: View {
             .font(.caption.weight(.medium)).foregroundStyle(Theme.accent)
     }
     private func routineRow(_ routine: Routine) -> some View {
-        let recorded = store.today?.routines.contains(routine) == true
-        return Button { showCheckIn = true } label: {
+        let recorded = store.journal.recordedRoutines(on: .now).contains(routine)
+        return Button { _ = store.toggleRoutine(routine) } label: {
             HStack(spacing: 12) {
                 Image(systemName: routine.symbol).font(.title3).foregroundStyle(Theme.accent)
                     .frame(width: 40, height: 40).background(Theme.lilac.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
                 Text(store.routineTitle(routine)).font(.system(.subheadline, design: .rounded, weight: .semibold))
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
-                Image(systemName: recorded ? "checkmark.circle.fill" : "chevron.right")
+                Image(systemName: recorded ? "checkmark.circle.fill" : "circle")
                     .font(recorded ? .title3 : .caption.weight(.semibold)).foregroundStyle(Theme.accent)
             }.frame(minHeight: 44).card(padding: 12)
         }.buttonStyle(.plain)
             .accessibilityLabel("\(store.routineTitle(routine)), \(recorded ? "recorded today" : "not recorded today")")
-            .accessibilityHint("Opens your check-in")
+            .accessibilityHint(recorded ? "Tap to undo" : "Tap to record this routine")
+            .accessibilityIdentifier("today.routine.\(routine.rawValue)")
+            .sensoryFeedback(.selection, trigger: recorded)
     }
 }
 
@@ -138,7 +141,7 @@ struct WeeklyRecapView: View {
                     Text("A week of little moments.").alongTitle(30)
                     Text("The last seven days, from the entries you chose to keep.").foregroundStyle(Theme.secondaryInk)
                     HStack(spacing: 14) {
-                        recapMetric("\(store.week.count)", label: "days recorded", symbol: "book")
+                        recapMetric("\(store.weekRecordedDays)", label: "days recorded", symbol: "book")
                         recapMetric("\(store.routineCount)", label: "routine moments", symbol: "leaf")
                     }
                     Text(store.recap).font(.system(.body, design: .serif)).lineSpacing(6).frame(maxWidth: .infinity, alignment: .leading).card()

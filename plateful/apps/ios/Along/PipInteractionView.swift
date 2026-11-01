@@ -6,6 +6,7 @@ struct PipPlayground: View {
     var accessory: Accessory
     var message = "A little company for today."
     var height: CGFloat = 250
+    var rewards: Set<PipReward> = []
     @Environment(\.alongReducedMotion) private var reduceMotion
     @State private var greetings = 0
     @State private var reacting = false
@@ -13,7 +14,7 @@ struct PipPlayground: View {
         VStack(spacing: 9) {
             Button(action: greet) {
                 PipRoomView(accessory: accessory, pose: reacting ? .celebrate : .welcome,
-                            message: reacting ? "Hello, little friend." : message, height: height)
+                            message: reacting ? "Hello, little friend." : message, height: height, rewards: rewards)
                     .overlay(alignment: .trailing) {
                         HStack(spacing: 6) {
                             Image(systemName: "heart.fill").font(.title3)
@@ -51,7 +52,7 @@ struct PipStoryView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    PipRoomView(accessory: store.journal.accessory, pose: choice == nil ? .journal : .celebrate, height: 215)
+                    PipRoomView(accessory: store.journal.accessory, pose: choice == nil ? .journal : .celebrate, height: 215, rewards: store.journal.roomRewards)
                         .clipShape(RoundedRectangle(cornerRadius: 28))
                     Pill(text: "A little story with \(store.companionName)", symbol: story.symbol)
                     Text(choice == nil ? story.title : "Something to remember.").alongTitle(30)

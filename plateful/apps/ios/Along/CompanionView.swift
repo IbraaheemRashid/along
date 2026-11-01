@@ -5,6 +5,7 @@ struct CompanionView: View {
     @Environment(\.dynamicTypeSize) private var textSize
     @State private var story: PipStory?
     @State private var previewAccessory: Accessory?
+    @State private var reward: PipReward?
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -13,24 +14,29 @@ struct CompanionView: View {
                         HStack { Text("\(store.companionName)’s place").alongTitle(27); Spacer(); DemoBadge() }
                         VStack(alignment: .leading, spacing: 8) { Text("\(store.companionName)’s place").alongTitle(27); DemoBadge() }
                     }
-                    PipPlayground(name: store.companionName, accessory: previewAccessory ?? store.journal.accessory, message: "It’s lovely to see you.", height: 235)
+                    PipPlayground(name: store.companionName, accessory: previewAccessory ?? store.journal.accessory, message: "It’s lovely to see you.", height: 235, rewards: store.journal.roomRewards)
                         .accessibilityIdentifier("companion.preview")
                     if let previewAccessory {
                         SetupNote(text: "Previewing \(previewAccessory.title). It becomes yours after \(previewAccessory.requiredDays) recorded days.", symbol: "eye")
                         Button("Back to current look") { self.previewAccessory = nil }.frame(minHeight: 44)
                     }
+                    PipProgressCard()
                     Button {
-                        story = PipStory.all.first { store.journal.companionDiscoveries?[$0.id] == nil } ?? PipStory.all[0]
+                        story = PipStory.all.first { store.journal.canRead($0) && store.journal.companionDiscoveries?[$0.id] == nil } ?? PipStory.all[0]
                     } label: {
                         HStack(spacing: 14) {
                             AlongIcon(symbol: "bubble.left.and.bubble.right", apricot: true)
                             VStack(alignment: .leading, spacing: 5) {
                                 Text("A moment with \(store.companionName)").font(.system(.headline, design: .rounded))
-                                Text("A little story. Something new to notice.").font(.caption).foregroundStyle(Theme.secondaryInk)
+                                Text(PipStory.all.contains { store.journal.canRead($0) && store.journal.companionDiscoveries?[$0.id] == nil } ? "A new story is ready for you." : "Revisit a favourite little discovery.").font(.caption).foregroundStyle(Theme.secondaryInk)
                             }
                             Spacer(minLength: 0); Image(systemName: "chevron.right").font(.caption)
                         }.card(padding: 16)
                     }.buttonStyle(.plain).accessibilityIdentifier("pet.story.open")
+                    if let nextStory = PipStory.all.first(where: { !store.journal.canRead($0) }) {
+                        Text("Next story: \(nextStory.title) · \(nextStory.requiredDays) recorded days")
+                            .font(.caption).foregroundStyle(Theme.secondaryInk)
+                    }
                     VStack(alignment: .leading, spacing: 14) {
                         SectionLabel(title: "A little more personality", subtitle: "Keepsakes appear as you record days. Once unlocked, they’re yours.")
                         if textSize.isAccessibilitySize {
@@ -38,6 +44,20 @@ struct CompanionView: View {
                         } else {
                             HStack(alignment: .top, spacing: 10) { ForEach(Accessory.allCases) { keepsake($0, compact: true) } }
                         }
+                    }
+                    SectionLabel(title: "A room that grows with you", subtitle: "Keep a little record. Make a little home.")
+                    ForEach(PipReward.allCases.filter { $0.accessory == nil }) { item in
+                        Button { reward = item } label: {
+                            HStack(spacing: 14) {
+                                AlongIcon(symbol: item.symbol, apricot: true)
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(item.title).font(.subheadline.weight(.semibold))
+                                    Text(store.journal.roomRewards.contains(item) ? "In your room" : store.journal.availableRewards.contains(item) ? "Ready to collect" : "\(item.requiredDays) recorded days")
+                                        .font(.caption).foregroundStyle(Theme.secondaryInk)
+                                }
+                                Spacer(); Image(systemName: store.journal.roomRewards.contains(item) ? "checkmark.circle.fill" : "chevron.right").foregroundStyle(Theme.accent)
+                            }.card(padding: 14)
+                        }.buttonStyle(.plain).accessibilityIdentifier("pet.room.\(item.rawValue)")
                     }
                     if let discoveries = store.journal.companionDiscoveries, !discoveries.isEmpty {
                         SectionLabel(title: "Little discoveries", subtitle: "Things \(store.companionName) has noticed with you.")
@@ -76,6 +96,7 @@ struct CompanionView: View {
             }.frame(maxWidth: .infinity).pageBackground()
                 .navigationTitle(store.companionName).navigationBarTitleDisplayMode(.inline)
                 .sheet(item: $story) { PipStoryView(story: $0) }
+                .sheet(item: $reward) { PipRewardView(reward: $0) }
         }
     }
 
@@ -85,9 +106,7 @@ struct CompanionView: View {
         return Button {
             guard available else { previewAccessory = accessory; return }
             previewAccessory = nil
-            store.journal.accessory = accessory
-            store.persist()
-            store.showToast("\(store.companionName)’s new look")
+            if store.wearAccessory(accessory) { store.showToast("\(store.companionName)’s new look") }
         } label: {
             let layout = compact ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 16))
             layout {

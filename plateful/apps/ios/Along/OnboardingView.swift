@@ -2,12 +2,11 @@ import SwiftUI
 
 struct OnboardingView: View {
     @Environment(JournalStore.self) private var store
+    @Environment(BillingStore.self) private var billing
     @Environment(\.alongReducedMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicType
-    @State private var showPurchaseInfo = false
-    @State private var showRestoreInfo = false
-    @State private var showPrivacy = false
-    @State private var showTerms = false
+    @State private var showBackup = false
+    @State private var showLocalData = false
     @State private var showPreviewConfirmation = false
     @State private var preparedReview = false
     @FocusState private var inputFocused: Bool
@@ -40,14 +39,8 @@ struct OnboardingView: View {
             }
         }.pageBackground().safeAreaInset(edge: .bottom, spacing: 0) { footer }
             .onAppear { prepareScreenReview() }
-            .sheet(isPresented: $showPrivacy) { PrivacyView() }
-            .sheet(isPresented: $showTerms) { MembershipTermsView() }
-            .alert("Purchases aren’t connected", isPresented: $showPurchaseInfo) { Button("OK", role: .cancel) {} } message: {
-                Text("This is a local design preview. No payment was taken and no subscription was created. App Store products and Superwall must be configured before checkout can work.")
-            }
-            .alert("Restore purchases", isPresented: $showRestoreInfo) { Button("OK", role: .cancel) {} } message: {
-                Text("Purchases cannot be restored in this local preview because a store is not connected. Your onboarding and first entry remain saved.")
-            }
+            .sheet(isPresented: $showBackup) { JournalBackupView(journal: { store.journal }, replace: store.restoreJournal) }
+            .sheet(isPresented: $showLocalData) { LocalDataView() }
             .alert("Open the local design preview?", isPresented: $showPreviewConfirmation) {
                 Button("Open design preview") { _ = store.finishOnboardingPreview() }
                 Button("Stay here", role: .cancel) {}
@@ -123,7 +116,9 @@ struct OnboardingView: View {
             PipPlayground(name: "Pip", accessory: .leaf, message: "Hi, I’m Pip.", height: 230)
             heading("A personal record of your GLP-1 journey. A little friend to help you notice the moments along the way.", eyebrow: "WELCOME TO ALONG")
             HStack(spacing: 18) { Label("Your progress", systemImage: "book.closed"); Label("Your pace", systemImage: "leaf") }.font(.caption.weight(.medium)).foregroundStyle(Theme.accent)
-            Text("For adults · About 3–5 minutes to set up\nPaid membership required after setup.").font(.caption).foregroundStyle(Theme.secondaryInk).lineSpacing(4)
+            Text("For adults · About 3–5 minutes to set up\nPaid membership required after setup. No free trial.").font(.caption).foregroundStyle(Theme.secondaryInk).lineSpacing(4)
+            Button("Have a journal backup? Restore it") { showBackup = true }.font(.caption).frame(minHeight: 44)
+            Button("Your data & reminders") { showLocalData = true }.font(.caption).frame(minHeight: 44)
         }
     }
     private var nameScreen: some View {
@@ -272,7 +267,7 @@ struct OnboardingView: View {
             choice("Morning", detail: "A moment before the day gets going", symbol: "sun.horizon", value: "Morning", key: \.reminder, id: "morning")
             choice("Evening", detail: "A little space to look back on today", symbol: "moon", value: "Evening", key: \.reminder, id: "evening")
             choice("I’ll find my own moment", detail: "No reminder for now", symbol: "bell.slash", value: "Off", key: \.reminder, id: "off")
-            Text("Your preference is saved. Notifications aren’t enabled in this local preview.").font(.caption).foregroundStyle(Theme.secondaryInk)
+            Text("Your preference is saved. After setup, choose a time and turn reminders on in You. Nothing is scheduled yet.").font(.caption).foregroundStyle(Theme.secondaryInk)
         }
     }
     private var reflectionDayScreen: some View {
@@ -392,7 +387,7 @@ struct OnboardingView: View {
     }
     private var paywallScreen: some View {
         VStack(alignment: .leading, spacing: 19) {
-            Text("DESIGN PREVIEW · BILLING NOT CONNECTED").font(.system(size: 9, weight: .semibold)).tracking(0.5).foregroundStyle(Theme.secondaryInk)
+            BillingAvailabilityView()
             let layout = dynamicType.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(alignment: .center, spacing: 8))
             layout {
                 VStack(alignment: .leading, spacing: 10) {
@@ -412,11 +407,9 @@ struct OnboardingView: View {
             MembershipPlans(selection: binding(\.plan))
             MembershipDisclosure(plan: draft.plan)
             HStack(spacing: 22) {
-                Button("Restore") { showRestoreInfo = true }.accessibilityIdentifier("onboarding.restore")
-                Button("Terms") { showTerms = true }
-                Button("Privacy") { showPrivacy = true }
+                Button("Restore") { Task { await billing.restore(); finishIfSubscribed() } }.disabled(billing.isBusy).accessibilityIdentifier("onboarding.restore")
+                MembershipLegalLinks()
             }.font(.caption).frame(maxWidth: .infinity).frame(minHeight: 35)
-            Text("DESIGN PREVIEW · US PRICING\nPurchases are not connected. No charge can be made.").font(.system(size: 10, weight: .medium)).foregroundStyle(Theme.secondaryInk).multilineTextAlignment(.center).lineSpacing(4).frame(maxWidth: .infinity)
             #if DEBUG
             Button("Open app preview · no payment") { showPreviewConfirmation = true }.font(.caption).frame(maxWidth: .infinity, minHeight: 44).accessibilityIdentifier("onboarding.preview")
             #endif
@@ -424,20 +417,25 @@ struct OnboardingView: View {
     }
     private var footer: some View {
         VStack(spacing: 4) {
-            Button { if step == 25 { showPurchaseInfo = true } else { advance() } } label: {
+            Button {
+                if step == 25 {
+                    if billing.isEntitled { finishIfSubscribed() }
+                    else { Task { await billing.purchase(plan: draft.plan.billingPlan); finishIfSubscribed() } }
+                } else { advance() }
+            } label: {
                 HStack(spacing: 12) {
                     Spacer(minLength: 0)
-                    Text(step == 25 && dynamicType.isAccessibilitySize ? "Subscribe" : primaryTitle).font(.system(.body, design: .rounded, weight: .semibold))
+                    Text(step == 25 && dynamicType.isAccessibilitySize ? (billing.isEntitled ? "Open journal" : billing.canPurchase ? "Subscribe" : "Unavailable") : primaryTitle).font(.system(.body, design: .rounded, weight: .semibold))
                     Image(systemName: step == 25 ? "lock.open" : "arrow.right").font(.system(size: 17, weight: .semibold))
                     Spacer(minLength: 0)
                 }.padding(.vertical, 15).frame(minHeight: 56).padding(.horizontal, 12).foregroundStyle(.white)
-                    .background(Theme.plum.opacity(draft.canContinue(at: step) ? 1 : 0.35), in: RoundedRectangle(cornerRadius: 20))
-            }.buttonStyle(.plain).disabled(!draft.canContinue(at: step)).accessibilityLabel(primaryTitle).accessibilityIdentifier(step == 25 ? "onboarding.subscribe" : "onboarding.continue")
+                    .background(Theme.plum.opacity(primaryEnabled ? 1 : 0.35), in: RoundedRectangle(cornerRadius: 20))
+            }.buttonStyle(.plain).disabled(!primaryEnabled).accessibilityLabel(primaryTitle).accessibilityIdentifier(step == 25 ? "onboarding.subscribe" : "onboarding.continue")
             if canSkip {
                 Button("Skip for now", action: skip).font(.subheadline).foregroundStyle(Theme.secondaryInk).frame(minHeight: 38).accessibilityIdentifier("onboarding.skip")
             } else if step == 0 { Text("Made for your real life.").font(.caption).foregroundStyle(Theme.secondaryInk).frame(minHeight: 32) }
             else if step == 25 {
-                Text(dynamicType.isAccessibilitySize ? (draft.plan == .annual ? "$29.99 / year\nDue on purchase" : "$5.99 / month\nDue on purchase") : "Payment is due when you subscribe.")
+                Text(billing.product(for: draft.plan.billingPlan).map { "\($0.priceWithPeriod) · Due on purchase" } ?? (dynamicType.isAccessibilitySize ? "Checkout unavailable" : "No payment can be taken until plans are available."))
                     .font(.caption).foregroundStyle(Theme.secondaryInk).multilineTextAlignment(.center).frame(minHeight: 32)
             }
         }.padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 8).frame(maxWidth: 560).frame(maxWidth: .infinity)
@@ -454,9 +452,18 @@ struct OnboardingView: View {
         case 22: return "See my space"
         case 23: return "Explore membership"
         case 24: return "Choose my membership"
-        case 25: return draft.plan == .annual ? "Subscribe for $29.99 / year" : "Subscribe for $5.99 / month"
+        case 25:
+            if billing.isEntitled { return "Open my journal" }
+            if billing.isBusy { return "Please wait…" }
+            return billing.product(for: draft.plan.billingPlan).map { "Subscribe for \($0.priceWithPeriod)" } ?? "Purchases unavailable"
         default: return "Continue"
         }
+    }
+    private var primaryEnabled: Bool {
+        draft.canContinue(at: step) && (step != 25 || billing.isEntitled || billing.canPurchase)
+    }
+    private func finishIfSubscribed() {
+        if billing.isEntitled { _ = store.finishPaidOnboarding() }
     }
     private var canSkip: Bool { [1, 3, 8, 10, 19, 21].contains(step) }
     private func advance() {
@@ -539,9 +546,9 @@ struct MembershipTermsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                AlongSection(title: "Local design preview") { Text("This build cannot take payments. The displayed US prices illustrate the proposed membership. No subscription is created by interacting with these screens.") }
+                AlongSection(title: "Membership information") { Text("Purchases are unavailable until the App Store plans and final legal documents have been configured. No subscription is created by previewing these screens.") }
                 AlongSection(title: "Proposed membership") {
-                    Text("Yearly: $29.99 charged at purchase and each annual renewal. Monthly: $5.99 charged at purchase and each monthly renewal. Billing starts immediately after a confirmed purchase. There is no free introductory period.")
+                    Text("Along offers monthly and yearly membership. The App Store price is shown before you subscribe. Billing starts immediately after a confirmed purchase. There is no free trial.")
                     Text("A production membership will renew automatically unless cancelled through the App Store subscription settings. Store pricing and final terms must be configured before purchases are enabled.")
                 }
                 AlongSection(title: "Your journal") { Text("Your saved entries remain on this device. Along supports personal reflection and routines; it does not give medical advice or medication instructions.") }

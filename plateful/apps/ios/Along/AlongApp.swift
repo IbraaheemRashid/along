@@ -2,9 +2,15 @@ import SwiftUI
 
 @main struct AlongApp: App {
     @State private var store = JournalStore()
+    @State private var reminders = ReminderStore()
+    @State private var previewReminders = ReminderStore(deliveryEnabled: false)
+    @State private var billing = BillingStore(configuration: BillingConfiguration.forCurrentLaunch())
+    @State private var previewBilling = BillingStore(configuration: .unconfigured(["Local design preview"]))
     var body: some Scene {
         WindowGroup {
-            RootView().environment(store).tint(Theme.accent)
+            RootView().environment(store)
+                .environment(store.journal.isDesignPreview == true || store.journal.hasSampleData ? previewReminders : reminders)
+                .environment(store.journal.isDesignPreview == true || store.journal.hasSampleData ? previewBilling : billing).tint(Theme.accent)
             #if DEBUG
                 .preferredColorScheme(ProcessInfo.processInfo.arguments.contains("--ui-testing") && ProcessInfo.processInfo.arguments.contains("--dark-review") ? .dark : nil)
             #endif
@@ -13,23 +19,37 @@ import SwiftUI
 }
 struct RootView: View {
     @Environment(JournalStore.self) private var store
+    @Environment(BillingStore.self) private var billing
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.alongReducedMotion) private var reduceMotion
     var showsDevTools = true
     #if DEBUG
     @State private var showDevLab = false
     #endif
+    private var previewAccess: Bool {
+        #if DEBUG
+        store.journal.isDesignPreview == true
+        #else
+        false
+        #endif
+    }
     var body: some View {
         @Bindable var store = store
         Group {
-            if store.journal.hasOnboarded {
+            if !billing.hasCheckedEntitlements && !previewAccess {
+                ProgressView("Opening your space…").frame(maxWidth: .infinity, maxHeight: .infinity).pageBackground()
+            } else if store.journal.hasOnboarded && (billing.isEntitled || previewAccess) {
                 TabView(selection: $store.selectedTab) {
                     TodayView().tabItem { Label("Today", systemImage: "sun.max") }.tag(0)
                     JourneyView().tabItem { Label("Journey", systemImage: "point.topleft.down.to.point.bottomright.curvepath") }.tag(1)
                     CompanionView().tabItem { Label(store.companionName, systemImage: "pawprint") }.tag(2)
                     SettingsView().tabItem { Label("You", systemImage: "person.crop.circle") }.tag(3)
                 }
-            } else { OnboardingView() }
+            } else if store.journal.hasOnboarded { MembershipView(canClose: false) }
+            else { OnboardingView() }
         }
+        .task(id: ObjectIdentifier(billing)) { await billing.start() }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await billing.refresh() } } }
         #if DEBUG
         .safeAreaInset(edge: .top, spacing: 0) {
             if showsDevTools {
@@ -50,7 +70,7 @@ struct RootView: View {
             }
         }.animation(reduceMotion ? nil : .spring(response: 0.35), value: store.toast)
             .alert("Something needs attention", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
-                Button("Try saving again") { store.error = nil; store.persist() }
+                Button("OK") { store.error = nil }
                 if !store.journal.hasOnboarded {
                     Button("Restart setup") { store.error = nil; store.resetOnboarding() }
                 }

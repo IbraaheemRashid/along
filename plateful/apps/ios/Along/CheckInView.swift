@@ -24,6 +24,7 @@ struct CheckInView: View {
                             HStack { Pill(text: mood?.shortTitle ?? "", symbol: mood?.symbol); Pill(text: "Saved on this device", symbol: "checkmark") }
                             VStack(alignment: .leading) { Pill(text: mood?.shortTitle ?? "", symbol: mood?.symbol); Pill(text: "Saved on this device", symbol: "checkmark") }
                         }
+                        PipProgressCard()
                         PrimaryButton(title: "Back to my day") { dismiss() }
                         Button("See my journey") { store.selectedTab = 1; dismiss() }.frame(maxWidth: .infinity, minHeight: 44)
                     } else {
@@ -71,10 +72,15 @@ struct CheckInView: View {
                 .navigationTitle(saved ? "Moment saved" : "Your check-in").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Close") { dismiss() } } }
                 .sensoryFeedback(.success, trigger: saved)
-        }.onAppear { if let entry { day = entry.day; mood = entry.mood; appetite = entry.appetite; routines = entry.routines; note = entry.note } }
+        }.onAppear {
+            if let entry { day = entry.day; mood = entry.mood; appetite = entry.appetite; routines = entry.routines; note = entry.note }
+            else { routines = store.journal.recordedRoutines(on: day) }
+        }
             .onChange(of: day) {
                 if entry == nil, let existing = store.journal.checkIns.first(where: { Calendar.current.isDate($0.day, inSameDayAs: day) }) {
                     mood = existing.mood; appetite = existing.appetite; routines = existing.routines; note = existing.note
+                } else if entry == nil {
+                    mood = nil; appetite = nil; routines = store.journal.recordedRoutines(on: day); note = ""
                 }
             }
     }

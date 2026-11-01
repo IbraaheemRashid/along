@@ -38,6 +38,8 @@ struct OnboardingCatalogView: View {
 private struct OnboardingScreenPreview: View {
     @Environment(\.dismiss) private var dismiss
     @State private var previewStore: JournalStore
+    @State private var billing = BillingStore(configuration: .unconfigured(["Isolated onboarding review"]))
+    @State private var reminders = ReminderStore(deliveryEnabled: false)
     init(step: Int) {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("AlongScreenReview-\(UUID().uuidString)", isDirectory: true)
         let store = JournalStore(directory: directory, arguments: [], clearCredentials: {})
@@ -51,7 +53,7 @@ private struct OnboardingScreenPreview: View {
                 Spacer()
                 Button("Done") { dismiss() }.font(.subheadline).accessibilityIdentifier("dev.onboarding.close")
             }.padding(.horizontal, 24).padding(.vertical, 10).background(Theme.paper)
-            RootView(showsDevTools: false).environment(previewStore)
+            RootView(showsDevTools: false).environment(previewStore).environment(billing).environment(reminders)
         }
     }
 }

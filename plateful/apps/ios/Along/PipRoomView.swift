@@ -7,6 +7,7 @@ struct PipRoomView: View {
     var pose: PipPose = .welcome
     var message: String? = nil
     var height: CGFloat = 250
+    var rewards: Set<PipReward> = []
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dynamicTypeSize) private var textSize
 
@@ -28,6 +29,25 @@ struct PipRoomView: View {
 
                     books.frame(width: width * 0.15, height: roomHeight * 0.17)
                         .position(x: width * 0.83, y: roomHeight * 0.65)
+                    if rewards.contains(.plant) {
+                        VStack(spacing: -2) {
+                            Image(systemName: "leaf.fill").font(.system(size: 26)).rotationEffect(.degrees(-30)).foregroundStyle(Theme.accent)
+                            UnevenRoundedRectangle(topLeadingRadius: 2, bottomLeadingRadius: 8, bottomTrailingRadius: 8, topTrailingRadius: 2)
+                                .fill(Theme.peach).frame(width: 24, height: 22)
+                        }.position(x: width * 0.2, y: roomHeight * 0.66)
+                    }
+                    if rewards.contains(.lantern) {
+                        Image(systemName: "lamp.table.fill").font(.system(size: 39)).foregroundStyle(Theme.gold)
+                            .background(Circle().fill(Theme.gold.opacity(0.15)).frame(width: 64, height: 64))
+                            .position(x: width * 0.84, y: roomHeight * 0.4)
+                    }
+                    if rewards.contains(.stars) {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "star.fill").font(.system(size: 11)).padding(.top, 10)
+                            Image(systemName: "star.fill").font(.system(size: 16))
+                            Image(systemName: "star.fill").font(.system(size: 9)).padding(.top, 18)
+                        }.foregroundStyle(Theme.gold).position(x: width * 0.2, y: roomHeight * 0.17)
+                    }
                     Ellipse().fill(Theme.plum.opacity(0.08))
                         .frame(width: width * 0.53, height: roomHeight * 0.16)
                         .position(x: width * 0.55, y: roomHeight * 0.88)
@@ -78,6 +98,10 @@ struct PipRoomView: View {
     private var books: some View {
         VStack(spacing: 3) {
             HStack(alignment: .bottom, spacing: 4) {
+                if rewards.contains(.notebook) {
+                    RoundedRectangle(cornerRadius: 3).fill(Theme.lilac).frame(width: 15, height: 40)
+                        .overlay(Image(systemName: "heart.fill").font(.system(size: 7)).foregroundStyle(Theme.accent))
+                }
                 RoundedRectangle(cornerRadius: 3).fill(Theme.plum).frame(width: 13, height: 30)
                 RoundedRectangle(cornerRadius: 3).fill(Theme.peach).frame(width: 12, height: 36)
                 RoundedRectangle(cornerRadius: 3).fill(Theme.gold).frame(width: 11, height: 27).rotationEffect(.degrees(-9))

@@ -116,12 +116,13 @@ struct SetupBenefit: View {
 }
 
 struct MembershipPlans: View {
+    @Environment(BillingStore.self) private var billing
     @Environment(\.dynamicTypeSize) private var dynamicType
     @Binding var selection: OnboardingPlan
     var body: some View {
         VStack(spacing: 10) {
-            plan(.annual, title: "Yearly", price: "$29.99", period: "/ year", detail: "Billed yearly · $2.50 / month equivalent", badge: "BEST VALUE")
-            plan(.monthly, title: "Monthly", price: "$5.99", period: "/ month", detail: "Billed monthly", badge: nil)
+            plan(.annual, title: "Yearly", price: billing.product(for: .annual)?.displayPrice ?? "—", period: "/ year", detail: "One payment each year", badge: nil)
+            plan(.monthly, title: "Monthly", price: billing.product(for: .monthly)?.displayPrice ?? "—", period: "/ month", detail: "One payment each month", badge: nil)
         }
     }
     private func plan(_ plan: OnboardingPlan, title: String, price: String, period: String, detail: String, badge: String?) -> some View {
@@ -149,11 +150,10 @@ struct MembershipPlans: View {
 }
 
 struct MembershipDisclosure: View {
+    @Environment(BillingStore.self) private var billing
     var plan: OnboardingPlan
     var body: some View {
-        Text(plan == .annual
-             ? "$29.99 charged when you subscribe, then yearly until cancelled. Manage or cancel in your App Store subscription settings."
-             : "$5.99 charged when you subscribe, then monthly until cancelled. Manage or cancel in your App Store subscription settings.")
+        Text(billing.product(for: plan.billingPlan).map { "\($0.displayPrice) charged when you subscribe, then every \($0.plan.periodLabel) until cancelled. No free trial. Manage or cancel in your App Store subscription settings." } ?? "App Store prices appear when plans are available. No free trial. Payment begins when you subscribe and renews until cancelled.")
             .font(.caption).foregroundStyle(Theme.secondaryInk).multilineTextAlignment(.center).lineSpacing(3)
     }
 }
