@@ -20,7 +20,8 @@ final class AlongUITests: XCTestCase {
     }
 
     private func capture(_ name: String) {
-        let attachment = XCTAttachment(screenshot: app.screenshot())
+        // Capture the composited screen, including native bars and safe areas.
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
@@ -127,6 +128,37 @@ final class AlongUITests: XCTestCase {
         let count = Int(value.label)
         XCTAssertNotNil(count, "The recorded-days metric should expose its numeric value")
         return count ?? -1
+    }
+
+    func testCompanionDesignReview() {
+        for (name, arguments) in [("light", [String]()), ("dark", ["--dark-review"]), ("large", ["--dark-review", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])] {
+            launchSandbox(arguments: ["--sample-journey"] + arguments)
+            XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 5))
+            capture("today-\(name)")
+            tap("How’s today feeling?")
+            reveal(app.buttons["Save this moment"])
+            app.buttons["Close"].tap()
+            app.tabBars.buttons["Pip"].tap()
+            capture("pip-\(name)")
+            tap("companion.accessory.scarf")
+            XCTAssertTrue(app.buttons["companion.accessory.scarf"].isSelected)
+            app.terminate()
+        }
+    }
+
+    func testRoomOpensCompanionAndKeepsakePersists() {
+        launchSampleJourney()
+        tap("today.companion")
+        XCTAssertTrue(app.tabBars.buttons["Pip"].isSelected)
+        tap("companion.accessory.scarf")
+        XCTAssertTrue(app.buttons["companion.accessory.scarf"].isSelected)
+        app.terminate()
+        launchSandbox(reset: false)
+        tap("today.companion")
+        let scarf = app.buttons["companion.accessory.scarf"]
+        reveal(scarf)
+        XCTAssertTrue(scarf.isSelected, "Chosen keepsake must survive restarting the app")
+        capture("pip-selected-scarf")
     }
 
     func testDevLabSetupShortcuts() {

@@ -152,6 +152,28 @@ Final Dev Lab verification:
 
 The existing four app tabs are Today, Journey, Pip and You. Live billing, cloud accounts, reminder delivery, analytics, real-device checks and market validation remain pending.
 
+## Finch reference pass — 1 November 2026
+
+Mobbin MCP became available on the latest retry. Inspected Finch home, wardrobe and onboarding images directly, plus broader self-care search results. Applied two Finch patterns to **Today and Pip** in native SwiftUI, using the user's confirmed plum, cream and apricot direction and the existing original Pip renders.
+
+- [Finch home](https://mobbin.com/screens/e7f40efd-01a8-4f03-828e-31db0c35dbc2): a character room above compact daily actions. Along now uses an original reading nook, a direct check-in button and individual routine rows. Tapping the room opens Pip. No energy, currency or health-task reward system was added.
+- [Finch wardrobe](https://mobbin.com/screens/fd25240a-f998-4164-bbcf-abbe3fff15d4): character preview above visual choices, with a selected state. Along's three existing keepsakes now appear directly below Pip with a “Wearing” label. Their existing availability and persistence rules are retained.
+- The room is drawn locally with SwiftUI. It adds no image service, package or animation. At accessibility text sizes, the speech moves above the room and keepsake choices become vertical rows.
+- The 26-screen onboarding, no-trial offer, journey records, weekly reflection and Dev Lab remain available. This pass changes Today and Pip; it does not redesign all 26 onboarding screens.
+
+Comparison files contain the actual simulator captures, embedded so the HTML opens independently: [Today light](screenshots/finch-refresh/today-light.html), [Pip light](screenshots/finch-refresh/pip-light.html), [Today dark](screenshots/finch-refresh/today-dark.html), [Pip dark](screenshots/finch-refresh/pip-dark.html).
+
+Evidence limitation: the applied reference patterns come from one product, Finch. They are visual design references, not proof of retention, conversion or demand.
+
+Verification for this pass:
+
+- `bash scripts/check.sh`: **30 Node tests, 83 Swift domain checks and the Vite production build passed** on the host. Log: `.build/finch-checks.log`.
+- `.build/finch-redesign.xcresult`: review captures, keepsake persistence and the existing check-in/edit/relaunch flow passed (3 tests).
+- `.build/finch-final.xcresult`: light/dark/largest-text actions, keepsake persistence and Dev Lab setup shortcuts passed (3 tests).
+- `.build/finch-delivery.xcresult`: final layout and keepsake persistence passed (2 tests), including check-in and selection at the largest accessibility text size. Verified the running simulator through the native UI as well.
+- `.build/finch-screen-captures.xcresult`: the design review case passed again with full-screen capture. The runner intermittently omitted native bars in Today captures; its light/dark comparison panes use the earlier `.build/finch-final.xcresult` captures, whose layout was checked against the final running app. Pip panes use the final screen-capture run. This is a capture limitation, not a claim of completed real-device review.
+- Release simulator build passed; log `.build/finch-release-delivery.log`. No payment, deployment or external service was activated.
+
 ## Implementation verification log
 
 Native: Xcode 26.3, iPhone 17 Pro simulator, iOS 26.3. Project: `apps/ios/Along.xcodeproj`, scheme Along. No signing or Apple Developer account needed for the simulator build.
