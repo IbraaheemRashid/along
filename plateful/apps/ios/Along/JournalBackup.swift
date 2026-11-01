@@ -1,0 +1,246 @@
+import Foundation
+
+/// A user-controlled, readable local archive. This format deliberately excludes
+/// onboarding access flags, credentials and subscription/entitlement state.
+struct JournalBackup: Codable, Equatable {
+    static let maximumBytes = 5 * 1024 * 1024
+    static let maximumRecords = 10_000
+    static let maximumCredits = 50_000
+    static let currentSchema = 1
+    private static let signature = "along-local-journal"
+
+    let format: String
+    let schemaVersion: Int
+    let exportedAt: Date
+    let timeZoneID: String
+    let content: Content
+
+    struct Content: Codable, Equatable {
+        var journalVersion: Int
+        var name: String
+        var companionName: String
+        var routines: Set<Routine>
+        var checkIns: [CheckIn]
+        var milestones: [Milestone]
+        var weights: [WeightEntry]
+        var weightUnit: WeightUnit
+        var showWeight: Bool
+        var accessory: Accessory
+        var unlockedAccessories: Set<Accessory>
+        var hasSampleData: Bool
+        var startDate: Date
+        var onboardingPreferences: OnboardingDraft?
+        var companionDiscoveries: [String: String]?
+        var pipProgress: PipProgress?
+        var routineDays: [RoutineDay]?
+
+        init(_ journal: Journal) {
+            journalVersion = journal.version
+            name = journal.name; companionName = journal.companionName
+            routines = journal.routines; checkIns = journal.checkIns
+            milestones = journal.milestones; weights = journal.weights
+            weightUnit = journal.weightUnit; showWeight = journal.showWeight
+            accessory = journal.accessory; unlockedAccessories = journal.unlockedAccessories
+            hasSampleData = journal.hasSampleData; startDate = journal.startDate
+            onboardingPreferences = journal.onboardingPreferences
+            companionDiscoveries = journal.companionDiscoveries
+            pipProgress = journal.pipProgress; routineDays = journal.routineDays
+        }
+    }
+
+    enum Failure: Error { case invalidArchive, unsupportedVersion, tooLarge, sampleArchive, unreadableFile }
+
+    static var allowsSamples: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
+    }
+
+    static func make(from journal: Journal, now: Date = .now, timeZone: TimeZone = .current) throws -> JournalBackup {
+        let backup = JournalBackup(format: signature, schemaVersion: currentSchema,
+                                   exportedAt: now, timeZoneID: timeZone.identifier, content: Content(journal))
+        try backup.validate(now: now)
+        return backup
+    }
+
+    func encoded(now: Date = .now) throws -> Data {
+        try validate(now: now)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        // Foundation's default date representation preserves subsecond values
+        // exactly, including dates created by the existing local journal format.
+        let data = try encoder.encode(self)
+        guard data.count <= Self.maximumBytes else { throw Failure.tooLarge }
+        return data
+    }
+
+    static func decode(_ data: Data, now: Date = .now) throws -> JournalBackup {
+        guard !data.isEmpty, data.count <= maximumBytes else { throw Failure.tooLarge }
+        do {
+            try validateShape(data)
+            let backup = try JSONDecoder().decode(Self.self, from: data)
+            try backup.validate(now: now)
+            return backup
+        } catch let failure as Failure { throw failure }
+        catch { throw Failure.invalidArchive }
+    }
+
+    /// Revalidate at the final confirmation, preserving the destination's access
+    /// flags even if the archive came from a subscribed or development device.
+    func restoring(into current: Journal, now: Date = .now) throws -> Journal {
+        try validate(now: now)
+        var restored = Journal()
+        restored.version = content.journalVersion
+        restored.name = content.name; restored.companionName = content.companionName
+        restored.routines = content.routines; restored.checkIns = content.checkIns
+        restored.milestones = content.milestones; restored.weights = content.weights
+        restored.weightUnit = content.weightUnit; restored.showWeight = content.showWeight
+        restored.accessory = content.accessory; restored.unlockedAccessories = content.unlockedAccessories
+        restored.hasSampleData = content.hasSampleData; restored.startDate = content.startDate
+        restored.onboardingPreferences = content.onboardingPreferences
+        restored.companionDiscoveries = content.companionDiscoveries
+        restored.pipProgress = content.pipProgress; restored.routineDays = content.routineDays
+        restored.hasOnboarded = current.hasOnboarded
+        restored.isDesignPreview = current.isDesignPreview
+        return restored
+    }
+
+    /// Bounded even if file metadata is missing, stale or describes a provider.
+    static func read(from url: URL, now: Date = .now) throws -> JournalBackup {
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let values = try url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+            guard values.isRegularFile == true else { throw Failure.unreadableFile }
+            if let size = values.fileSize, size > maximumBytes { throw Failure.tooLarge }
+            let handle = try FileHandle(forReadingFrom: url)
+            defer { try? handle.close() }
+            var data = Data()
+            while data.count <= maximumBytes {
+                let remaining = maximumBytes + 1 - data.count
+                guard let chunk = try handle.read(upToCount: min(65_536, remaining)), !chunk.isEmpty else { break }
+                data.append(chunk)
+            }
+            return try decode(data, now: now)
+        } catch let failure as Failure { throw failure }
+        catch { throw Failure.unreadableFile }
+    }
+
+    private func validate(now: Date) throws {
+        guard format == Self.signature else { throw Failure.invalidArchive }
+        guard schemaVersion == Self.currentSchema, content.journalVersion == 1 else { throw Failure.unsupportedVersion }
+        guard let timeZone = TimeZone(identifier: timeZoneID), timeZoneID.count <= 100 else { throw Failure.invalidArchive }
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = timeZone
+        let lowerBound = Date(timeIntervalSince1970: -2_208_988_800) // 1900-01-01
+        guard now.timeIntervalSinceReferenceDate.isFinite,
+              let upperBound = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) else { throw Failure.invalidArchive }
+        func validDate(_ date: Date) -> Bool {
+            date.timeIntervalSinceReferenceDate.isFinite && date >= lowerBound && date < upperBound
+        }
+        func validText(_ value: String, limit: Int, required: Bool = false) -> Bool {
+            value.count <= limit && (!required || !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                && !value.unicodeScalars.contains { CharacterSet.controlCharacters.contains($0) && $0 != "\n" && $0 != "\t" }
+        }
+        guard validDate(exportedAt), exportedAt <= now.addingTimeInterval(300), validDate(content.startDate),
+              validText(content.name, limit: 30), validText(content.companionName, limit: 24),
+              content.unlockedAccessories.contains(.leaf), content.unlockedAccessories.contains(content.accessory),
+              content.checkIns.count <= Self.maximumRecords, content.weights.count <= Self.maximumRecords,
+              content.milestones.count <= Self.maximumRecords, (content.routineDays?.count ?? 0) <= Self.maximumRecords else { throw Failure.invalidArchive }
+
+        var identifiers = Set<UUID>()
+        var checkInDays = Set<Date>(), weightDays = Set<Date>(), routineDays = Set<Date>()
+        func unique(_ id: UUID) -> Bool { identifiers.insert(id).inserted }
+        for entry in content.checkIns {
+            guard unique(entry.id), validDate(entry.day), validText(entry.note, limit: 500),
+                  checkInDays.insert(calendar.startOfDay(for: entry.day)).inserted else { throw Failure.invalidArchive }
+        }
+        for entry in content.weights {
+            guard unique(entry.id), validDate(entry.date), JournalValidation.weight(entry.kilograms),
+                  weightDays.insert(calendar.startOfDay(for: entry.date)).inserted else { throw Failure.invalidArchive }
+        }
+        for entry in content.milestones {
+            guard unique(entry.id), validDate(entry.date), validText(entry.title, limit: 80, required: true),
+                  validText(entry.note, limit: 300) else { throw Failure.invalidArchive }
+        }
+        for entry in content.routineDays ?? [] {
+            guard unique(entry.id), validDate(entry.day),
+                  routineDays.insert(calendar.startOfDay(for: entry.day)).inserted else { throw Failure.invalidArchive }
+        }
+        guard checkInDays.isDisjoint(with: routineDays) else { throw Failure.invalidArchive }
+
+        let containsSamples = content.checkIns.contains(where: \.isSample) || content.weights.contains(where: \.isSample)
+            || content.milestones.contains(where: \.isSample) || (content.routineDays ?? []).contains(where: \.isSample)
+        guard !containsSamples || content.hasSampleData else { throw Failure.invalidArchive }
+        guard Self.allowsSamples || (!content.hasSampleData && !containsSamples) else { throw Failure.sampleArchive }
+
+        if let draft = content.onboardingPreferences {
+            guard draft.isValidForPersistence, validDate(draft.startDate),
+                  !draft.showWeight || draft.weightValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.baselineKilograms != nil else { throw Failure.invalidArchive }
+        }
+        if let discoveries = content.companionDiscoveries {
+            guard discoveries.count <= PipStory.all.count else { throw Failure.invalidArchive }
+            for (id, choice) in discoveries {
+                guard PipStory.all.contains(where: { $0.id == id && $0.choices.contains(where: { $0.id == choice }) }) else { throw Failure.invalidArchive }
+            }
+        }
+        if let progress = content.pipProgress {
+            guard let zone = TimeZone(identifier: progress.timeZoneID), progress.timeZoneID.count <= 100,
+                  progress.recordedDays.count <= Self.maximumRecords, progress.creditedEntries.count <= Self.maximumCredits,
+                  progress.recordedDays.count <= progress.creditedEntries.count else { throw Failure.invalidArchive }
+            var ledgerCalendar = Calendar(identifier: .gregorian); ledgerCalendar.timeZone = zone
+            for key in progress.recordedDays {
+                let pieces = key.split(separator: "-", omittingEmptySubsequences: false)
+                guard key.utf8.count == 10, pieces.count == 3, pieces[0].count == 4, pieces[1].count == 2, pieces[2].count == 2,
+                      pieces.allSatisfy({ $0.utf8.allSatisfy { (48...57).contains($0) } }),
+                      let year = Int(pieces[0]), let month = Int(pieces[1]), let day = Int(pieces[2]), year >= 1900,
+                      let date = ledgerCalendar.date(from: DateComponents(year: year, month: month, day: day)),
+                      ledgerCalendar.dateComponents([.year, .month, .day], from: date) == DateComponents(year: year, month: month, day: day),
+                      date <= ledgerCalendar.startOfDay(for: now) else { throw Failure.invalidArchive }
+            }
+            // Legacy starter accessories are legitimate gifts, not earned days.
+            for reward in progress.claimedRewards where progress.recordedDays.count < reward.requiredDays {
+                guard let accessory = reward.accessory, content.unlockedAccessories.contains(accessory) else { throw Failure.invalidArchive }
+            }
+        }
+    }
+
+    /// Reject unknown fields rather than silently discarding a future format.
+    /// Inspect sets before decoding because Codable Set would hide duplicates.
+    private static func validateShape(_ data: Data) throws {
+        guard let envelope = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw Failure.invalidArchive }
+        func object(_ value: Any?, required: Set<String>, optional: Set<String> = []) throws -> [String: Any] {
+            guard let result = value as? [String: Any], required.isSubset(of: Set(result.keys)),
+                  Set(result.keys).isSubset(of: required.union(optional)) else { throw Failure.invalidArchive }
+            return result
+        }
+        func strings(_ value: Any?, lowercase: Bool = false) throws {
+            guard let values = value as? [String], Set(values.map { lowercase ? $0.lowercased() : $0 }).count == values.count else { throw Failure.invalidArchive }
+        }
+        _ = try object(envelope, required: ["format", "schemaVersion", "exportedAt", "timeZoneID", "content"])
+        let content = try object(envelope["content"], required: ["journalVersion", "name", "companionName", "routines", "checkIns", "milestones", "weights", "weightUnit", "showWeight", "accessory", "unlockedAccessories", "hasSampleData", "startDate"], optional: ["onboardingPreferences", "companionDiscoveries", "pipProgress", "routineDays"])
+        try strings(content["routines"]); try strings(content["unlockedAccessories"])
+        for (key, fields) in [
+            ("checkIns", Set(["id", "day", "mood", "appetite", "routines", "note", "isSample"])),
+            ("weights", Set(["id", "date", "kilograms", "isSample"])),
+            ("milestones", Set(["id", "date", "title", "note", "kind", "isSample"])),
+            ("routineDays", Set(["id", "day", "routines", "isSample"]))
+        ] {
+            if key == "routineDays" && content[key] == nil { continue }
+            guard let entries = content[key] as? [Any], entries.count <= maximumRecords else { throw Failure.invalidArchive }
+            for raw in entries {
+                let entry = try object(raw, required: fields)
+                if fields.contains("routines") { try strings(entry["routines"]) }
+            }
+        }
+        if let raw = content["onboardingPreferences"] {
+            let draft = try object(raw, required: ["step", "name", "stage", "hasStartDate", "startDate", "priority", "obstacle", "progressAreas", "intention", "showWeight", "weightValue", "weightUnit", "routines", "routineNames", "frequency", "reminder", "reflectionDay", "encouragement", "accessory", "companionName", "note", "plan"], optional: ["mood", "appetite"])
+            try strings(draft["progressAreas"]); try strings(draft["routines"])
+        }
+        if let raw = content["pipProgress"] {
+            let progress = try object(raw, required: ["timeZoneID", "recordedDays", "creditedEntries", "claimedRewards"])
+            try strings(progress["recordedDays"]); try strings(progress["creditedEntries"], lowercase: true); try strings(progress["claimedRewards"])
+        }
+    }
+}
