@@ -6,7 +6,7 @@ A native SwiftUI prototype for an adult GLP-1 progress companion. A short check-
 
 Open `apps/ios/Along.xcodeproj` in Xcode, choose the **Along** scheme and an installed iPhone Simulator, then Run. No Apple developer account, server, API key or payment is required for simulator use. iOS 17 or later; tested with Xcode 26.3 and an iPhone 17 Pro simulator running iOS 26.3.
 
-Complete the 26-screen setup to create your first journal entry. Screen 26 is a direct subscription offer with **no trial**. Billing is not connected: Subscribe and Restore do not unlock access. In a Debug build, scroll to **Open app preview · no payment** and confirm **Open design preview** to explore the app locally. This does not create a subscription.
+Complete the 26-screen setup to create your first journal entry. Screen 26 is a direct subscription offer with **no trial**. The StoreKit/Superwall billing implementation is present but live products and public configuration are not supplied, so purchases remain unavailable. In a Debug build, scroll to **Open app preview · no payment** and confirm **Open design preview** to explore the app locally. This does not create a subscription.
 
 In **You → Review all 26 onboarding screens**, jump to any screen using clearly labelled example answers in a separate review journal. **You → Load the sample journey** loads fictional records; individual entries retain sample labels. You can also export or delete local data. The old `apps/ios/Plateful` folder is an abandoned pantry experiment and is deliberately excluded from the Xcode project.
 
@@ -18,7 +18,7 @@ The working core includes:
 - Optional weight records with canonical kg storage and kg/lb display.
 - Five new transparent Pip renders: welcome, journal, celebration, scarf and flower. Customisation and cumulative keepsakes carry into the app without streak penalties.
 - Local file protection, restart persistence, readable export and deletion.
-- An explicitly non-purchasable direct subscription preview: $29.99/year or $5.99/month, with immediate-charge disclosure and no trial.
+- A hard no-trial membership gate using verified StoreKit entitlements and localized product prices when configured. No invented price is shown when products are unavailable.
 
 ## Dev Lab
 
@@ -31,13 +31,13 @@ In a Debug build, tap **Dev Lab** in the top bar from onboarding or the main app
 - Inspect sandbox JSON, preview a save-error alert, reload saved state from disk or reset the current scenario.
 - **Resume last sandbox** returns to the saved test session, including after an app restart. UI tests use a separate Dev Lab storage scope.
 
-Purchases, cloud accounts and notification delivery remain unconnected. Dev Lab displays the connection status and never creates a real subscription.
+Live purchase acceptance and cloud accounts remain unconfigured. Optional local reminders are implemented; review and sandbox sessions disable notification delivery. Dev Lab displays the connection status and never creates a real subscription.
 
 ## What is connected
 
 **iOS works locally.** Entries are not sent to a server, model or analytics system. The API client and Keychain token utility are dormant integration seams; the app does not create accounts or call them automatically. This is not a medical, dosing or nutrition-assessment service.
 
-The companion API uses plain Cloudflare Worker handlers and D1 SQL. Its Node preview is local-only and marks non-persisted submissions honestly. Live Better Auth, OpenRouter/AI Gateway, Superwall, Stripe and Tinybird remain disabled until configured and implemented. The web page uses React + Vite and is a separate validation preview, not the native application.
+The companion API uses plain Cloudflare Worker handlers and D1 SQL. Its Node preview is local-only and marks non-persisted submissions honestly. Live Better Auth, OpenRouter/AI Gateway, Stripe and Tinybird remain disabled until configured and implemented. Native Superwall billing is implemented but needs account configuration and sandbox purchase verification. The web page uses React + Vite and is a separate validation preview, not the native application.
 
 No production deployment, real waitlist campaign, AI service, purchase, trial, cloud sync or TestFlight distribution has occurred. No new recurring costs were started.
 
