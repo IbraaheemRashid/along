@@ -58,63 +58,6 @@ struct SetupHero: View {
     }
 }
 
-struct SetupJournalCard: View {
-    @Environment(\.dynamicTypeSize) private var dynamicType
-    var draft: OnboardingDraft
-    var recorded = false
-    var entry: CheckIn? = nil
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Image(systemName: "book.closed").font(.title3).foregroundStyle(Theme.accent)
-                Text(recorded ? (entry == nil ? "EXAMPLE PAGE" : "YOUR FIRST PAGE") : "YOUR JOURNEY").font(.caption2.weight(.bold)).tracking(1.6).foregroundStyle(Theme.accent)
-                Spacer()
-                Image(systemName: "bookmark.fill").foregroundStyle(Theme.peach)
-            }
-            Text(draft.name.isEmpty ? "A beginning,\nin your own words." : "\(draft.name)’s\nnew chapter.").alongTitle(29)
-                .fixedSize(horizontal: false, vertical: true)
-            Rectangle().fill(Theme.line).frame(height: 1)
-            if recorded, let mood = entry?.mood ?? draft.mood, let appetite = entry?.appetite ?? draft.appetite {
-                Text(entry?.day.formatted(.dateTime.day().month(.abbreviated).year()).uppercased() ?? "EXAMPLE ENTRY").font(.caption2.weight(.semibold)).tracking(1.4).foregroundStyle(Theme.secondaryInk)
-                let layout = dynamicType.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
-                layout { Pill(text: mood.shortTitle, symbol: mood.symbol); Pill(text: appetite.title, symbol: "leaf") }
-                if !(entry?.note ?? draft.note).isEmpty { Text(entry?.note ?? draft.note).font(.system(.body, design: .serif)).lineSpacing(4) }
-                else { Text("You made a little space to notice today.").font(.system(.body, design: .serif)).foregroundStyle(Theme.secondaryInk).lineSpacing(4) }
-            } else {
-                Text(draft.intention.isEmpty ? "The things you notice. The routines you choose. The moments that matter to you." : draft.intention)
-                    .font(.system(.body, design: .serif)).lineSpacing(5).foregroundStyle(Theme.secondaryInk)
-                if !draft.progressAreas.isEmpty {
-                    Text(draft.progressAreas.sorted().joined(separator: "  ·  ")).font(.caption.weight(.medium)).foregroundStyle(Theme.accent)
-                }
-            }
-            HStack {
-                Circle().fill(Theme.peach).frame(width: 7, height: 7)
-                Text(recorded ? (entry == nil ? "Example only · not a saved entry" : "Saved on this device") : "Made around what matters to you").font(.caption).foregroundStyle(Theme.secondaryInk)
-            }
-        }.padding(25).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 22))
-            .overlay(alignment: .leading) { RoundedRectangle(cornerRadius: 2).fill(Theme.peach.opacity(0.75)).frame(width: 4).padding(.vertical, 24).padding(.leading, 10) }
-            .overlay(RoundedRectangle(cornerRadius: 22).stroke(Theme.line))
-            .shadow(color: Theme.ink.opacity(0.05), radius: 18, x: 0, y: 8)
-    }
-}
-
-struct SetupBenefit: View {
-    var number: String
-    var title: String
-    var detail: String
-    var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            Text(number).font(.system(.title3, design: .serif)).foregroundStyle(Theme.accent)
-                .frame(width: 42, height: 42).background(Theme.lilac.opacity(0.35), in: Circle())
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.headline)
-                Text(detail).font(.subheadline).foregroundStyle(Theme.secondaryInk).lineSpacing(3)
-            }
-        }.frame(maxWidth: .infinity, alignment: .leading).card(padding: 16)
-    }
-}
-
 struct MembershipPlans: View {
     @Environment(BillingStore.self) private var billing
     @Environment(\.dynamicTypeSize) private var dynamicType

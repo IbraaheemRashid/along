@@ -11,9 +11,6 @@ import SwiftUI
             RootView().environment(store)
                 .environment(store.journal.isDesignPreview == true || store.journal.hasSampleData ? previewReminders : reminders)
                 .environment(store.journal.isDesignPreview == true || store.journal.hasSampleData ? previewBilling : billing).tint(Theme.accent)
-            #if DEBUG
-                .preferredColorScheme(ProcessInfo.processInfo.arguments.contains("--ui-testing") && ProcessInfo.processInfo.arguments.contains("--dark-review") ? .dark : nil)
-            #endif
         }
     }
 }
@@ -26,6 +23,13 @@ struct RootView: View {
     #if DEBUG
     @State private var showDevLab = false
     #endif
+    private var colorScheme: ColorScheme? {
+        #if DEBUG
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("--ui-testing") && arguments.contains("--dark-review") { return .dark }
+        #endif
+        return nil
+    }
     private var previewAccess: Bool {
         #if DEBUG
         store.journal.isDesignPreview == true
@@ -46,14 +50,15 @@ struct RootView: View {
                     SettingsView().tabItem { Label("You", systemImage: "person.crop.circle") }.tag(3)
                 }
             } else if store.journal.hasOnboarded { MembershipView(canClose: false) }
-            else { OnboardingView() }
+            else { SetupFlowView() }
         }
+        .preferredColorScheme(colorScheme)
         .task(id: ObjectIdentifier(billing)) { await billing.start() }
         .onChange(of: scenePhase) { _, phase in if phase == .active { store.referenceDate = .now; Task { await billing.refresh() } } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in store.referenceDate = .now }
         #if DEBUG
         .safeAreaInset(edge: UIDevice.current.userInterfaceIdiom == .pad ? .bottom : .top, spacing: 0) {
-            if showsDevTools {
+            if showsDevTools && store.journal.hasOnboarded {
                 HStack {
                     Text("LOCAL DEVELOPMENT").font(.system(size: 9, weight: .semibold)).tracking(1)
                     Spacer()
@@ -61,6 +66,15 @@ struct RootView: View {
                         .accessibilityIdentifier("dev.open")
                 }.padding(.horizontal, 20).foregroundStyle(Theme.accent).background(Theme.paper)
                     .overlay(alignment: .bottom) { Theme.line.frame(height: 1) }
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if showsDevTools && !store.journal.hasOnboarded && store.setup.step == .welcome {
+                Button { showDevLab = true } label: {
+                    Image(systemName: "wrench.and.screwdriver").font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(SetupTheme.muted).frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("Dev Lab").accessibilityIdentifier("dev.open").padding(.trailing, 12)
             }
         }
         .sheet(isPresented: $showDevLab) { DevLabView() }

@@ -312,6 +312,72 @@ import Foundation
         resumedTravel.onboardingDraft.showWeight = true; resumedTravel.onboardingDraft.weightValue = "75"
         expect(resumedTravel.saveOnboardingEntry(now: .now, calendar: newYork), "Setup resumes after travel")
         expect(resumedTravel.journal.weights == [preservedWeight], "Travelled setup cannot duplicate or overwrite an independent same-day weight")
+
+        var setup = SetupDraft()
+        expect(setup.step == .welcome && setup.progress == 0, "Peptide setup starts on the welcome screen")
+        expect(SetupStep.allCases.first == .welcome && SetupStep.allCases.last == .paywall, "Peptide setup ends on the paywall")
+        expect(!setup.canContinue(at: .experience) && !setup.canContinue(at: .goals) && !setup.canContinue(at: .source)
+               && !setup.canContinue(at: .frequency) && !setup.canContinue(at: .obstacles), "Required setup answers cannot be skipped")
+        setup.goals = [.recovery]
+        expect(!setup.steps.contains(.weight) && !setup.steps.contains(.target) && setup.step(after: .birthday) == .commitment, "Weight is only asked for weight goals")
+        expect(setup.step(after: .weight) == .commitment, "Leaving a retired or hidden screen moves forward")
+        setup.goals.insert(.weightLoss)
+        expect(setup.step(after: .weight) == .target && setup.step(before: .commitment) == .target, "Weight goals add the goal-weight screen")
+        expect(setup.step(before: .plan) == .ready && setup.step(before: .paywall) == .plan, "Going back never replays the loader")
+        setup.goals = [.recovery]
+        expect(setup.step(before: .target) == .birthday, "Back from a hidden step lands on the nearest visible screen")
+        setup.goals = [.weightLoss]; setup.weightKg = 90
+        setup.prepareTarget()
+        expect(setup.targetKg < setup.weightKg && setup.targetDirection == "Lose weight", "Weight-loss goals seed a lower target")
+        setup.hasChosenTarget = true; setup.targetKg = 95; setup.prepareTarget()
+        expect(setup.targetKg == 95, "A chosen target is never overwritten")
+        setup.birthDate = calendar.date(byAdding: .year, value: -17, to: now)!
+        expect(!setup.canContinue(at: .birthday, now: now) && !setup.isAdult(now: now), "Under-18s cannot continue")
+        setup.birthDate = calendar.date(byAdding: .year, value: -30, to: now)!
+        expect(setup.canContinue(at: .birthday, now: now), "Adults can continue")
+        setup.toggleCompound("BPC-157"); setup.toggleCompound("bpc-157")
+        expect(setup.compounds.isEmpty, "Compound toggles are case-insensitive")
+        setup.toggleStack(PeptideStack.popular[0])
+        expect(setup.compounds == PeptideStack.popular[0].peptides, "A stack adds each of its peptides once")
+        setup.toggleStack(PeptideStack.popular[1])
+        expect(Set(setup.compounds.map { $0.lowercased() }).count == setup.compounds.count, "Overlapping stacks never duplicate a peptide")
+        setup.toggleCompound(String(repeating: "x", count: 41)); setup.toggleCompound("  ")
+        expect(setup.compounds.count == 3, "Blank or oversized custom peptides are rejected")
+        setup.referralCode = "CREATOR-10"
+        expect(setup.canContinue(at: .referral), "Referral codes accept letters, numbers and dashes")
+        setup.referralCode = "NO SPACES"
+        expect(!setup.canContinue(at: .referral) && !setup.isValid, "Invalid referral codes are rejected")
+        setup.referralCode = ""
+        expect(setup.isValid, "A complete setup is valid")
+        let setupData = try JSONEncoder().encode(setup)
+        expect(try JSONDecoder().decode(SetupDraft.self, from: setupData) == setup, "Setup survives persistence round trip")
+        expect(try JSONDecoder().decode(SetupDraft.self, from: Data("{\"step\":\"goals\"}".utf8)).step == .goals, "Partial setup files decode with defaults")
+        let retired = try JSONDecoder().decode(SetupDraft.self, from: Data("{\"step\":\"height\",\"experience\":\"stack\",\"obstacles\":[\"forgetting\",\"retired\"]}".utf8))
+        expect(retired.step == .welcome && retired.experience == nil && retired.obstacles == [.forgetting], "Retired screens and answers fall back safely")
+
+        let setupRoot = testRoot.appendingPathComponent("peptide-setup")
+        let setupStore = JournalStore(directory: setupRoot, arguments: [], clearCredentials: {})
+        setup.step = .frequency
+        setupStore.setup = setup
+        let resumedSetup = JournalStore(directory: setupRoot, arguments: [], clearCredentials: {})
+        expect(resumedSetup.setup == setup && !resumedSetup.journal.hasOnboarded, "Incomplete setup resumes at the saved screen")
+        resumedSetup.setup.weightKg = 88.4
+        expect(resumedSetup.finishSetup(now: now, calendar: calendar), "A valid setup completes")
+        expect(resumedSetup.journal.hasOnboarded && resumedSetup.journal.setupProfile?.weightKg == 88.4, "Setup answers are saved to the journal")
+        expect(resumedSetup.journal.weights.count == 1 && resumedSetup.journal.weights[0].kilograms == 88.4 && resumedSetup.journal.showWeight, "Starting weight becomes the first weight record")
+        expect(resumedSetup.finishSetup(now: now, calendar: calendar) && resumedSetup.journal.weights.count == 1, "Finishing twice never duplicates the starting weight")
+        let noWeightGoal = JournalStore(directory: testRoot.appendingPathComponent("skin-setup"), arguments: [], clearCredentials: {})
+        noWeightGoal.setup = setup
+        noWeightGoal.setup.goals = [.skin]
+        expect(noWeightGoal.finishSetup(now: now, calendar: calendar) && noWeightGoal.journal.weights.isEmpty, "Goals without weight never invent a weight record")
+        _ = try JournalBackup.make(from: resumedSetup.journal)
+        expect(true, "Journals with a setup profile remain exportable")
+        let underage = JournalStore(directory: testRoot.appendingPathComponent("underage-setup"), arguments: [], clearCredentials: {})
+        underage.setup = setup
+        underage.setup.birthDate = calendar.date(byAdding: .year, value: -16, to: now)!
+        expect(!underage.finishSetup(now: now, calendar: calendar) && !underage.journal.hasOnboarded, "Under-18 setups never complete")
+        resumedSetup.resetOnboarding()
+        expect(resumedSetup.setup == SetupDraft(), "Restarting setup clears every answer")
         print("PASS: \(checks) meaningful Along domain checks")
     }
 }

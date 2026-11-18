@@ -30,6 +30,7 @@ struct JournalBackup: Codable, Equatable {
         var hasSampleData: Bool
         var startDate: Date
         var onboardingPreferences: OnboardingDraft?
+        var setupProfile: SetupDraft?
         var companionDiscoveries: [String: String]?
         var pipProgress: PipProgress?
         var routineDays: [RoutineDay]?
@@ -43,6 +44,7 @@ struct JournalBackup: Codable, Equatable {
             accessory = journal.accessory; unlockedAccessories = journal.unlockedAccessories
             hasSampleData = journal.hasSampleData; startDate = journal.startDate
             onboardingPreferences = journal.onboardingPreferences
+            setupProfile = journal.setupProfile
             companionDiscoveries = journal.companionDiscoveries
             pipProgress = journal.pipProgress; routineDays = journal.routineDays
         }
@@ -106,6 +108,7 @@ struct JournalBackup: Codable, Equatable {
         restored.accessory = content.accessory; restored.unlockedAccessories = content.unlockedAccessories
         restored.hasSampleData = content.hasSampleData; restored.startDate = content.startDate
         restored.onboardingPreferences = content.onboardingPreferences
+        restored.setupProfile = content.setupProfile
         restored.companionDiscoveries = content.companionDiscoveries
         restored.pipProgress = content.pipProgress; restored.routineDays = content.routineDays
         restored.hasOnboarded = current.hasOnboarded
@@ -191,6 +194,9 @@ struct JournalBackup: Codable, Equatable {
             guard draft.isValidForPersistence, validDate(draft.startDate),
                   !draft.showWeight || draft.weightValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.baselineKilograms != nil else { throw Failure.invalidArchive }
         }
+        if let profile = content.setupProfile {
+            guard profile.isValid, validDate(profile.birthDate) else { throw Failure.invalidArchive }
+        }
         if let discoveries = content.companionDiscoveries {
             guard discoveries.count <= PipStory.all.count else { throw Failure.invalidArchive }
             for (id, choice) in discoveries {
@@ -224,7 +230,7 @@ struct JournalBackup: Codable, Equatable {
             guard let values = value as? [String], Set(values.map { lowercase ? $0.lowercased() : $0 }).count == values.count else { throw Failure.invalidArchive }
         }
         _ = try object(envelope, required: ["format", "schemaVersion", "exportedAt", "timeZoneID", "content"])
-        let content = try object(envelope["content"], required: ["journalVersion", "name", "companionName", "routines", "checkIns", "milestones", "weights", "weightUnit", "showWeight", "accessory", "unlockedAccessories", "hasSampleData", "startDate"], optional: ["onboardingPreferences", "companionDiscoveries", "pipProgress", "routineDays"])
+        let content = try object(envelope["content"], required: ["journalVersion", "name", "companionName", "routines", "checkIns", "milestones", "weights", "weightUnit", "showWeight", "accessory", "unlockedAccessories", "hasSampleData", "startDate"], optional: ["onboardingPreferences", "setupProfile", "companionDiscoveries", "pipProgress", "routineDays"])
         try strings(content["routines"]); try strings(content["unlockedAccessories"])
         for (key, fields) in [
             ("checkIns", Set(["id", "day", "mood", "appetite", "routines", "note", "isSample"])),
@@ -246,6 +252,12 @@ struct JournalBackup: Codable, Equatable {
         if let raw = content["onboardingPreferences"] {
             let draft = try object(raw, required: ["step", "name", "stage", "hasStartDate", "startDate", "priority", "obstacle", "progressAreas", "intention", "showWeight", "weightValue", "weightUnit", "routines", "routineNames", "frequency", "reminder", "reflectionDay", "encouragement", "accessory", "companionName", "note", "plan"], optional: ["mood", "appetite"])
             try strings(draft["progressAreas"]); try strings(draft["routines"])
+        }
+        if let raw = content["setupProfile"] {
+            let profile = try object(raw, required: [], optional: Set(SetupDraft.CodingKeys.allCases.map(\.rawValue)))
+            if profile["goals"] != nil { try strings(profile["goals"]) }
+            if profile["obstacles"] != nil { try strings(profile["obstacles"]) }
+            if profile["compounds"] != nil { try strings(profile["compounds"], lowercase: true) }
         }
         if let raw = content["pipProgress"] {
             let progress = try object(raw, required: ["timeZoneID", "recordedDays", "creditedEntries", "claimedRewards"])

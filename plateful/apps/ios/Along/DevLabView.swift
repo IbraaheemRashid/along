@@ -44,8 +44,8 @@ private enum DevScenario: String, CaseIterable, Identifiable {
     }
     var detail: String {
         switch self {
-        case .fresh: "Start at screen 1 with no answers."
-        case .resume: "Screen 14 with example preferences already saved."
+        case .fresh: "Start at the welcome screen with no answers."
+        case .resume: "The peptide picker with example answers already saved."
         case .paywall: "Try both plans, unavailable checkout, restore and close."
         case .empty: "Check empty states and create a first record."
         case .sample: "8 example check-ins, milestones and weight records."
@@ -74,8 +74,8 @@ private enum DevScenario: String, CaseIterable, Identifiable {
         let store = JournalStore(directory: directory, arguments: [], clearCredentials: {})
         switch self {
         case .fresh: break
-        case .resume: store.onboardingDraft = OnboardingView.exampleDraft(at: 13)
-        case .paywall: store.onboardingDraft = OnboardingView.exampleDraft(at: 25)
+        case .resume: store.setup = SetupDraft.example(at: .compounds)
+        case .paywall: store.setup = SetupDraft.example(at: .paywall)
         case .empty, .sample, .sparse, .month, .firstKeepsake, .allKeepsakes:
             var journal = self == .empty ? Journal() : Journal.sample()
             journal.name = "Alex"
@@ -160,7 +160,7 @@ struct DevLabView: View {
                 }
                 Section("Onboarding") {
                     Button { showCatalogue = true } label: {
-                        Label("Browse all 26 screens", systemImage: "rectangle.stack")
+                        Label("Browse all \(SetupStep.allCases.count) screens", systemImage: "rectangle.stack")
                     }.accessibilityIdentifier("dev.onboarding")
                     ForEach([DevScenario.fresh, .resume, .paywall]) { scenario in scenarioButton(scenario) }
                 }

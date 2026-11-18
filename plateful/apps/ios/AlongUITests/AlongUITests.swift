@@ -51,7 +51,7 @@ final class AlongUITests: XCTestCase {
             let top = max(bounds.minY + 16, app.frame.minY + 100)
             var bottom = min(bounds.maxY - 16, app.frame.maxY - 100)
             if app.keyboards.firstMatch.exists { bottom = min(bottom, app.keyboards.firstMatch.frame.minY - 12) }
-            for identifier in ["onboarding.continue", "onboarding.subscribe"] {
+            for identifier in ["setup.continue", "setup.subscribe"] {
                 let action = app.buttons[identifier]
                 if action.exists && action.isHittable { bottom = min(bottom, action.frame.minY - 16) }
             }
@@ -77,10 +77,10 @@ final class AlongUITests: XCTestCase {
         button.tap()
     }
 
-    private func assertOnboardingStep(_ step: Int, file: StaticString = #filePath, line: UInt = #line) {
-        XCTAssertTrue(app.staticTexts["onboarding.step.\(step)"].waitForExistence(timeout: 10),
-                      "Expected onboarding screen \(step)", file: file, line: line)
-        XCTAssertFalse(navigationTab("Today").exists, "Onboarding must not unlock the journal", file: file, line: line)
+    private func assertSetupStep(_ step: String, file: StaticString = #filePath, line: UInt = #line) {
+        let screen = app.descendants(matching: .any).matching(identifier: "setup.screen.\(step)").firstMatch
+        XCTAssertTrue(screen.waitForExistence(timeout: 10), "Expected setup screen \(step)", file: file, line: line)
+        XCTAssertFalse(navigationTab("Today").exists, "Setup must not unlock the app", file: file, line: line)
     }
 
     private func selectIfPresent(_ identifier: String) {
@@ -91,44 +91,39 @@ final class AlongUITests: XCTestCase {
         }
     }
 
-    private func fillIfEmpty(_ identifier: String, with text: String) {
-        let field = app.textFields[identifier].exists ? app.textFields[identifier] : app.textViews[identifier]
-        guard field.exists else { return }
-        let value = field.value as? String ?? ""
-        guard value.isEmpty || value == field.placeholderValue else { return }
-        reveal(field, centerInScroll: true)
-        field.tap()
-        field.typeText(text)
+    /// Answers whatever the current screen asks, then continues. Wheels, rulers
+    /// and the date picker keep their valid defaults.
+    private func answerAndContinue(_ step: String) {
+        switch step {
+        case "experience": selectIfPresent("setup.experience.planning")
+        case "goals": selectIfPresent("setup.goal.weightLoss"); selectIfPresent("setup.goal.recovery")
+        case "source": selectIfPresent("setup.source.tiktok")
+        case "compounds": selectIfPresent("setup.stack.Wolverine")
+        case "frequency": selectIfPresent("setup.frequency.fewPerWeek")
+        case "obstacles": selectIfPresent("setup.obstacle.forgetting")
+        default: break
+        }
+        if step == "reminders" { tap("setup.reminders.skip") } else { tap("setup.continue") }
     }
 
-    private func answerCurrentScreen() {
-        for identifier in [
-            "onboarding.stage.recent", "onboarding.priority.progress", "onboarding.obstacle.noticing",
-            "onboarding.progress.energy", "onboarding.progress.confidence", "onboarding.weight.show",
-            "onboarding.routine.nutrition", "onboarding.routine.movement",
-            "onboarding.mood.steady", "onboarding.appetite.comfortable"
-        ] {
-            selectIfPresent(identifier)
-        }
-        fillIfEmpty("onboarding.name", with: "Alex")
-        fillIfEmpty("onboarding.weight.value", with: "90.5")
-        fillIfEmpty("onboarding.intention", with: "Notice the moments that matter.")
-        fillIfEmpty("onboarding.companionName", with: "Pip")
-        fillIfEmpty("onboarding.note", with: "I made time for a quiet walk.")
-    }
+    private let setupOrder = ["welcome", "experience", "goals", "source", "showcase", "birthday", "weight", "target",
+                              "commitment", "compounds", "frequency", "doseTime", "obstacles", "trust", "reminders", "referral", "ready"]
 
-    private func advanceThroughOnboarding(from first: Int = 1, through last: Int) {
-        for step in first...last {
-            assertOnboardingStep(step)
-            if step == 20 { capture("20") }
-            if step == 4 {
-                tap("onboarding.skip") // A start date is optional.
-            } else {
-                answerCurrentScreen()
-                tap("onboarding.continue")
-            }
+    /// Walks the real flow from welcome through the loader and plan reveal.
+    private func advanceThroughSetup(until last: String = "paywall") {
+        for step in setupOrder {
+            if step == last { assertSetupStep(step); return }
+            assertSetupStep(step)
+            if step == "goals" || step == "plan" { capture("setup-\(step)") }
+            answerAndContinue(step)
         }
-        assertOnboardingStep(last + 1)
+        guard last != "ready" else { return }
+        XCTAssertTrue(app.descendants(matching: .any)["setup.screen.building"].waitForExistence(timeout: 5))
+        assertSetupStep("plan")
+        if last == "plan" { return }
+        capture("setup-plan")
+        tap("setup.continue")
+        assertSetupStep("paywall")
     }
 
     private func launchSampleJourney() {
@@ -276,8 +271,9 @@ final class AlongUITests: XCTestCase {
     }
 
     func testUnpaidDataControlsRemainAvailable() {
-        launchSandbox()
-        tap("Your data & reminders")
+        launchSandbox(arguments: ["--setup-step", "paywall"])
+        assertSetupStep("paywall")
+        tap("setup.local-data")
         XCTAssertTrue(app.navigationBars["Your data & reminders"].waitForExistence(timeout: 5))
         capture("release-unpaid-data-controls")
         tap("Backup & restore")
@@ -286,7 +282,7 @@ final class AlongUITests: XCTestCase {
         tap("Delete all local data")
         let confirm = app.sheets.buttons["Delete all local data"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
-        assertOnboardingStep(1)
+        assertSetupStep("welcome")
     }
 
     func testEditingPoundsDoesNotConvertTwice() {
@@ -328,23 +324,24 @@ final class AlongUITests: XCTestCase {
 
     func testDevLabSetupShortcuts() {
         launchSandbox()
+        assertSetupStep("welcome")
         tap("dev.open")
         XCTAssertTrue(app.navigationBars["Dev Lab"].waitForExistence(timeout: 5))
         capture("dev-lab-menu")
-        for (scenario, step) in [("fresh", 1), ("resume", 14), ("paywall", 26)] {
+        for (scenario, step) in [("fresh", "welcome"), ("resume", "compounds"), ("paywall", "paywall")] {
             tap("dev.scenario.\(scenario)")
-            assertOnboardingStep(step)
+            assertSetupStep(step)
             XCTAssertTrue(app.staticTexts["dev.sandbox.banner"].exists)
             capture("dev-setup-\(scenario)")
             tap("dev.sandbox.close")
         }
         tap("dev.close")
-        assertOnboardingStep(1)
+        assertSetupStep("welcome")
     }
 
     func testDevLabScenariosDoNotChangeOriginalOnboarding() {
         launchSandbox()
-        assertOnboardingStep(1)
+        assertSetupStep("welcome")
 
         let scenarios: [(name: String, days: Int?)] = [
             ("empty", nil), ("sample", 8), ("sparse", 2), ("month", 30)
@@ -367,24 +364,24 @@ final class AlongUITests: XCTestCase {
             tap("dev.sandbox.close")
             XCTAssertTrue(app.navigationBars["Dev Lab"].waitForExistence(timeout: 5))
             tap("dev.close")
-            assertOnboardingStep(1)
+            assertSetupStep("welcome")
         }
 
         app.terminate()
         launchSandbox(reset: false)
-        assertOnboardingStep(1)
+        assertSetupStep("welcome")
     }
 
     func testDevLabOnboardingCatalogueLeavesOriginalJourneyUntouched() {
-        launchSandbox(arguments: ["--onboarding-step", "0"])
-        assertOnboardingStep(1)
+        launchSandbox()
+        assertSetupStep("welcome")
         tap("dev.open")
         XCTAssertTrue(app.navigationBars["Dev Lab"].waitForExistence(timeout: 5))
         tap("dev.onboarding")
         XCTAssertTrue(app.navigationBars["Design review"].waitForExistence(timeout: 5))
-        tap("dev.onboarding.26")
-        assertOnboardingStep(26)
-        XCTAssertTrue(app.buttons["onboarding.subscribe"].exists)
+        tap("dev.onboarding.paywall")
+        assertSetupStep("paywall")
+        XCTAssertTrue(app.buttons["setup.subscribe"].exists)
         capture("dev-onboarding-catalogue-paywall")
 
         tap("dev.onboarding.close")
@@ -393,7 +390,7 @@ final class AlongUITests: XCTestCase {
         tap("dev.onboarding.catalogue.close")
         XCTAssertTrue(app.navigationBars["Dev Lab"].waitForExistence(timeout: 5))
         tap("dev.close")
-        assertOnboardingStep(1)
+        assertSetupStep("welcome")
     }
 
     func testDevLabFeatureShortcutAndSavedSessionSurviveRestart() {
@@ -416,11 +413,11 @@ final class AlongUITests: XCTestCase {
         XCTAssertEqual(recordedDays(), 9, "Reloading from disk must preserve the new entry")
         tap("dev.sandbox.close")
         tap("dev.close")
-        assertOnboardingStep(1)
+        assertSetupStep("welcome")
 
         app.terminate()
         launchSandbox(reset: false)
-        assertOnboardingStep(1)
+        assertSetupStep("welcome")
         tap("dev.open")
         tap("dev.resumeLast")
         navigationTab("Journey").tap()
@@ -428,59 +425,58 @@ final class AlongUITests: XCTestCase {
         capture("dev-resumed-sandbox")
         tap("dev.sandbox.close")
         tap("dev.close")
-        assertOnboardingStep(1)
+        assertSetupStep("welcome")
     }
 
-    func testAll26OnboardingScreensHaveReviewScreenshots() {
-        for step in 1...26 {
-            if step > 1 { app.terminate() }
-            // Fixture steps are zero-based; the accessibility headers are one-based.
-            launchSandbox(arguments: ["--onboarding-step", String(step - 1)])
-            assertOnboardingStep(step)
-            capture(String(format: "%02d", step))
+    func testEverySetupScreenHasReviewScreenshots() {
+        for (index, step) in (setupOrder + ["plan", "paywall"]).enumerated() {
+            if index > 0 { app.terminate() }
+            launchSandbox(arguments: ["--setup-step", step])
+            assertSetupStep(step)
+            capture(String(format: "setup-%02d-%@", index + 1, step))
         }
     }
 
-    func testCheckInAndPaywallSupportDarkModeAndLargestAccessibilityText() {
-        for step in [21, 26] {
-            if step == 26 { app.terminate() }
+    func testSetupSupportsDarkModeAndLargestAccessibilityText() {
+        for (index, step) in ["goals", "compounds", "paywall"].enumerated() {
+            if index > 0 { app.terminate() }
             launchSandbox(arguments: [
-                "--onboarding-step", String(step - 1),
+                "--setup-step", step,
                 "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
                 "--dark-review"
             ])
-            assertOnboardingStep(step)
-            capture(String(format: "%02d-dark-xxxl-top", step))
+            assertSetupStep(step)
+            capture("setup-\(step)-dark-xxxl-top")
 
-            if step == 26 {
+            if step == "paywall" {
                 for plan in ["annual", "monthly"] {
-                    let control = app.buttons["onboarding.plan.\(plan)"]
+                    let control = app.buttons["setup.plan.\(plan)"]
                     reveal(control, centerInScroll: true)
-                    XCTAssertTrue(control.isEnabled, "The \(plan) price control must remain usable with large text")
                     control.tap()
-                    XCTAssertTrue(control.isSelected, "The \(plan) must be selectable with large text")
-                    capture("26-dark-xxxl-\(plan)-price")
+                    XCTAssertTrue(control.isSelected, "The \(plan) plan must be selectable with large text")
+                    capture("setup-paywall-dark-xxxl-\(plan)")
                 }
             }
 
-            let cta = app.buttons[step == 26 ? "onboarding.subscribe" : "onboarding.continue"]
-            reveal(cta)
-            if step == 26 { XCTAssertFalse(cta.isEnabled, "Unconfigured purchases must stay disabled at every text size") }
+            let cta = app.buttons[step == "paywall" ? "setup.subscribe" : "setup.continue"]
+            XCTAssertTrue(cta.exists && cta.isHittable, "The primary action stays pinned on screen at every text size")
+            if step == "paywall" { XCTAssertFalse(cta.isEnabled, "Unconfigured purchases must stay disabled at every text size") }
             else { XCTAssertTrue(cta.isEnabled, "The primary action must remain usable with large text") }
-            capture(String(format: "%02d-dark-xxxl-primary-action", step))
-            XCTAssertFalse(navigationTab("Today").exists, "Review fixtures must remain outside the personal journal")
+            XCTAssertFalse(navigationTab("Today").exists, "Review fixtures must remain outside the app")
         }
     }
 
-    func testFullOnboardingStopsAtPaywallAndCanOpenExplicitDesignPreview() {
+    func testFullSetupStopsAtPaywallAndCanOpenExplicitDesignPreview() {
         launchSandbox()
-        advanceThroughOnboarding(through: 25)
-        XCTAssertTrue(app.buttons["onboarding.subscribe"].exists)
-        XCTAssertTrue(app.buttons["onboarding.restore"].exists)
-        capture("onboarding-completed-paywall")
+        advanceThroughSetup()
+        XCTAssertTrue(app.buttons["setup.subscribe"].exists)
+        XCTAssertTrue(app.buttons["setup.restore"].exists)
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label CONTAINS[cd] %@", "trial")).count, 0,
+                       "The paywall must not contain a trial CTA")
+        capture("setup-completed-paywall")
 
         // The DEBUG-only route requires an explicit confirmation and is not a purchase.
-        tap("onboarding.preview")
+        tap("setup.preview")
         let confirmation = app.alerts.buttons["Open design preview"]
         XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
         XCTAssertFalse(navigationTab("Today").exists)
@@ -488,49 +484,98 @@ final class AlongUITests: XCTestCase {
         XCTAssertTrue(navigationTab("Today").waitForExistence(timeout: 8))
         let badge = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[cd] %@", "design preview")).firstMatch
         XCTAssertTrue(badge.waitForExistence(timeout: 5), "Local preview must be conspicuously labelled")
-        XCTAssertFalse(app.buttons["onboarding.subscribe"].exists)
+        XCTAssertFalse(app.buttons["setup.subscribe"].exists)
         capture("explicit-local-design-preview")
     }
 
-    func testUnconnectedPurchaseAndRestoreNeverUnlockJournal() {
-        launchSandbox(arguments: ["--onboarding-step", "25"])
-        assertOnboardingStep(26)
-        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label CONTAINS[cd] %@", "trial")).count, 0,
-                       "The membership offer must not contain a trial CTA")
-
-        for plan in ["onboarding.plan.monthly", "onboarding.plan.annual"] {
-            tap(plan)
-            XCTAssertFalse(app.buttons["onboarding.subscribe"].isEnabled, "No configured products means no checkout")
-            XCTAssertFalse(navigationTab("Today").exists)
-            assertOnboardingStep(26)
-        }
-
-        tap("onboarding.restore")
-        XCTAssertTrue(app.staticTexts["membership.notice"].waitForExistence(timeout: 5))
-        XCTAssertFalse(navigationTab("Today").exists)
-        assertOnboardingStep(26)
-
-        app.terminate()
-        launchSandbox(reset: false)
-        assertOnboardingStep(26)
-        tap("onboarding.close")
-        assertOnboardingStep(24)
-        tap("onboarding.continue")
-        assertOnboardingStep(25)
-        tap("onboarding.continue")
-        assertOnboardingStep(26)
+    func testSetupWithoutWeightGoalSkipsWeightScreens() {
+        launchSandbox()
+        for step in ["welcome", "experience"] { assertSetupStep(step); answerAndContinue(step) }
+        assertSetupStep("goals")
+        selectIfPresent("setup.goal.skin")
+        tap("setup.continue")
+        for step in ["source", "showcase", "birthday"] { assertSetupStep(step); answerAndContinue(step) }
+        assertSetupStep("commitment")
+        tap("setup.back")
+        assertSetupStep("birthday")
     }
 
-    func testIncompleteOnboardingResumesAtSavedStep() {
-        launchSandbox()
-        advanceThroughOnboarding(through: 6)
+    func testUnconnectedPurchaseAndRestoreNeverUnlockApp() {
+        launchSandbox(arguments: ["--setup-step", "paywall"])
+        assertSetupStep("paywall")
+
+        for plan in ["setup.plan.monthly", "setup.plan.annual"] {
+            tap(plan)
+            XCTAssertTrue(app.buttons[plan].isSelected)
+            XCTAssertFalse(app.buttons["setup.subscribe"].isEnabled, "No configured products means no checkout")
+            XCTAssertFalse(navigationTab("Today").exists)
+        }
+
+        tap("setup.restore")
+        XCTAssertTrue(app.staticTexts["setup.billing-notice"].waitForExistence(timeout: 5))
+        XCTAssertFalse(navigationTab("Today").exists)
+        assertSetupStep("paywall")
+
         app.terminate()
         launchSandbox(reset: false)
-        assertOnboardingStep(7)
-        tap("onboarding.back")
-        assertOnboardingStep(6)
-        tap("onboarding.continue")
-        assertOnboardingStep(7)
+        assertSetupStep("paywall")
+        tap("setup.back")
+        assertSetupStep("plan")
+        XCTAssertFalse(app.buttons["setup.back"].exists, "The plan reveal never steps back into the loader")
+        tap("setup.continue")
+        assertSetupStep("paywall")
+    }
+
+    func testWelcomeSignInSheetExplainsAccountsAndOffersRestore() {
+        launchSandbox()
+        assertSetupStep("welcome")
+        tap("setup.sign-in")
+        XCTAssertTrue(app.buttons["setup.sign-in.apple"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["setup.sign-in.google"].exists && app.buttons["setup.sign-in.email"].exists)
+        capture("setup-sign-in")
+        tap("setup.sign-in.apple")
+        XCTAssertTrue(app.staticTexts["setup.sign-in.notice"].waitForExistence(timeout: 5), "Unconnected sign-in explains itself instead of failing silently")
+        XCTAssertFalse(navigationTab("Today").exists)
+        capture("setup-sign-in-notice")
+        tap("setup.restore-backup")
+        XCTAssertTrue(app.navigationBars["Backup & restore"].waitForExistence(timeout: 5))
+        app.navigationBars["Backup & restore"].buttons["Done"].tap()
+        assertSetupStep("welcome")
+    }
+
+    func testPeptideSearchAddsLibraryAndCustomPeptides() {
+        launchSandbox(arguments: ["--setup-step", "compounds"])
+        assertSetupStep("compounds")
+        let search = app.textFields["setup.compounds.search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("tesa")
+        tap("setup.compound.Tesamorelin")
+        XCTAssertTrue(app.buttons["setup.compound.Tesamorelin"].waitForExistence(timeout: 5) && app.buttons["setup.compound.Tesamorelin"].isSelected,
+                      "A searched peptide joins the selection")
+        search.tap()
+        search.typeText("My blend")
+        tap("setup.compounds.add")
+        let custom = app.buttons["setup.compound.My blend"]
+        XCTAssertTrue(custom.waitForExistence(timeout: 5) && custom.isSelected, "A custom peptide can be added from search")
+        capture("setup-compounds-custom")
+        tap("setup.continue")
+        assertSetupStep("frequency")
+    }
+
+    func testIncompleteSetupResumesAtSavedStep() {
+        launchSandbox()
+        advanceThroughSetup(until: "birthday")
+        app.terminate()
+        launchSandbox(reset: false)
+        assertSetupStep("birthday")
+        tap("setup.back")
+        assertSetupStep("showcase")
+        tap("setup.back")
+        assertSetupStep("source")
+        XCTAssertTrue(app.buttons["setup.source.tiktok"].isSelected, "Answers survive a relaunch")
+        tap("setup.continue")
+        assertSetupStep("showcase")
     }
 
     func testSampleJourneyCheckInAndPersistence() {
@@ -607,10 +652,10 @@ final class AlongUITests: XCTestCase {
         let confirmation = app.sheets.buttons["Delete all local data"]
         XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
         confirmation.tap()
-        assertOnboardingStep(1)
+        assertSetupStep("welcome")
         app.terminate()
         launchSandbox(reset: false)
-        assertOnboardingStep(1)
+        assertSetupStep("welcome")
     }
 
     func testWeeklyReflection() {

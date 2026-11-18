@@ -43,7 +43,7 @@ struct BillingConfiguration: Equatable, Sendable {
     }
     static func forCurrentLaunch(arguments: [String] = ProcessInfo.processInfo.arguments, bundle: Bundle = .main) -> State {
         #if DEBUG
-        let reviewFlags = ["--ui-testing", "--onboarding-step", "--review-onboarding", "--sample-journey", "--reset-demo"]
+        let reviewFlags = ["--ui-testing", "--onboarding-step", "--review-onboarding", "--setup-step", "--sample-journey", "--reset-demo"]
         if arguments.contains(where: reviewFlags.contains) { return .unconfigured(["Isolated development review"]) }
         #endif
         return load(bundle: bundle)

@@ -19,7 +19,7 @@ import UserNotifications
 
     init(defaults: UserDefaults = .standard, client: (any ReminderClient)? = nil,
          deliveryEnabled: Bool = true, arguments: [String] = ProcessInfo.processInfo.arguments) {
-        let reviewFlags = ["--ui-testing", "--onboarding-step", "--review-onboarding", "--sample-journey", "--reset-demo"]
+        let reviewFlags = ["--ui-testing", "--onboarding-step", "--review-onboarding", "--setup-step", "--sample-journey", "--reset-demo"]
         self.deliveryEnabled = deliveryEnabled && !arguments.contains(where: reviewFlags.contains)
         self.defaults = defaults
         // A disabled instance never instantiates or calls UNUserNotificationCenter.

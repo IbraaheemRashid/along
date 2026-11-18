@@ -17,6 +17,9 @@ private struct OnboardingArchive: Codable {
     var onboardingDraft = OnboardingDraft() {
         didSet { if !loadingDraft { saveOnboardingDraft() } }
     }
+    var setup = SetupDraft() {
+        didSet { if !loadingDraft && setup != oldValue { saveSetup() } }
+    }
     var selectedTab = 0
     var referenceDate = Date.now
     var toast: String?
@@ -30,6 +33,7 @@ private struct OnboardingArchive: Codable {
     }
     private let url: URL
     private let draftURL: URL
+    private let setupURL: URL
     private let clearCredentials: () -> Void
     private var canSave = true
     private var canSaveDraft = true
@@ -54,12 +58,13 @@ private struct OnboardingArchive: Codable {
         startupArguments = arguments
         var folder = "Along"
         #if DEBUG
-        let isReviewSession = arguments.contains("--ui-testing") || arguments.contains("--onboarding-step") || arguments.contains("--review-onboarding")
+        let isReviewSession = arguments.contains("--ui-testing") || arguments.contains("--onboarding-step") || arguments.contains("--review-onboarding") || arguments.contains("--setup-step")
         if isReviewSession { folder = "AlongDesignReview" }
         #endif
         let directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(folder, isDirectory: true)
         url = directory.appendingPathComponent("journal-v1.json")
         draftURL = directory.appendingPathComponent("onboarding-draft-v1.json")
+        setupURL = directory.appendingPathComponent("setup-v2.json")
         // Review storage must not share the real journal's credential lifecycle.
         // A reset during screenshots or design review never clears its session.
         #if DEBUG
@@ -111,9 +116,19 @@ private struct OnboardingArchive: Codable {
                 if self.error == nil { self.error = "Your setup draft couldn’t be opened. Your journal is unchanged. Restart setup to replace only the draft." }
             }
         }
+        if let data = try? Data(contentsOf: setupURL), data.count <= 65536,
+           let saved = try? JSONDecoder().decode(SetupDraft.self, from: data), saved.isValid {
+            setup = saved
+        } else if let profile = journal.setupProfile, profile.isValid {
+            setup = profile
+        }
         loadingDraft = false
         #if DEBUG
         if arguments.contains("--reset-demo") { clearJournal(); error = nil }
+        if let index = arguments.firstIndex(of: "--setup-step"), arguments.indices.contains(index + 1), let step = SetupStep(rawValue: arguments[index + 1]) {
+            journal.hasOnboarded = false; persist()
+            setup = step == .welcome ? SetupDraft() : SetupDraft.example(at: step)
+        }
         if arguments.contains("--sample-journey") {
             journal = Journal.sample(); journal.name = "Alex"; journal.hasOnboarded = true; journal.isDesignPreview = true; canSave = true; error = nil; persist()
         }
@@ -299,6 +314,55 @@ private struct OnboardingArchive: Codable {
         journal = candidate
         return true
     }
+    @discardableResult func saveSetup() -> Bool {
+        guard setup.isValid else { return false }
+        do {
+            let data = try JSONEncoder().encode(setup)
+            var resource = setupURL.deletingLastPathComponent()
+            var values = URLResourceValues(); values.isExcludedFromBackup = true
+            try resource.setResourceValues(values)
+            try data.write(to: setupURL, options: Self.writeOptions)
+            return true
+        } catch { self.error = "Your setup couldn’t be saved on this device. Please try again before closing the app."; return false }
+    }
+    /// Copies setup answers into the journal: the profile, display unit and, for
+    /// weight goals, a starting weight for today unless a real record exists.
+    private func journalAfterSetup(now: Date = .now, calendar: Calendar = .current) -> Journal? {
+        guard setup.isValid, setup.isAdult(now: now) else {
+            error = "Some setup answers need another look before continuing. Your journal is unchanged."; return nil
+        }
+        var candidate = journal
+        candidate.setupProfile = setup
+        candidate.weightUnit = setup.weightUnit
+        guard setup.tracksWeightGoal else { return candidate }
+        candidate.showWeight = true
+        if !candidate.weights.contains(where: { $0.isOn(now, calendar: calendar) && !$0.isSample }) {
+            candidate.weights.removeAll { $0.isSample && $0.isOn(now, calendar: calendar) }
+            candidate.save(WeightEntry(date: now, kilograms: setup.weightKg), calendar: calendar)
+        }
+        return candidate
+    }
+    @discardableResult func finishSetup(now: Date = .now, calendar: Calendar = .current) -> Bool {
+        guard var candidate = journalAfterSetup(now: now, calendar: calendar) else { return false }
+        candidate.hasOnboarded = true; candidate.isDesignPreview = false
+        candidate.reconcileProgress(now: now)
+        guard persist(candidate) else { return false }
+        journal = candidate
+        return true
+    }
+    @discardableResult func finishSetupPreview(now: Date = .now) -> Bool {
+        #if DEBUG
+        guard var candidate = journalAfterSetup(now: now) else { return false }
+        candidate.hasOnboarded = true; candidate.isDesignPreview = true
+        candidate.reconcileProgress(now: now)
+        guard persist(candidate) else { return false }
+        journal = candidate
+        return true
+        #else
+        error = "Design preview access is only available in a development build. No subscription has been activated."
+        return false
+        #endif
+    }
     @discardableResult func finishOnboardingPreview() -> Bool {
         #if DEBUG
         guard saveOnboardingEntry() else { return false }
@@ -343,10 +407,10 @@ private struct OnboardingArchive: Codable {
         guard persist(candidate) else { return }
         journal = candidate
         onboardingArchive = OnboardingArchive()
-        loadingDraft = true; onboardingDraft = OnboardingDraft(); loadingDraft = false
+        loadingDraft = true; onboardingDraft = OnboardingDraft(); setup = SetupDraft(); loadingDraft = false
         canSaveDraft = true
         selectedTab = 0
-        saveOnboardingDraft()
+        saveOnboardingDraft(); saveSetup()
     }
     func saveCheckIn(day: Date, mood: Mood, appetite: Appetite, routines: Set<Routine>, note: String, editing id: UUID? = nil) -> Bool {
         let old = journal.checkIns.first { $0.id == id }
@@ -416,11 +480,12 @@ private struct OnboardingArchive: Codable {
         guard persist(blank) else { canSave = couldSave; return false }
         journal = blank; selectedTab = 0
         onboardingArchive = OnboardingArchive(journalGeneration: blank.restoreGeneration)
-        loadingDraft = true; onboardingDraft = OnboardingDraft(); loadingDraft = false
+        loadingDraft = true; onboardingDraft = OnboardingDraft(); setup = SetupDraft(); loadingDraft = false
         canSaveDraft = true
         clearCredentials()
         do {
             if FileManager.default.fileExists(atPath: draftURL.path) { try FileManager.default.removeItem(at: draftURL) }
+            if FileManager.default.fileExists(atPath: setupURL.path) { try FileManager.default.removeItem(at: setupURL) }
         } catch { self.error = "Your journal was cleared, but your setup draft could not be removed. Please retry clearing local data."; return false }
         return true
     }

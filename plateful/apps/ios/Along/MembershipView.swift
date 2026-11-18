@@ -28,8 +28,9 @@ struct MembershipLegalLinks: View {
     @Environment(BillingStore.self) private var billing
     @State private var privacy = false
     @State private var terms = false
+    var compact = false
     var body: some View {
-        HStack(spacing: 24) {
+        HStack(spacing: compact ? 18 : 24) {
             if let config = billing.configuration.value {
                 Link("Terms", destination: config.termsURL)
                 Link("Privacy", destination: config.privacyURL)
@@ -37,7 +38,7 @@ struct MembershipLegalLinks: View {
                 Button("Terms") { terms = true }
                 Button("Privacy") { privacy = true }
             }
-        }.font(.subheadline).frame(maxWidth: .infinity, minHeight: 44)
+        }.font(compact ? .caption : .subheadline).frame(maxWidth: compact ? nil : .infinity, minHeight: compact ? 32 : 44)
             .sheet(isPresented: $privacy) { PrivacyView() }
             .sheet(isPresented: $terms) { MembershipTermsView() }
     }
@@ -95,9 +96,28 @@ struct MembershipView: View {
                 .toolbar { if canClose { ToolbarItem(placement: .topBarTrailing) { Button("Close") { dismiss() } } } }
                 .sheet(isPresented: $backup) { JournalBackupView(journal: { store.journal }, replace: store.restoreJournal) }
                 .sheet(isPresented: $localData) { LocalDataView() }
-                .onAppear { plan = store.journal.onboardingPreferences?.plan ?? .annual }
+                .onAppear { plan = store.journal.setupProfile?.plan ?? store.journal.onboardingPreferences?.plan ?? .annual }
         }
     }
 }
 
 typealias PaywallPreview = MembershipView
+
+struct MembershipTermsView: View {
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                AlongSection(title: "Membership information") { Text("Purchases are unavailable until the App Store plans and final legal documents have been configured. No subscription is created by previewing these screens.") }
+                AlongSection(title: "Proposed membership") {
+                    Text("Along offers monthly and yearly membership. The App Store price is shown before you subscribe. Billing starts immediately after a confirmed purchase. There is no free trial.")
+                    Text("A production membership will renew automatically unless cancelled through the App Store subscription settings. Store pricing and final terms must be configured before purchases are enabled.")
+                }
+                AlongSection(title: "Your journal") { Text("Your saved entries remain on this device. Along supports personal reflection and routines; it does not give medical advice or medication instructions.") }
+                }.padding(22).frame(maxWidth: 650)
+            }.frame(maxWidth: .infinity).pageBackground().navigationTitle("Membership terms").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+        }
+    }
+}

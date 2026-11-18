@@ -9,22 +9,21 @@ struct OnboardingCatalogView: View {
             List {
                 Section {
                     HStack(spacing: 15) {
-                        PipArtwork().frame(width: 80, height: 90)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("26 little steps.").alongTitle(25)
-                            Text("Open any screen with example answers. Your own journal stays untouched.").font(.subheadline).foregroundStyle(Theme.secondaryInk)
+                                                VStack(alignment: .leading, spacing: 6) {
+                            Text("\(SetupStep.allCases.count) setup screens").font(.title3.weight(.bold))
+                            Text("Open any screen with example answers. Your own data stays untouched.").font(.subheadline).foregroundStyle(Theme.secondaryInk)
                         }
                     }
                 }
                 Section("Onboarding screens") {
-                    ForEach(0..<26, id: \.self) { step in
+                    ForEach(Array(SetupStep.allCases.enumerated()), id: \.offset) { index, step in
                         Button { selection = ReviewSelection(id: step) } label: {
                             HStack(spacing: 14) {
-                                Text(String(format: "%02d", step + 1)).font(.caption.monospacedDigit()).foregroundStyle(Theme.accent).frame(width: 28)
-                                Text(OnboardingView.titles[step].replacingOccurrences(of: "\n", with: " ")).font(.subheadline).foregroundStyle(.primary)
+                                Text(String(format: "%02d", index + 1)).font(.caption.monospacedDigit()).foregroundStyle(Theme.accent).frame(width: 28)
+                                Text(step.reviewTitle).font(.subheadline).foregroundStyle(.primary)
                                 Spacer(); Image(systemName: "chevron.right").font(.caption).foregroundStyle(Theme.secondaryInk)
                             }.padding(.vertical, 9)
-                        }.accessibilityIdentifier("dev.onboarding.\(step + 1)").listRowBackground(Theme.card)
+                        }.accessibilityIdentifier("dev.onboarding.\(step.rawValue)").listRowBackground(Theme.card)
                     }
                 }
             }.scrollContentBackground(.hidden).pageBackground().navigationTitle("Design review").navigationBarTitleDisplayMode(.inline)
@@ -32,7 +31,7 @@ struct OnboardingCatalogView: View {
                 .fullScreenCover(item: $selection) { selection in OnboardingScreenPreview(step: selection.id) }
         }
     }
-    private struct ReviewSelection: Identifiable { var id: Int }
+    private struct ReviewSelection: Identifiable { var id: SetupStep }
 }
 
 private struct OnboardingScreenPreview: View {
@@ -40,10 +39,10 @@ private struct OnboardingScreenPreview: View {
     @State private var previewStore: JournalStore
     @State private var billing = BillingStore(configuration: .unconfigured(["Isolated onboarding review"]))
     @State private var reminders = ReminderStore(deliveryEnabled: false)
-    init(step: Int) {
+    init(step: SetupStep) {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("AlongScreenReview-\(UUID().uuidString)", isDirectory: true)
         let store = JournalStore(directory: directory, arguments: [], clearCredentials: {})
-        store.onboardingDraft = OnboardingView.exampleDraft(at: step)
+        store.setup = step == .welcome ? SetupDraft() : SetupDraft.example(at: step)
         _previewStore = State(initialValue: store)
     }
     var body: some View {
@@ -54,6 +53,32 @@ private struct OnboardingScreenPreview: View {
                 Button("Done") { dismiss() }.font(.subheadline).accessibilityIdentifier("dev.onboarding.close")
             }.padding(.horizontal, 24).padding(.vertical, 10).background(Theme.paper)
             RootView(showsDevTools: false).environment(previewStore).environment(billing).environment(reminders)
+        }
+    }
+}
+extension SetupStep {
+    var reviewTitle: String {
+        switch self {
+        case .welcome: "Welcome"
+        case .experience: "Experience level"
+        case .goals: "Goals"
+        case .source: "Where did you hear about us"
+        case .showcase: "Know what you took"
+        case .birthday: "Date of birth"
+        case .weight: "Current weight (weight goals only)"
+        case .target: "Goal weight (weight goals only)"
+        case .commitment: "Consistency"
+        case .compounds: "Peptide picker"
+        case .frequency: "Dose frequency"
+        case .doseTime: "Usual dose time"
+        case .obstacles: "What gets in the way"
+        case .trust: "Thank you for trusting us"
+        case .reminders: "Dose reminders"
+        case .referral: "Referral code"
+        case .ready: "Time to build"
+        case .building: "Building your protocol"
+        case .plan: "Your protocol"
+        case .paywall: "Paywall"
         }
     }
 }

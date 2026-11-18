@@ -24,6 +24,10 @@ import Foundation
         preferences.startDate = now; preferences.name = "Alex"; preferences.note = "My first page"
         preferences.routineNames = ["movement": "My own movement"]
         original.onboardingPreferences = preferences
+        var profile = SetupDraft()
+        profile.goals = [.weightLoss, .recovery]; profile.compounds = ["BPC-157", "Tirzepatide"]; profile.obstacles = [.forgetting]
+        profile.birthDate = calendar.date(byAdding: .year, value: -30, to: now)!; profile.referralCode = "CREATOR-10"
+        original.setupProfile = profile
         original.reconcileProgress(now: now)
         original.pipProgress?.timeZoneID = zone.identifier
         original.pipProgress?.claimedRewards.insert(.notebook)
@@ -37,6 +41,7 @@ import Foundation
         expect(restored.checkIns == original.checkIns && restored.weights == original.weights && restored.milestones == original.milestones, "Restore preserves records and identity")
         expect(restored.routineDays == original.routineDays && restored.pipProgress == original.pipProgress && restored.companionDiscoveries == original.companionDiscoveries, "Restore preserves routines and cumulative pet history")
         expect(restored.onboardingPreferences == preferences, "Restore preserves routine wording and preferences")
+        expect(restored.setupProfile == profile, "Restore preserves peptide setup answers")
         destination.hasOnboarded = true; destination.isDesignPreview = false
         let completedDestination = try decoded.restoring(into: destination, now: now)
         expect(completedDestination.hasOnboarded && completedDestination.isDesignPreview == false, "Import preserves the destination's existing access flags")
@@ -67,6 +72,9 @@ import Foundation
         rejectContent("duplicate set values") { $0["routines"] = ["nutrition", "nutrition"] }
         rejectContent("wearing a locked item") { $0["accessory"] = "flower" }
         rejectContent("missing field") { $0.removeValue(forKey: "checkIns") }
+        rejectContent("unknown setup field") { $0["setupProfile"] = ((($0["setupProfile"] as! [String: Any]).merging(["isEntitled": true]) { $1 })) }
+        rejectContent("duplicate setup peptide") { var value = $0["setupProfile"] as! [String: Any]; value["compounds"] = ["BPC-157", "bpc-157"]; $0["setupProfile"] = value }
+        rejectContent("invalid referral code") { var value = $0["setupProfile"] as! [String: Any]; value["referralCode"] = "has spaces"; $0["setupProfile"] = value }
         rejectContent("unknown story choice") { $0["companionDiscoveries"] = ["window": "unknown"] }
         rejectContent("unknown story") { $0["companionDiscoveries"] = ["unrecognised": "rain"] }
         rejectContent("duplicate record IDs") {

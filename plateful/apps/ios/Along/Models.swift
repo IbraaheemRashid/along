@@ -81,6 +81,7 @@ struct Journal: Codable, Equatable {
     // Optional additions allow journals written before expanded onboarding to
     // decode unchanged. A design preview is never a subscription entitlement.
     var onboardingPreferences: OnboardingDraft?
+    var setupProfile: SetupDraft?
     var isDesignPreview: Bool?
     // Optional for compatibility with journals saved before Pip's story chats.
     // These are fictional pet preferences, separate from health/journal records.
