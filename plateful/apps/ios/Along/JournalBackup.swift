@@ -34,6 +34,8 @@ struct JournalBackup: Codable, Equatable {
         var companionDiscoveries: [String: String]?
         var pipProgress: PipProgress?
         var routineDays: [RoutineDay]?
+        var peptides: [TrackedPeptide]?
+        var doseLogs: [DoseLog]?
 
         init(_ journal: Journal) {
             journalVersion = journal.version
@@ -47,6 +49,7 @@ struct JournalBackup: Codable, Equatable {
             setupProfile = journal.setupProfile
             companionDiscoveries = journal.companionDiscoveries
             pipProgress = journal.pipProgress; routineDays = journal.routineDays
+            peptides = journal.peptides; doseLogs = journal.doseLogs
         }
     }
 
@@ -111,6 +114,7 @@ struct JournalBackup: Codable, Equatable {
         restored.setupProfile = content.setupProfile
         restored.companionDiscoveries = content.companionDiscoveries
         restored.pipProgress = content.pipProgress; restored.routineDays = content.routineDays
+        restored.peptides = content.peptides; restored.doseLogs = content.doseLogs
         restored.hasOnboarded = current.hasOnboarded
         restored.isDesignPreview = current.isDesignPreview
         restored.normalizeDayKeys(sourceTimeZone: TimeZone(identifier: timeZoneID)!)
@@ -185,8 +189,24 @@ struct JournalBackup: Codable, Equatable {
         }
         guard checkInDays.isDisjoint(with: routineDays) else { throw Failure.invalidArchive }
 
+        let peptides = content.peptides ?? [], doseLogs = content.doseLogs ?? []
+        guard peptides.count <= TrackedPeptide.limit, doseLogs.count <= DoseLog.limit else { throw Failure.invalidArchive }
+        var peptideIDs = Set<UUID>()
+        for peptide in peptides {
+            guard unique(peptide.id), peptide.isValid else { throw Failure.invalidArchive }
+            peptideIDs.insert(peptide.id)
+        }
+        var answeredSlots = Set<String>()
+        for log in doseLogs {
+            guard unique(log.id), peptideIDs.contains(log.peptideID), log.isValid(now: now), validDate(log.takenAt) else { throw Failure.invalidArchive }
+            if let time = log.scheduledTime {
+                guard answeredSlots.insert("\(log.peptideID)|\(log.dayKey)|\(time.minutes)").inserted else { throw Failure.invalidArchive }
+            }
+        }
+
         let containsSamples = content.checkIns.contains(where: \.isSample) || content.weights.contains(where: \.isSample)
             || content.milestones.contains(where: \.isSample) || (content.routineDays ?? []).contains(where: \.isSample)
+            || peptides.contains(where: \.isSample) || doseLogs.contains(where: \.isSample)
         guard !containsSamples || content.hasSampleData else { throw Failure.invalidArchive }
         guard Self.allowsSamples || (!content.hasSampleData && !containsSamples) else { throw Failure.sampleArchive }
 
@@ -230,7 +250,7 @@ struct JournalBackup: Codable, Equatable {
             guard let values = value as? [String], Set(values.map { lowercase ? $0.lowercased() : $0 }).count == values.count else { throw Failure.invalidArchive }
         }
         _ = try object(envelope, required: ["format", "schemaVersion", "exportedAt", "timeZoneID", "content"])
-        let content = try object(envelope["content"], required: ["journalVersion", "name", "companionName", "routines", "checkIns", "milestones", "weights", "weightUnit", "showWeight", "accessory", "unlockedAccessories", "hasSampleData", "startDate"], optional: ["onboardingPreferences", "setupProfile", "companionDiscoveries", "pipProgress", "routineDays"])
+        let content = try object(envelope["content"], required: ["journalVersion", "name", "companionName", "routines", "checkIns", "milestones", "weights", "weightUnit", "showWeight", "accessory", "unlockedAccessories", "hasSampleData", "startDate"], optional: ["onboardingPreferences", "setupProfile", "companionDiscoveries", "pipProgress", "routineDays", "peptides", "doseLogs"])
         try strings(content["routines"]); try strings(content["unlockedAccessories"])
         for (key, fields) in [
             ("checkIns", Set(["id", "day", "mood", "appetite", "routines", "note", "isSample"])),
@@ -247,6 +267,23 @@ struct JournalBackup: Codable, Equatable {
                     guard let dateKey = rawKey as? String, DayIdentity.isValid(dateKey) else { throw Failure.invalidArchive }
                 }
                 if fields.contains("routines") { try strings(entry["routines"]) }
+            }
+        }
+        if let raw = content["peptides"] {
+            guard let entries = raw as? [Any], entries.count <= TrackedPeptide.limit else { throw Failure.invalidArchive }
+            for entry in entries {
+                let peptide = try object(entry, required: ["id", "name", "unit", "schedule", "startKey", "isPaused", "note", "isSample"], optional: ["amount"])
+                let schedule = try object(peptide["schedule"], required: ["kind", "weekdays", "intervalDays", "times"])
+                guard let weekdays = schedule["weekdays"] as? [Int], Set(weekdays).count == weekdays.count,
+                      let times = schedule["times"] as? [Any] else { throw Failure.invalidArchive }
+                for time in times { _ = try object(time, required: ["hour", "minute"]) }
+            }
+        }
+        if let raw = content["doseLogs"] {
+            guard let entries = raw as? [Any], entries.count <= DoseLog.limit else { throw Failure.invalidArchive }
+            for entry in entries {
+                let log = try object(entry, required: ["id", "peptideID", "dayKey", "status", "takenAt", "unit", "note", "isSample"], optional: ["scheduledTime", "amount", "site"])
+                if let time = log["scheduledTime"] { _ = try object(time, required: ["hour", "minute"]) }
             }
         }
         if let raw = content["onboardingPreferences"] {

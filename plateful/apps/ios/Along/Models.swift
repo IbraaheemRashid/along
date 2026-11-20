@@ -88,6 +88,9 @@ struct Journal: Codable, Equatable {
     var companionDiscoveries: [String: String]?
     var pipProgress: PipProgress?
     var routineDays: [RoutineDay]?
+    // Optional so journals saved before the protocol tracker decode unchanged.
+    var peptides: [TrackedPeptide]?
+    var doseLogs: [DoseLog]?
     // Local restore boundary; never included in exported backup content.
     var restoreGeneration: UUID?
 
