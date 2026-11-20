@@ -129,6 +129,9 @@ private struct OnboardingArchive: Codable {
             journal.hasOnboarded = false; persist()
             setup = step == .welcome ? SetupDraft() : SetupDraft.example(at: step)
         }
+        if arguments.contains("--setup-complete") {
+            clearJournal(); setup = SetupDraft.example(at: .paywall); finishSetupPreview(); error = nil
+        }
         if arguments.contains("--sample-journey") {
             journal = Journal.sample(); journal.name = "Alex"; journal.hasOnboarded = true; journal.isDesignPreview = true; canSave = true; error = nil; persist()
         }

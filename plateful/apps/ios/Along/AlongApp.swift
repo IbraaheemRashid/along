@@ -44,11 +44,12 @@ struct RootView: View {
                 ProgressView("Opening your space…").frame(maxWidth: .infinity, maxHeight: .infinity).pageBackground()
             } else if store.journal.hasOnboarded && (billing.isEntitled || previewAccess) {
                 TabView(selection: $store.selectedTab) {
-                    TodayView().tabItem { Label("Today", systemImage: "sun.max") }.tag(0)
-                    JourneyView().tabItem { Label("Journey", systemImage: "point.topleft.down.to.point.bottomright.curvepath") }.tag(1)
-                    CompanionView().tabItem { Label(store.companionName, systemImage: "pawprint") }.tag(2)
-                    SettingsView().tabItem { Label("You", systemImage: "person.crop.circle") }.tag(3)
+                    HomeView().tabItem { Label("Today", systemImage: "house.fill") }.tag(0)
+                    ProtocolView().tabItem { Label("Protocol", systemImage: "list.bullet.rectangle.portrait") }.tag(1)
+                    JourneyView().tabItem { Label("Progress", systemImage: "chart.bar.xaxis") }.tag(2)
+                    SettingsView().tabItem { Label("Settings", systemImage: "gearshape") }.tag(3)
                 }
+                .tint(SetupTheme.ink)
             } else if store.journal.hasOnboarded { MembershipView(canClose: false) }
             else { SetupFlowView() }
         }
@@ -57,17 +58,6 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in if phase == .active { store.referenceDate = .now; Task { await billing.refresh() } } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in store.referenceDate = .now }
         #if DEBUG
-        .safeAreaInset(edge: UIDevice.current.userInterfaceIdiom == .pad ? .bottom : .top, spacing: 0) {
-            if showsDevTools && store.journal.hasOnboarded {
-                HStack {
-                    Text("LOCAL DEVELOPMENT").font(.system(size: 9, weight: .semibold)).tracking(1)
-                    Spacer()
-                    Button { showDevLab = true } label: { Label("Dev Lab", systemImage: "wrench.and.screwdriver").font(.system(size: 12, weight: .semibold)).frame(minHeight: 44) }
-                        .accessibilityIdentifier("dev.open")
-                }.padding(.horizontal, 20).foregroundStyle(Theme.accent).background(Theme.paper)
-                    .overlay(alignment: .bottom) { Theme.line.frame(height: 1) }
-            }
-        }
         .overlay(alignment: .topTrailing) {
             if showsDevTools && !store.journal.hasOnboarded && store.setup.step == .welcome {
                 Button { showDevLab = true } label: {
@@ -75,6 +65,18 @@ struct RootView: View {
                         .foregroundStyle(SetupTheme.muted).frame(width: 44, height: 44)
                 }
                 .accessibilityLabel("Dev Lab").accessibilityIdentifier("dev.open").padding(.trailing, 12)
+            }
+        }
+        .overlay(alignment: .bottomLeading) {
+            if showsDevTools && store.journal.hasOnboarded {
+                Button { showDevLab = true } label: {
+                    Image(systemName: "wrench.and.screwdriver").font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(SetupTheme.muted).frame(width: 36, height: 36)
+                        .background(.regularMaterial, in: Circle()).overlay(Circle().strokeBorder(SetupTheme.border))
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("Dev Lab").accessibilityIdentifier("dev.open")
+                .padding(.leading, 6).padding(.bottom, 92)
             }
         }
         .sheet(isPresented: $showDevLab) { DevLabView() }

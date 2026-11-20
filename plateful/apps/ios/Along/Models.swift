@@ -168,6 +168,7 @@ struct Journal: Codable, Equatable {
             WeightEntry(date: calendar.date(byAdding: .day, value: offset, to: now)!, kilograms: weight, isSample: true)
         }
         journal.normalizeDayKeys(sourceTimeZone: calendar.timeZone)
+        journal.addSampleProtocol(now: now, calendar: calendar)
         return journal
     }
 }

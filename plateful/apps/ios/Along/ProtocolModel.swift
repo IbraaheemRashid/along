@@ -335,3 +335,37 @@ extension Journal {
         peptides = list
     }
 }
+
+extension Journal {
+    /// Fictional records for design review. Every item is flagged as a sample
+    /// and the journal is marked as containing sample data.
+    mutating func addSampleProtocol(now: Date = .now, calendar: Calendar = .current) {
+        guard let today = DayIdentity.key(for: now, timeZone: calendar.timeZone),
+              let weeklyStart = ProtocolSchedule.key(today, adding: -23) else { return }
+        let morning = DoseTime(hour: 8, minute: 0), evening = DoseTime(hour: 20, minute: 0)
+        let samples = [
+            TrackedPeptide(name: "Tirzepatide", amount: 2.5, unit: .mg, schedule: .on([ProtocolSchedule.weekday(of: weeklyStart) ?? 2], at: morning), startKey: weeklyStart, isSample: true),
+            TrackedPeptide(name: "BPC-157", amount: 250, unit: .mcg, schedule: DoseSchedule(kind: .daily, times: [morning, evening]), startKey: ProtocolSchedule.key(today, adding: -13) ?? today, isSample: true),
+            TrackedPeptide(name: "GHK-Cu", amount: 1, unit: .mg, schedule: .on([2, 4, 6], at: DoseTime(hour: 21, minute: 0)), startKey: ProtocolSchedule.key(today, adding: -20) ?? today, isSample: true),
+        ]
+        let notes = ["Slept well.", "A little tired today.", "Felt good after training."]
+        var logs: [DoseLog] = [], counter = 0
+        var site = InjectionSite.abdomenLeft
+        for offset in -20...0 {
+            guard let key = ProtocolSchedule.key(today, adding: offset) else { continue }
+            for slot in ProtocolSchedule.slots(on: key, peptides: samples, logs: []) {
+                guard let time = slot.time, let moment = time.date(on: key, timeZone: calendar.timeZone), moment < now else { continue }
+                counter += 1
+                if counter % 7 == 0 { continue }
+                let skipped = counter % 13 == 0
+                logs.append(DoseLog(peptideID: slot.peptide.id, dayKey: key, scheduledTime: time, status: skipped ? .skipped : .taken,
+                                    takenAt: moment.addingTimeInterval(Double(counter % 4) * 420), amount: slot.peptide.amount, unit: slot.peptide.unit,
+                                    site: skipped ? nil : site, note: counter % 9 == 0 ? notes[counter % notes.count] : "", isSample: true))
+                if !skipped { site = ProtocolSchedule.suggestedSite(after: site) }
+            }
+        }
+        peptides = samples
+        doseLogs = logs
+        hasSampleData = true
+    }
+}
