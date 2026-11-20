@@ -15,18 +15,49 @@ final class SuperwallBillingBridge: PurchaseController {
     init(store: BillingStore, configuration: BillingConfiguration) {
         self.store = store
         self.configuration = configuration
-        let options = SuperwallOptions()
-        options.storeKitVersion = .storeKit2
-        options.testModeBehavior = .never
-        // Billing must not opt the user into event/advertising analytics on launch.
-        options.eventTrackingBehavior = .none
-        options.logging.level = .error
-        Superwall.configure(apiKey: configuration.superwallPublicKey, purchaseController: self, options: options)
-        synchronizeStatus()
+        if configuration.usesSuperwallDashboard {
+            let options = SuperwallOptions()
+            options.storeKitVersion = .storeKit2
+            options.testModeBehavior = .never
+            // Dashboard paywalls and price experiments need Superwall's own events.
+            // Advertising/ATT integrations stay off until attribution is approved.
+            options.eventTrackingBehavior = .superwallOnly
+            options.logging.level = .error
+            Superwall.configure(apiKey: configuration.superwallPublicKey, purchaseController: self, options: options)
+            synchronizeStatus()
+        }
+    }
+
+    /// Presents the Superwall dashboard paywall for A/B price tests. Falls back
+    /// to false when Superwall is not configured so the SwiftUI paywall can show.
+    @discardableResult
+    func presentOnboardingPaywall() async -> Bool {
+        guard configuration.usesSuperwallDashboard else { return false }
+        if Superwall.shared.configurationStatus == .failed {
+            await Superwall.shared.refreshConfiguration()
+        }
+        guard Superwall.shared.configurationStatus == .configured else { return false }
+        return await withCheckedContinuation { continuation in
+            var resumed = false
+            Superwall.shared.register(placement: BillingConfiguration.onboardingPlacement) {
+                if !resumed { resumed = true; continuation.resume(returning: true) }
+            }
+            // If Superwall skips the paywall (no assignment), still report presented=false
+            // so Along can show the native fallback. Wait briefly for a presentation.
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(400))
+                if !resumed { resumed = true; continuation.resume(returning: Superwall.shared.isPaywallPresented) }
+            }
+        }
+    }
+
+    /// Direct StoreKit purchase when the local StoreKit configuration is in use.
+    func purchaseLocally(_ product: StoreKit.Product) async -> BillingOutcome {
+        await store?.purchaseFromController(productID: product.id) ?? .failed(BillingFailure.unavailable.localizedDescription)
     }
 
     func synchronizeStatus() {
-        guard let store else { return }
+        guard configuration.usesSuperwallDashboard, let store else { return }
         if !store.hasCheckedEntitlements {
             Superwall.shared.subscriptionStatus = .unknown
         } else if store.isEntitled {
@@ -37,6 +68,9 @@ final class SuperwallBillingBridge: PurchaseController {
     }
 
     func purchase(_ product: StoreKit.Product) async -> BillingOutcome {
+        guard configuration.usesSuperwallDashboard else {
+            return await purchaseLocally(product)
+        }
         if Superwall.shared.configurationStatus == .failed {
             await Superwall.shared.refreshConfiguration()
         }
@@ -92,6 +126,7 @@ final class SuperwallBillingBridge {
     static let isAvailable = false
     init(store: BillingStore, configuration: BillingConfiguration) {}
     func synchronizeStatus() {}
+    @discardableResult func presentOnboardingPaywall() async -> Bool { false }
     func purchase(_ product: Product) async -> BillingOutcome {
         .failed(BillingFailure.unavailable.localizedDescription)
     }

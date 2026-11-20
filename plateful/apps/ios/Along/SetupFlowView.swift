@@ -517,6 +517,10 @@ struct SetupFlowView: View {
             }
             paywallFinePrint.padding(.top, 18)
         }
+        .task(id: step) {
+            guard step == .paywall, billing.usesSuperwallDashboard else { return }
+            _ = await billing.presentOnboardingPaywall()
+        }
     }
 
     private func benefit(_ symbol: String, _ text: String) -> some View {
@@ -569,6 +573,9 @@ struct SetupFlowView: View {
     private var billingNotice: String? {
         if let notice = billing.notice { return notice }
         #if DEBUG
+        if billing.configuration.value?.superwallPublicKey == BillingConfiguration.localStoreKitKey {
+            return "Local StoreKit prices. Simulator purchases unlock the app for this device only."
+        }
         if !billing.isConfigured { return "Example prices for development. Purchases aren’t available in this build, so no payment will be taken." }
         #endif
         if !billing.isConfigured { return "Purchases aren’t available in this build. No payment will be taken." }

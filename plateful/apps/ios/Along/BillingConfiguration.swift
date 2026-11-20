@@ -9,6 +9,10 @@ enum BillingPlan: String, CaseIterable, Identifiable, Sendable {
 
 /// Public identifiers only. App Store / Superwall secret keys never belong in the app.
 struct BillingConfiguration: Equatable, Sendable {
+    /// Sentinel public key for simulator StoreKit testing without a Superwall project.
+    static let localStoreKitKey = "pk_local_storekit"
+    static let onboardingPlacement = "onboarding_end"
+
     let annualProductID: String
     let monthlyProductID: String
     let superwallPublicKey: String
@@ -17,6 +21,8 @@ struct BillingConfiguration: Equatable, Sendable {
     let privacyURL: URL
 
     var productIDs: Set<String> { [annualProductID, monthlyProductID] }
+    /// Local StoreKit files can exercise purchases without configuring Superwall.
+    var usesSuperwallDashboard: Bool { superwallPublicKey != Self.localStoreKitKey }
     func productID(for plan: BillingPlan) -> String {
         plan == .annual ? annualProductID : monthlyProductID
     }

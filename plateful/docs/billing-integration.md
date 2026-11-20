@@ -96,3 +96,11 @@ Before release, record successful evidence for each of these flows on the actual
 - Subscription management opens Apple's interface and refreshes access after returning. Data export/deletion remain possible behind an expired subscription gate.
 
 No live or Sandbox purchase acceptance run has been performed yet. Account configuration and this end-to-end evidence remain release blockers.
+
+## Local StoreKit and Superwall paywalls (2026-11)
+
+Debug builds ship with a StoreKit configuration file (`Along.storekit`) and public product IDs `dev.along.membership.annual` / `dev.along.membership.monthly`. The Debug Superwall key `pk_local_storekit` is a sentinel: purchases go through StoreKit 2 directly, Superwall is not configured, and verified transactions remain the only entitlement source.
+
+When a real Superwall public key is supplied, the bridge sets `eventTrackingBehavior = .superwallOnly` and the setup paywall calls `register(placement: "onboarding_end")` so dashboard A/B price tests can run. If Superwall is unavailable or skips the placement, the existing SwiftUI paywall stays as the fallback. Rebuild the paywall in Superwall’s editor before relying on experiments; our native design is the default until then.
+
+Release builds still require real App Store Connect products, a real Superwall key, and published legal URLs. Never commit secret keys.

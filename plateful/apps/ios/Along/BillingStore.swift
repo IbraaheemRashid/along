@@ -122,7 +122,8 @@ final class BillingStore {
         }
     }
 
-    /// Native SwiftUI paywall purchases still pass through Superwall for the named billing stack.
+    /// Native SwiftUI paywall purchases pass through Superwall when configured, or
+    /// straight to StoreKit when the local StoreKit configuration is active.
     @discardableResult
     func purchase(plan: BillingPlan) async -> BillingOutcome {
         guard !isBusy else { return report(.failed(BillingFailure.busy.localizedDescription)) }
@@ -136,6 +137,15 @@ final class BillingStore {
         let outcome = await superwall.purchase(product)
         return report(outcome)
     }
+
+    /// Asks Superwall to show the dashboard paywall for `onboarding_end`. Returns
+    /// false when Superwall is not configured so the SwiftUI paywall can remain.
+    @discardableResult
+    func presentOnboardingPaywall() async -> Bool {
+        await superwall?.presentOnboardingPaywall() ?? false
+    }
+
+    var usesSuperwallDashboard: Bool { configuration.value?.usesSuperwallDashboard == true }
 
     /// Used exclusively by Superwall's PurchaseController. Never call Superwall again from here.
     func purchaseFromController(productID: String) async -> BillingOutcome {
