@@ -325,7 +325,8 @@ private struct OnboardingArchive: Codable {
             return true
         } catch { self.error = "Your setup couldn’t be saved on this device. Please try again before closing the app."; return false }
     }
-    /// Copies setup answers into the journal: the profile, display unit and, for
+    /// Copies setup answers into the journal: the profile, display unit, the
+    /// chosen peptides as a starting protocol and, for
     /// weight goals, a starting weight for today unless a real record exists.
     private func journalAfterSetup(now: Date = .now, calendar: Calendar = .current) -> Journal? {
         guard setup.isValid, setup.isAdult(now: now) else {
@@ -334,6 +335,9 @@ private struct OnboardingArchive: Codable {
         var candidate = journal
         candidate.setupProfile = setup
         candidate.weightUnit = setup.weightUnit
+        if let today = DayIdentity.key(for: now, timeZone: calendar.timeZone) {
+            candidate.adoptSetupPeptides(setup.initialPeptides(startKey: today))
+        }
         guard setup.tracksWeightGoal else { return candidate }
         candidate.showWeight = true
         if !candidate.weights.contains(where: { $0.isOn(now, calendar: calendar) && !$0.isSample }) {

@@ -376,6 +376,46 @@ import Foundation
         underage.setup = setup
         underage.setup.birthDate = calendar.date(byAdding: .year, value: -16, to: now)!
         expect(!underage.finishSetup(now: now, calendar: calendar) && !underage.journal.hasOnboarded, "Under-18 setups never complete")
+        let handover = resumedSetup.journal.protocolPeptides
+        expect(handover.map(\.name) == setup.compounds, "Setup peptides become the starting protocol")
+        expect(handover.allSatisfy { $0.amount == nil && $0.startKey == "2026-11-01" }, "Setup never fills in a dose amount")
+        expect(handover.allSatisfy { $0.schedule.times == [DoseTime(hour: setup.doseHour, minute: setup.doseMinute)] }, "The chosen dose time carries into every schedule")
+        expect(resumedSetup.finishSetup(now: now, calendar: calendar) && resumedSetup.journal.protocolPeptides.count == handover.count, "Finishing twice never duplicates peptides")
+        var weeklySetup = setup; weeklySetup.frequency = .weekly
+        expect(weeklySetup.initialPeptides(startKey: "2026-11-04").first?.schedule == .on([4], at: DoseTime(hour: setup.doseHour, minute: setup.doseMinute)), "Weekly setups start on the setup weekday")
+        var fewSetup = setup; fewSetup.frequency = .fewPerWeek
+        expect(fewSetup.initialPeptides(startKey: "2026-11-04").first?.schedule.weekdays == [2, 4, 6], "A few times a week starts as Monday, Wednesday and Friday")
+
+        let protocolStore = resumedSetup
+        protocolStore.referenceDate = now
+        let firstPeptide = handover[0]
+        var renamed = firstPeptide; renamed.name = handover[1].name.uppercased()
+        expect(!protocolStore.savePeptide(renamed), "Two peptides cannot share a name")
+        var edited = firstPeptide; edited.amount = 250; edited.unit = .mcg; edited.schedule.times = [DoseTime(hour: 20, minute: 0), DoseTime(hour: 8, minute: 0), DoseTime(hour: 8, minute: 0)]
+        expect(protocolStore.savePeptide(edited) && protocolStore.peptide(firstPeptide.id)?.schedule.times == [DoseTime(hour: 8, minute: 0), DoseTime(hour: 20, minute: 0)], "Saving tidies duplicate and unordered times")
+        var invalid = firstPeptide; invalid.amount = -1
+        expect(!protocolStore.savePeptide(invalid) && protocolStore.peptide(firstPeptide.id)?.amount == 250, "An invalid edit leaves the protocol unchanged")
+        let custom = TrackedPeptide(name: "  My blend ", schedule: .every(3, at: DoseTime(hour: 9, minute: 0)), startKey: "2026-11-01")
+        expect(protocolStore.savePeptide(custom) && protocolStore.peptide(custom.id)?.name == "My blend", "Custom peptides can be added")
+
+        let todaySlots = protocolStore.slots(on: "2026-11-01")
+        let morningSlot = todaySlots.first { $0.peptide.id == firstPeptide.id && $0.time == DoseTime(hour: 8, minute: 0) }!
+        expect(protocolStore.logDose(morningSlot, at: now), "A scheduled dose logs in one tap")
+        let logged = protocolStore.journal.protocolLogs.first!
+        expect(logged.amount == 250 && logged.unit == .mcg && logged.status == .taken, "One-tap logs copy the protocol's own amount")
+        expect(protocolStore.logDose(protocolStore.slots(on: "2026-11-01").first { $0.id == morningSlot.id }!, status: .skipped, at: now) && protocolStore.journal.protocolLogs.count == 1 && protocolStore.journal.protocolLogs[0].status == .skipped, "Changing an answer updates the same record")
+        var duplicate = DoseLog(peptideID: firstPeptide.id, dayKey: "2026-11-01", scheduledTime: DoseTime(hour: 8, minute: 0), takenAt: now)
+        expect(!protocolStore.saveDose(duplicate), "A slot cannot be answered twice")
+        duplicate.scheduledTime = nil; duplicate.site = .thighLeft; duplicate.note = "  Felt fine  "
+        expect(protocolStore.saveDose(duplicate) && protocolStore.journal.protocolLogs.count == 2 && protocolStore.journal.protocolLogs[1].note == "Felt fine", "Extra doses can be logged with a site and note")
+        expect(!protocolStore.saveDose(DoseLog(peptideID: UUID(), dayKey: "2026-11-01", takenAt: now)), "Doses for unknown peptides are rejected")
+        expect(protocolStore.setPaused(firstPeptide.id, true) && !protocolStore.slots(on: "2026-11-02").contains { $0.peptide.id == firstPeptide.id }, "Paused peptides leave the schedule")
+        expect(protocolStore.journal.protocolLogs.count == 2, "Pausing keeps dose history")
+        expect(protocolStore.removeDose(duplicate.id) && protocolStore.journal.protocolLogs.count == 1, "Doses can be deleted")
+        expect(protocolStore.removePeptide(firstPeptide.id) && protocolStore.peptide(firstPeptide.id) == nil && protocolStore.journal.protocolLogs.isEmpty, "Removing a peptide removes its history")
+        let reloaded = JournalStore(directory: setupRoot, arguments: [], clearCredentials: {})
+        expect(reloaded.journal.protocolPeptides == protocolStore.journal.protocolPeptides, "Protocol changes persist across launches")
+
         resumedSetup.resetOnboarding()
         expect(resumedSetup.setup == SetupDraft(), "Restarting setup clears every answer")
         print("PASS: \(checks) meaningful Along domain checks")

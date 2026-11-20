@@ -301,3 +301,37 @@ enum ProtocolSchedule {
         return InjectionSite.allCases[(index + 1) % InjectionSite.allCases.count]
     }
 }
+
+extension SetupDraft {
+    /// The person's own setup answers as a starting protocol. Amounts stay
+    /// empty: only the person can enter a dose.
+    func initialPeptides(startKey: String) -> [TrackedPeptide] {
+        let time = DoseTime(hour: doseHour, minute: doseMinute)
+        let schedule: DoseSchedule
+        switch frequency {
+        case .fewPerWeek: schedule = .on([2, 4, 6], at: time)
+        case .weekly: schedule = .on([ProtocolSchedule.weekday(of: startKey) ?? 2], at: time)
+        case .daily, .varies, nil: schedule = .daily(at: time)
+        }
+        return compounds.prefix(TrackedPeptide.limit).map {
+            TrackedPeptide(name: $0, schedule: schedule, startKey: startKey)
+        }
+    }
+}
+
+extension Journal {
+    var protocolPeptides: [TrackedPeptide] { peptides ?? [] }
+    var activePeptides: [TrackedPeptide] { protocolPeptides.filter { !$0.isPaused } }
+    var protocolLogs: [DoseLog] { doseLogs ?? [] }
+
+    /// Adds setup peptides not already tracked, matching names case-insensitively,
+    /// so finishing setup twice never duplicates a protocol.
+    mutating func adoptSetupPeptides(_ incoming: [TrackedPeptide]) {
+        var list = protocolPeptides
+        for peptide in incoming where list.count < TrackedPeptide.limit
+            && !list.contains(where: { $0.name.caseInsensitiveCompare(peptide.name) == .orderedSame }) {
+            list.append(peptide)
+        }
+        peptides = list
+    }
+}
