@@ -6,11 +6,21 @@ import SwiftUI
     @State private var previewReminders = ReminderStore(deliveryEnabled: false)
     @State private var billing = BillingStore(configuration: BillingConfiguration.forCurrentLaunch())
     @State private var previewBilling = BillingStore(configuration: .unconfigured(["Local design preview"]))
+    @State private var attribution = AttributionStore()
+    @State private var analytics = AnalyticsClient()
     var body: some Scene {
         WindowGroup {
             RootView().environment(store)
                 .environment(store.journal.isDesignPreview == true || store.journal.hasSampleData ? previewReminders : reminders)
-                .environment(store.journal.isDesignPreview == true || store.journal.hasSampleData ? previewBilling : billing).tint(Theme.accent)
+                .environment(store.journal.isDesignPreview == true || store.journal.hasSampleData ? previewBilling : billing)
+                .environment(attribution)
+                .environment(analytics)
+                .tint(Theme.accent)
+                .task {
+                    CrashReporting.start()
+                    await attribution.start()
+                    analytics.track(.init(name: "app_opened", feature: "settings", surface: "welcome", result: "success"))
+                }
         }
     }
 }
@@ -18,6 +28,7 @@ struct RootView: View {
     @Environment(JournalStore.self) private var store
     @Environment(ReminderStore.self) private var reminders
     @Environment(BillingStore.self) private var billing
+    @Environment(AttributionStore.self) private var attribution
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.alongReducedMotion) private var reduceMotion
     var showsDevTools = true
@@ -56,6 +67,11 @@ struct RootView: View {
         }
         .preferredColorScheme(colorScheme)
         .task(id: ObjectIdentifier(billing)) { await billing.start() }
+        .task(id: store.journal.hasOnboarded) {
+            if store.journal.hasOnboarded {
+                _ = await attribution.capture(from: store.journal.setupProfile ?? store.setup)
+            }
+        }
         .task(id: store.journal.protocolPeptides.map(\.id)) {
             if reminders.preferences.isEnabled {
                 _ = await reminders.sync(sources: store.journal.reminderSources)
