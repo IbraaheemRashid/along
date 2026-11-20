@@ -27,19 +27,16 @@ private enum DevTextSize: String, CaseIterable, Identifiable {
 }
 
 private enum DevScenario: String, CaseIterable, Identifiable {
-    case fresh, resume, paywall, empty, sample, sparse, firstKeepsake, month, allKeepsakes
+    case fresh, resume, paywall, empty, sample, sparse
     var id: String { rawValue }
     var title: String {
         switch self {
         case .fresh: "Fresh onboarding"
         case .resume: "Resume setup halfway"
         case .paywall: "No-trial paywall"
-        case .empty: "Empty journal"
-        case .sample: "14-day sample journey"
-        case .sparse: "Sparse week"
-        case .month: "30 recorded days"
-        case .firstKeepsake: "First keepsake ready"
-        case .allKeepsakes: "60-day Pip room"
+        case .empty: "Empty protocol"
+        case .sample: "Sample protocol"
+        case .sparse: "Sparse dose history"
         }
     }
     var detail: String {
@@ -47,12 +44,9 @@ private enum DevScenario: String, CaseIterable, Identifiable {
         case .fresh: "Start at the welcome screen with no answers."
         case .resume: "The peptide picker with example answers already saved."
         case .paywall: "Try both plans, unavailable checkout, restore and close."
-        case .empty: "Check empty states and create a first record."
-        case .sample: "8 example check-ins, milestones and weight records."
-        case .sparse: "2 recorded days; gaps remain unrecorded."
-        case .month: "Synthetic 30-day progress, new stories and room keepsakes."
-        case .firstKeepsake: "Synthetic one-day progress. Try collecting the notebook."
-        case .allKeepsakes: "Synthetic 60-day progress. Collect each reward and preview the room."
+        case .empty: "Onboarded with no peptides — check empty states."
+        case .sample: "Fictional peptides, doses, notes and weight. Clearly labelled."
+        case .sparse: "One peptide and a couple of logs."
         }
     }
     var symbol: String {
@@ -60,12 +54,9 @@ private enum DevScenario: String, CaseIterable, Identifiable {
         case .fresh: "sparkles"
         case .resume: "arrow.clockwise"
         case .paywall: "lock"
-        case .empty: "book.closed"
-        case .sample: "calendar"
+        case .empty: "tray"
+        case .sample: "syringe"
         case .sparse: "calendar.badge.clock"
-        case .month: "books.vertical"
-        case .firstKeepsake: "gift"
-        case .allKeepsakes: "sparkles"
         }
     }
 
@@ -76,33 +67,20 @@ private enum DevScenario: String, CaseIterable, Identifiable {
         case .fresh: break
         case .resume: store.setup = SetupDraft.example(at: .compounds)
         case .paywall: store.setup = SetupDraft.example(at: .paywall)
-        case .empty, .sample, .sparse, .month, .firstKeepsake, .allKeepsakes:
-            var journal = self == .empty ? Journal() : Journal.sample()
+        case .empty, .sample, .sparse:
+            var journal = Journal()
             journal.name = "Alex"
             journal.hasOnboarded = true
             journal.isDesignPreview = true
-            journal.showWeight = self != .empty && self != .sparse
-            if self == .sparse {
-                journal.checkIns = Array(journal.checkIns.sorted { $0.day > $1.day }.prefix(2))
-                journal.milestones = []
-                journal.weights = []
-                journal.unlockedAccessories = [.leaf]
-            }
-            if self == .month {
-                let calendar = Calendar.current
-                journal.startDate = calendar.date(byAdding: .day, value: -30, to: .now)!
-                journal.checkIns = (1...30).map { index in
-                    CheckIn(day: calendar.date(byAdding: .day, value: -index, to: .now)!,
-                            mood: Mood.allCases[index % Mood.allCases.count],
-                            appetite: Appetite.allCases[index % Appetite.allCases.count],
-                            routines: index.isMultiple(of: 2) ? [.movement, .reflection] : [.nutrition],
-                            note: "Example moment \(index). A little part of this fictional journey.", isSample: true)
+            if self != .empty {
+                journal.addSampleProtocol()
+                journal.showWeight = true
+                if self == .sparse {
+                    journal.peptides = Array(journal.protocolPeptides.prefix(1))
+                    let id = journal.protocolPeptides.first?.id
+                    journal.doseLogs = journal.protocolLogs.filter { $0.peptideID == id }.suffix(3).map { $0 }
+                    journal.weights = Array(journal.weights.suffix(1))
                 }
-            }
-            journal.reconcileProgress()
-            if self == .month || self == .firstKeepsake || self == .allKeepsakes {
-                journal.pipProgress = .preview(days: self == .month ? 30 : self == .firstKeepsake ? 1 : 60)
-                journal.reconcileProgress()
             }
             store.journal = journal
         }
@@ -115,7 +93,7 @@ private enum DevScenario: String, CaseIterable, Identifiable {
 }
 
 private enum DevSheet: String, Identifiable {
-    case checkIn, milestone, weight, recap, membership, data
+    case membership, data, weight
     var id: String { rawValue }
 }
 
@@ -130,8 +108,6 @@ private struct DevLaunch: Identifiable {
         self.scenario = scenario
         self.tab = tab
         self.sheet = sheet
-        // Create storage once, in response to a launch action. SwiftUI may
-        // recreate the preview View value many times while its state survives.
         if restoreLast, let directory = DevSession.lastDirectory { store = JournalStore(directory: directory, arguments: [], clearCredentials: {}) }
         else { store = scenario.makeStore() }
         store.selectedTab = tab
@@ -151,9 +127,9 @@ struct DevLabView: View {
         NavigationStack {
             Form {
                 Section {
-                    Label("Test the whole local app", systemImage: "wrench.and.screwdriver").font(.headline)
-                    Text("New scenarios create separate sandboxes. Resume last sandbox reopens your saved test session. Your normal journal and credentials stay untouched; seeded records are fictional.")
-                        .font(.subheadline).foregroundStyle(Theme.secondaryInk)
+                    Label("Test the local peptide tracker", systemImage: "wrench.and.screwdriver").font(.headline)
+                    Text("New scenarios create separate sandboxes. Resume last sandbox reopens your saved test session. Your normal data stays untouched; seeded records are fictional and labelled.")
+                        .font(.subheadline).foregroundStyle(SetupTheme.muted)
                     Button("Resume last sandbox", systemImage: "clock.arrow.circlepath") {
                         launch = DevLaunch(scenario: DevSession.lastScenario, restoreLast: true)
                     }.disabled(lastSessionID.isEmpty || DevSession.lastDirectory == nil).accessibilityIdentifier("dev.resumeLast")
@@ -164,40 +140,38 @@ struct DevLabView: View {
                     }.accessibilityIdentifier("dev.onboarding")
                     ForEach([DevScenario.fresh, .resume, .paywall]) { scenario in scenarioButton(scenario) }
                 }
-                Section("Journal scenarios") {
-                    ForEach([DevScenario.empty, .sample, .sparse, .firstKeepsake, .month, .allKeepsakes]) { scenario in scenarioButton(scenario) }
+                Section("Protocol scenarios") {
+                    ForEach([DevScenario.empty, .sample, .sparse]) { scenario in scenarioButton(scenario) }
                 }
                 Section("Jump to a feature · sample data") {
-                    feature("Today", symbol: "sun.max", tab: 0)
-                    feature("Journey", symbol: "book", tab: 1)
-                    feature("Pip, petting and stories", symbol: "pawprint", tab: 2)
-                    feature("Settings, export and deletion", symbol: "gearshape", tab: 3)
-                    feature("New check-in", symbol: "square.and.pencil", sheet: .checkIn)
-                    feature("Personal milestone", symbol: "flag", sheet: .milestone)
-                    feature("Optional weight record", symbol: "chart.xyaxis.line", sheet: .weight)
-                    feature("Weekly reflection", symbol: "sparkles", sheet: .recap)
+                    feature("Today", symbol: "house.fill", tab: 0)
+                    feature("Protocol", symbol: "list.bullet.rectangle.portrait", tab: 1)
+                    feature("Progress", symbol: "chart.bar.xaxis", tab: 2)
+                    feature("Settings", symbol: "gearshape", tab: 3)
                     feature("Membership offer", symbol: "lock", sheet: .membership)
+                    feature("Log weight", symbol: "scalemass", sheet: .weight)
                 }
                 Section("Preview settings") {
                     Picker("Appearance", selection: $appearance) { ForEach(DevAppearance.allCases) { Text($0.rawValue).tag($0) } }
                     Picker("Text size", selection: $textSize) { ForEach(DevTextSize.allCases) { Text($0.rawValue).tag($0) } }
                     Toggle("Force reduced motion", isOn: $reduceMotion)
-                    Text("These settings apply inside the sandbox. They do not change your phone’s settings.").font(.caption).foregroundStyle(Theme.secondaryInk)
                 }
                 Section("Connection status") {
                     status("Local persistence", value: "Active in sandbox", symbol: "internaldrive")
                     status("App Store / Superwall", value: "Not connected · no charges", symbol: "creditcard")
                     status("Accounts and cloud sync", value: "Not connected", symbol: "icloud")
-                    status("Reminders", value: "Local scheduling available · disabled in previews", symbol: "bell")
-                    status("AI and analytics", value: "Not connected", symbol: "network")
+                    status("Reminders", value: "Disabled in previews", symbol: "bell")
+                    status("Analytics", value: "Not connected", symbol: "chart.xyaxis.line")
                 }
-            }.scrollContentBackground(.hidden).pageBackground()
-                .navigationTitle("Dev Lab").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.accessibilityIdentifier("dev.close") } }
-                .sheet(isPresented: $showCatalogue) { OnboardingCatalogView() }
-                .fullScreenCover(item: $launch) { launch in
-                    DevSandboxView(launch: launch, appearance: $appearance, textSize: $textSize, reduceMotion: $reduceMotion)
-                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(SetupTheme.tile)
+            .navigationTitle("Dev Lab").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.accessibilityIdentifier("dev.close") } }
+            .sheet(isPresented: $showCatalogue) { OnboardingCatalogView() }
+            .fullScreenCover(item: $launch) { launch in
+                DevSandboxView(launch: launch, appearance: $appearance, textSize: $textSize, reduceMotion: $reduceMotion)
+            }
         }.preferredColorScheme(appearance.scheme)
     }
 
@@ -206,7 +180,7 @@ struct DevLabView: View {
             Label {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(scenario.title).foregroundStyle(.primary)
-                    Text(scenario.detail).font(.caption).foregroundStyle(Theme.secondaryInk)
+                    Text(scenario.detail).font(.caption).foregroundStyle(SetupTheme.muted)
                 }.padding(.vertical, 4)
             } icon: { Image(systemName: scenario.symbol).frame(width: 25) }
         }.accessibilityIdentifier("dev.scenario.\(scenario.rawValue)")
@@ -218,7 +192,7 @@ struct DevLabView: View {
     }
 
     private func status(_ title: String, value: String, symbol: String) -> some View {
-        Label { VStack(alignment: .leading, spacing: 4) { Text(title); Text(value).font(.caption).foregroundStyle(Theme.secondaryInk) } } icon: { Image(systemName: symbol) }
+        Label { VStack(alignment: .leading, spacing: 4) { Text(title); Text(value).font(.caption).foregroundStyle(SetupTheme.muted) } } icon: { Image(systemName: symbol) }
     }
 }
 
@@ -251,7 +225,7 @@ private struct DevSandboxView: View {
                 Spacer()
                 VStack(spacing: 2) {
                     Text("DEV SANDBOX").font(.system(size: 10, weight: .bold)).tracking(1).accessibilityIdentifier("dev.sandbox.banner")
-                    Text(launch.scenario.title).font(.system(size: 10)).foregroundStyle(Theme.secondaryInk)
+                    Text(launch.scenario.title).font(.system(size: 10)).foregroundStyle(SetupTheme.muted)
                 }
                 Spacer()
                 Menu {
@@ -271,7 +245,7 @@ private struct DevSandboxView: View {
                     Button("Reload this scenario", systemImage: "arrow.counterclockwise") { showReset = true }
                 } label: { Image(systemName: "slider.horizontal.3").frame(width: 44, height: 36) }
                 .accessibilityLabel("Sandbox controls").accessibilityIdentifier("dev.sandbox.controls")
-            }.font(.system(size: 14, weight: .medium)).padding(.horizontal, 16).padding(.vertical, 5).background(Theme.paper)
+            }.font(.system(size: 14, weight: .medium)).padding(.horizontal, 16).padding(.vertical, 5).background(SetupTheme.surface)
                 .dynamicTypeSize(.large)
             RootView(showsDevTools: false).environment(store).environment(reminders).environment(billing)
                 .id(ObjectIdentifier(store))
@@ -282,7 +256,10 @@ private struct DevSandboxView: View {
                 sandboxSheet(item).environment(store).environment(reminders).environment(billing)
                     .dynamicTypeSize(textSize.size ?? systemTextSize)
                     .environment(\.alongForcedReducedMotion, reduceMotion)
-                    .safeAreaInset(edge: .bottom) { Text("DEV SANDBOX · SAMPLE DATA").font(.system(size: 10, weight: .semibold)).padding(8).frame(maxWidth: .infinity).background(Theme.paper) }
+                    .safeAreaInset(edge: .bottom) {
+                        Text("DEV SANDBOX · SAMPLE DATA").font(.system(size: 10, weight: .semibold)).padding(8)
+                            .frame(maxWidth: .infinity).background(SetupTheme.surface)
+                    }
             }
             .confirmationDialog("Reload this sandbox?", isPresented: $showReset, titleVisibility: .visible) {
                 Button("Discard sandbox edits and reload", role: .destructive) {
@@ -292,7 +269,7 @@ private struct DevSandboxView: View {
                     store.selectedTab = launch.tab
                 }
                 Button("Cancel", role: .cancel) {}
-            } message: { Text("Only the edits in this test scenario are replaced. Your normal journal is untouched.") }
+            } message: { Text("Only the edits in this test scenario are replaced. Your normal data is untouched.") }
             .onAppear {
                 if !presentedInitialFeature { presentedInitialFeature = true; sheet = launch.sheet }
             }
@@ -300,12 +277,9 @@ private struct DevSandboxView: View {
 
     @ViewBuilder private func sandboxSheet(_ item: DevSheet) -> some View {
         switch item {
-        case .checkIn: CheckInView()
-        case .milestone: AddMilestoneView()
-        case .weight: AddWeightView()
-        case .recap: WeeklyRecapView()
-        case .membership: PaywallPreview()
-        case .data: DevJournalInspector(journal: store.journal, draft: store.onboardingDraft)
+        case .membership: MembershipView(canClose: true)
+        case .weight: WeightLogSheet()
+        case .data: DevJournalInspector(journal: store.journal, draft: store.onboardingDraft, setup: store.setup)
         }
     }
 }
@@ -314,22 +288,24 @@ private struct DevJournalInspector: View {
     @Environment(\.dismiss) private var dismiss
     var journal: Journal
     var draft: OnboardingDraft
+    var setup: SetupDraft
     private var text: String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         let record = (try? encoder.encode(journal)).flatMap { String(data: $0, encoding: .utf8) } ?? "Unable to encode journal."
-        let setup = (try? encoder.encode(draft)).flatMap { String(data: $0, encoding: .utf8) } ?? "Unable to encode setup."
-        return "SANDBOX JOURNAL\n\n\(record)\n\nSETUP DRAFT\n\n\(setup)"
+        let onboarding = (try? encoder.encode(draft)).flatMap { String(data: $0, encoding: .utf8) } ?? "Unable to encode onboarding draft."
+        let peptideSetup = (try? encoder.encode(setup)).flatMap { String(data: $0, encoding: .utf8) } ?? "Unable to encode setup."
+        return "SANDBOX JOURNAL\n\n\(record)\n\nSETUP DRAFT\n\n\(peptideSetup)\n\nLEGACY ONBOARDING DRAFT\n\n\(onboarding)"
     }
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Sandbox data only. This view never reads your normal journal.").font(.subheadline).foregroundStyle(Theme.secondaryInk)
+                    Text("Sandbox data only. This view never reads your normal journal.").font(.subheadline).foregroundStyle(SetupTheme.muted)
                     Text(text).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
                 }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
-            }.pageBackground().navigationTitle("Sandbox data").navigationBarTitleDisplayMode(.inline)
+            }.background(SetupTheme.tile).navigationTitle("Sandbox data").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }
     }

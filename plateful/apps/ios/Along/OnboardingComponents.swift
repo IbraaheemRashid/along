@@ -46,18 +46,6 @@ struct SetupNote: View {
     }
 }
 
-struct SetupHero: View {
-    var pose: PipPose = .welcome
-    var accessory: Accessory = .leaf
-    var height: CGFloat = 245
-    var caption: String? = nil
-    var body: some View {
-        PipRoomView(accessory: accessory, pose: pose, message: caption, height: height)
-            .clipShape(RoundedRectangle(cornerRadius: 28))
-            .accessibilityHidden(true)
-    }
-}
-
 struct MembershipPlans: View {
     @Environment(BillingStore.self) private var billing
     @Environment(\.dynamicTypeSize) private var dynamicType

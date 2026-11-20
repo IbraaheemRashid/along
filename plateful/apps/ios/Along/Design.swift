@@ -98,42 +98,6 @@ struct QuietEmpty: View {
     }
 }
 
-// Original rendered artwork. Asset prompts and provenance are in docs/pip-art-direction.md.
-enum PipPose: String {
-    case welcome = "Pip2DWelcome"
-    case journal = "Pip2DJournal"
-    case celebrate = "Pip2DCelebrate"
-}
-struct PipArtwork: View {
-    var pose: PipPose = .welcome
-    var accessory: Accessory = .leaf
-    private var asset: String {
-        switch accessory {
-        case .leaf: return pose.rawValue
-        case .scarf: return "Pip2DScarf"
-        case .flower: return "Pip2DFlower"
-        }
-    }
-    var body: some View {
-        Image(asset).resizable().scaledToFit().accessibilityHidden(true)
-    }
-}
-struct PipView: View {
-    var accessory: Accessory = .leaf
-    var wave = false
-    var body: some View { PipArtwork(pose: .welcome, accessory: accessory).rotationEffect(.degrees(wave ? -2 : 0)) }
-}
-
-struct MeadowView: View {
-    var accessory: Accessory = .leaf
-    var compact = false
-    var body: some View {
-        GeometryReader { geometry in
-            PipRoomView(accessory: accessory, height: geometry.size.height)
-        }.accessibilityHidden(true)
-    }
-}
-
 struct AlongIcon: View {
     var symbol: String
     var apricot = false
@@ -142,24 +106,6 @@ struct AlongIcon: View {
             .foregroundStyle(Theme.accent).frame(width: 44, height: 44)
             .background(apricot ? Theme.softApricot : Theme.softAccent, in: RoundedRectangle(cornerRadius: 14))
             .accessibilityHidden(true)
-    }
-}
-
-struct CompanionHeading: View {
-    var title: String
-    var detail: String
-    var accessory: Accessory = .leaf
-    var pose: PipPose = .journal
-    @Environment(\.dynamicTypeSize) private var textSize
-    var body: some View {
-        let layout = textSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12)) : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
-        layout {
-            VStack(alignment: .leading, spacing: 9) {
-                Text(title).alongTitle(29).fixedSize(horizontal: false, vertical: true)
-                Text(detail).font(.subheadline).foregroundStyle(Theme.secondaryInk).fixedSize(horizontal: false, vertical: true)
-            }.frame(maxWidth: .infinity, alignment: .leading)
-            PipArtwork(pose: pose, accessory: accessory).frame(width: 82, height: 98)
-        }
     }
 }
 

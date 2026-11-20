@@ -285,7 +285,7 @@ private struct NoteRow: View {
     }
 }
 
-private struct WeightLogSheet: View {
+struct WeightLogSheet: View {
     @Environment(JournalStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""

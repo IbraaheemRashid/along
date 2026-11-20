@@ -461,17 +461,26 @@ private struct OnboardingArchive: Codable {
         toastTask = Task { try? await Task.sleep(for: .seconds(2.5)); if !Task.isCancelled { toast = nil } }
     }
     var exportText: String {
-        var lines = ["Along — local journal export", journal.hasSampleData ? "Contains fictional sample records mixed with any entries added in this prototype." : "Entries recorded on this device.", "Name: \(journal.name)", "Companion: \(companionName)", ""]
-        for entry in journal.checkIns.sorted(by: { $0.displayDay < $1.displayDay }) {
-            lines.append("\(entry.isSample ? "[SAMPLE] " : "")\(entry.dayText()) · \(entry.mood.title) · Appetite: \(entry.appetite.title)")
-            lines.append(entry.routines.sorted { $0.rawValue < $1.rawValue }.map(\.title).joined(separator: "; "))
-            if !entry.note.isEmpty { lines.append(entry.note) }; lines.append("")
+        var lines = ["Along — local protocol export",
+                     journal.hasSampleData ? "Contains fictional sample records mixed with any entries added in this prototype." : "Records saved on this device.",
+                     "Name: \(journal.name)", ""]
+        for peptide in journal.protocolPeptides {
+            lines.append("\(peptide.isSample ? "[SAMPLE] " : "")Peptide · \(peptide.name) · \(peptide.amountText ?? "dose not set") · \(peptide.schedule.summary) · \(peptide.schedule.timesSummary)\(peptide.isPaused ? " · paused" : "")")
+            if !peptide.note.isEmpty { lines.append(peptide.note) }
         }
-        for milestone in journal.milestones.sorted(by: { $0.displayDate < $1.displayDate }) { lines.append("\(milestone.isSample ? "[SAMPLE] " : "")Milestone · \(milestone.dateText()) · \(milestone.title)\n\(milestone.note)\n") }
-        for entry in (journal.routineDays ?? []).sorted(by: { $0.displayDay < $1.displayDay }) where !entry.routines.isEmpty {
-            lines.append("\(entry.isSample ? "[SAMPLE] " : "")Routines · \(entry.dayText()) · \(entry.routines.sorted { $0.rawValue < $1.rawValue }.map(\.title).joined(separator: "; "))")
+        lines.append("")
+        for log in journal.protocolLogs.sorted(by: { $0.takenAt < $1.takenAt }) {
+            let name = peptide(log.peptideID)?.name ?? "Peptide"
+            let amount = log.amountText ?? ""
+            let site = log.site?.shortTitle ?? ""
+            lines.append("\(log.isSample ? "[SAMPLE] " : "")Dose · \(log.dayKey) · \(name) · \(log.status.rawValue)\(amount.isEmpty ? "" : " · \(amount)")\(site.isEmpty ? "" : " · \(site)")")
+            if !log.note.isEmpty { lines.append(log.note) }
         }
-        for entry in journal.weights.sorted(by: { $0.displayDate < $1.displayDate }) { lines.append("\(entry.isSample ? "[SAMPLE] " : "")Weight · \(entry.dateText()) · \(entry.kilograms.formatted(.number.precision(.fractionLength(1)))) kg") }
+        lines.append("")
+        for entry in journal.weights.sorted(by: { $0.displayDate < $1.displayDate }) {
+            lines.append("\(entry.isSample ? "[SAMPLE] " : "")Weight · \(entry.dateText()) · \(entry.kilograms.formatted(.number.precision(.fractionLength(1)))) kg")
+        }
+        // Legacy companion discoveries from the retired Pip journal remain exportable.
         for story in PipStory.all {
             if let answer = journal.companionDiscoveries?[story.id], let choice = story.choices.first(where: { $0.id == answer }) {
                 lines.append("Fictional companion discovery · \(choice.discovery)")
@@ -498,17 +507,19 @@ private struct OnboardingArchive: Codable {
     }
     #if DEBUG
     func loadSample() {
-        var candidate = Journal.sample()
-        candidate.name = journal.name; candidate.companionName = companionName
-        candidate.hasOnboarded = true; candidate.isDesignPreview = true
-        candidate.reconcileProgress()
+        var candidate = Journal()
+        candidate.name = journal.name
+        candidate.hasOnboarded = true
+        candidate.isDesignPreview = true
+        candidate.showWeight = true
+        candidate.addSampleProtocol()
         guard persist(candidate) else { return }; journal = candidate
     }
     func startBlank() {
         var candidate = Journal()
-        candidate.name = journal.name; candidate.companionName = companionName; candidate.routines = journal.routines
-        candidate.hasOnboarded = true; candidate.isDesignPreview = true
-        candidate.reconcileProgress()
+        candidate.name = journal.name
+        candidate.hasOnboarded = true
+        candidate.isDesignPreview = true
         guard persist(candidate) else { return }; journal = candidate
     }
     #endif

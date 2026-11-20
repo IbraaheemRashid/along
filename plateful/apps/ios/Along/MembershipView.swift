@@ -56,14 +56,18 @@ struct MembershipView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    SetupHero(pose: .journal, accessory: store.journal.accessory, height: 200)
-                    Text(billing.isEntitled ? "A home for your story." : "Keep your story growing.").alongTitle(32)
+                    Image(systemName: "leaf.fill")
+                        .font(.system(size: 36, weight: .semibold))
+                        .foregroundStyle(SetupTheme.ink)
+                        .frame(maxWidth: .infinity, minHeight: 120)
+                        .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    Text(billing.isEntitled ? "Your protocol stays organised." : "Keep your protocol organised.").font(.system(size: 32, weight: .bold)).tracking(-0.6)
                     if billing.isEntitled {
                         Label(billing.isTestPurchase ? "Test membership active" : "Membership active", systemImage: "checkmark.seal.fill")
-                            .font(.headline).foregroundStyle(Theme.accent)
-                        Text("Your personal record, routines, reflections and companion are included. Manage renewal or cancellation with the App Store.").foregroundStyle(Theme.secondaryInk)
+                            .font(.headline).foregroundStyle(SetupTheme.ink)
+                        Text("Dose logging, reminders and progress are included. Manage renewal or cancellation with the App Store.").foregroundStyle(SetupTheme.muted)
                     } else {
-                        Text("Your personal record, weekly reflections and a little company along the way.").foregroundStyle(Theme.secondaryInk)
+                        Text("One place for every peptide, dose, reminder and note. No free trial.").foregroundStyle(SetupTheme.muted)
                         Pill(text: "No free trial", symbol: "checkmark")
                         MembershipPlans(selection: $plan)
                         MembershipDisclosure(plan: plan)
@@ -85,10 +89,10 @@ struct MembershipView: View {
                     if !canClose {
                         Divider()
                         Button("Your data & reminders") { localData = true }.frame(maxWidth: .infinity, minHeight: 44)
-                        Text("Your journal remains on this device. You can export your records without an active membership.").font(.caption).foregroundStyle(Theme.secondaryInk)
+                        Text("Your protocol remains on this device. You can export your records without an active membership.").font(.caption).foregroundStyle(SetupTheme.muted)
                         Button("Backup & restore") { backup = true }.frame(maxWidth: .infinity, minHeight: 44)
-                        ShareLink(item: store.exportText, preview: SharePreview("Along journal export")) {
-                            Label("Export my journal", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity, minHeight: 44)
+                        ShareLink(item: store.exportText, preview: SharePreview("Along export")) {
+                            Label("Export my records", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity, minHeight: 44)
                         }
                     }
                 }.padding(24).frame(maxWidth: 560)
@@ -114,7 +118,7 @@ struct MembershipTermsView: View {
                     Text("Along offers monthly and yearly membership. The App Store price is shown before you subscribe. Billing starts immediately after a confirmed purchase. There is no free trial.")
                     Text("A production membership will renew automatically unless cancelled through the App Store subscription settings. Store pricing and final terms must be configured before purchases are enabled.")
                 }
-                AlongSection(title: "Your journal") { Text("Your saved entries remain on this device. Along supports personal reflection and routines; it does not give medical advice or medication instructions.") }
+                AlongSection(title: "Your protocol") { Text("Your saved peptides and dose logs remain on this device. Along is a tracker, not medical advice, and never recommends a dose or schedule.") }
                 }.padding(22).frame(maxWidth: 650)
             }.frame(maxWidth: .infinity).pageBackground().navigationTitle("Membership terms").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }

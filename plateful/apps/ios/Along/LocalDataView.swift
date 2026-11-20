@@ -13,18 +13,21 @@ struct LocalDataView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text("Your record belongs to you.").alongTitle(29)
-                    Text("You can keep a copy, manage reminders or clear this device without a membership.").foregroundStyle(Theme.secondaryInk)
-                    AlongSection(title: "Your journal") {
-                        ShareLink(item: store.exportText) { Label("Export readable journal", systemImage: "square.and.arrow.up").frame(minHeight: 44) }
+                    Text("Your protocol belongs to you.")
+                        .font(.system(size: 29, weight: .bold)).tracking(-0.5).foregroundStyle(SetupTheme.ink)
+                    Text("You can keep a copy, manage reminders or clear this device without a membership.")
+                        .foregroundStyle(SetupTheme.muted)
+                    AlongSection(title: "Your data") {
+                        ShareLink(item: store.exportText) { Label("Export readable copy", systemImage: "square.and.arrow.up").frame(minHeight: 44) }
                         SettingsAction(title: "Backup & restore", symbol: "externaldrive") { backup = true }
-                        SettingsAction(title: "Privacy & your journal", symbol: "lock") { privacy = true }
+                        SettingsAction(title: "Privacy & your data", symbol: "lock") { privacy = true }
                         SettingsAction(title: "Delete all local data", symbol: "trash", destructive: true) { confirmDelete = true }
                     }
                     ReminderSettingsView()
-                    if let message { Text(message).font(.subheadline).foregroundStyle(Theme.secondaryInk) }
+                    if let message { Text(message).font(.subheadline).foregroundStyle(SetupTheme.muted) }
                 }.padding(22).frame(maxWidth: 620)
-            }.frame(maxWidth: .infinity).pageBackground().navigationTitle("Your data & reminders").navigationBarTitleDisplayMode(.inline)
+            }.frame(maxWidth: .infinity).background(SetupTheme.tile)
+                .navigationTitle("Your data & reminders").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
                 .sheet(isPresented: $backup) { JournalBackupView(journal: { store.journal }, replace: store.restoreJournal) }
                 .sheet(isPresented: $privacy) { PrivacyView() }
@@ -32,14 +35,14 @@ struct LocalDataView: View {
                     Button("Delete all local data", role: .destructive) {
                         Task {
                             if reminders.deliveryEnabled, !(await reminders.reset()) {
-                                message = "Reminders could not be removed. Your journal has been kept. Please try again."
+                                message = "Reminders could not be removed. Your protocol has been kept. Please try again."
                                 return
                             }
                             if store.clearJournal() { dismiss() }
                             else { message = store.error }
                         }
                     }
-                } message: { Text("This removes this device’s journal, setup and reminders. Save a backup first if you want to keep them. It does not cancel a subscription or delete exported copies.") }
+                } message: { Text("This removes this device’s protocol, setup and reminders. Save a backup first if you want to keep them. It does not cancel a subscription or delete exported copies.") }
         }
     }
 }
