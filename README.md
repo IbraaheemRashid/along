@@ -1,20 +1,17 @@
 # Along
 
-An adult GLP-1 journey companion for iOS, built in SwiftUI with an original 2D companion, Pip.
-
-The app includes 26 onboarding screens, daily check-ins, optional routines and weight records, milestones, weekly reflections, earned Pip keepsakes, local backup/restore and a Debug-only Dev Lab.
+A peptide protocol tracker for iOS, built in SwiftUI. Along supports people who have just bought, or are about to start, peptides: their protocol, every dose, reminders and progress in one place. It never gives dosing or medical advice.
 
 ## Run it
 
-Open [`plateful/apps/ios/Along.xcodeproj`](plateful/apps/ios/Along.xcodeproj) in Xcode, select the **Along** scheme and an iPhone Simulator, then Run. Use **Dev Lab** or the explicitly labelled design preview to explore without a subscription.
+Open [`plateful/apps/ios/Along.xcodeproj`](plateful/apps/ios/Along.xcodeproj) in Xcode, select the **Along** scheme and an iPhone Simulator, then Run. In a Debug build, **Open app preview · no payment** on the paywall explores the app without a subscription.
 
 - [Full setup and development guide](plateful/README.md)
-- [Current implementation and verification](plateful/docs/release-implementation.md)
-- [Release requirements](plateful/docs/release-readiness.md)
-- [Screen gallery files](plateful/docs/screenshots/release-refinement)
+- [Build plan](plateful/docs/peptide-tracker-plan.md)
+- [Current implementation and verification](plateful/docs/progress.md)
 
 ## Status
 
-Local development build. The paid release still requires Apple signing, live App Store/Superwall configuration, published legal pages and signed-device purchase testing. The intended membership has **no trial**. Sample data and development previews are labelled and do not grant a real subscription.
+Local development build. A paid release still requires Apple signing, App Store Connect products, Superwall configuration, published legal pages and signed-device purchase testing. The membership has **no trial**. Sample data and development previews are labelled and never grant a real subscription.
 
-Source code lives in `plateful/`; the folder name is historical. The active iOS app is Along. No production service is deployed by cloning or running this repository.
+Source code lives in `plateful/`; the folder name is historical.

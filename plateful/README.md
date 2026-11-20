@@ -1,45 +1,26 @@
 # Along
 
-A native SwiftUI prototype for an adult GLP-1 progress companion. A short check-in becomes part of a personal journey, with routines, meaningful milestones and an original companion named Pip. Along and Pip are working names.
+A native SwiftUI peptide protocol tracker. Along helps people who have just bought, or are about to start, peptides keep their protocol, every dose, reminders and progress in one place. It is a supporting tool, not a source of dosing or medical advice. Along is a working name.
 
 ## Try the iOS app
 
-Open `apps/ios/Along.xcodeproj` in Xcode, choose the **Along** scheme and an installed iPhone Simulator, then Run. No Apple developer account, server, API key or payment is required for simulator use. iOS 17 or later; tested with Xcode 26.3 and an iPhone 17 Pro simulator running iOS 26.3.
+Open `apps/ios/Along.xcodeproj` in Xcode, choose the **Along** scheme and an iPhone Simulator, then Run. No Apple developer account, server, API key or payment is required for simulator use. iOS 17 or later.
 
-Complete the 26-screen setup to create your first journal entry. Screen 26 is a direct subscription offer with **no trial**. The StoreKit/Superwall billing implementation is present but live products and public configuration are not supplied, so purchases remain unavailable. In a Debug build, scroll to **Open app preview · no payment** and confirm **Open design preview** to explore the app locally. This does not create a subscription.
+Setup is a peptide-specific onboarding that ends in a direct subscription offer with **no trial**. In a Debug build, **Open app preview · no payment** on the paywall opens the app without a subscription. Any setup screen can be opened directly:
 
-In **You → Review all 26 onboarding screens**, jump to any screen using clearly labelled example answers in a separate review journal. **You → Load the sample journey** loads fictional records; individual entries retain sample labels. You can also export or delete local data. The old `apps/ios/Plateful` folder is an abandoned pantry experiment and is deliberately excluded from the Xcode project.
+```sh
+xcrun simctl launch booted dev.along.prototype --setup-step paywall
+```
 
-The working core includes:
-
-- Resumable 26-screen onboarding with journey, progress, routine and companion preferences; an actual first entry before the paywall.
-- Daily mood/appetite check-ins, optional routines and notes; same-day edits replace the prior entry.
-- Chronological journey, personal milestones and factual weekly recaps.
-- Optional weight records with canonical kg storage and kg/lb display.
-- Five new transparent Pip renders: welcome, journal, celebration, scarf and flower. Customisation and cumulative keepsakes carry into the app without streak penalties.
-- Local file protection, restart persistence, readable export and deletion.
-- A hard no-trial membership gate using verified StoreKit entitlements and localized product prices when configured. No invented price is shown when products are unavailable.
+The build plan and its current state are in [docs/peptide-tracker-plan.md](docs/peptide-tracker-plan.md).
 
 ## Dev Lab
 
-In a Debug build, tap **Dev Lab** in the top bar from onboarding or the main app. New scenarios use isolated local storage; the normal journal and credentials are untouched. Release builds omit these tools.
-
-- Jump to any of the 26 onboarding screens, fresh setup, halfway setup or the no-trial offer.
-- Load an empty journal, the 14-day example, a sparse week or 30 recorded days.
-- Open Today, Journey, Pip, Settings, check-in, milestone, weight, reflection or membership directly.
-- Change appearance, text size and app motion inside the sandbox.
-- Inspect sandbox JSON, preview a save-error alert, reload saved state from disk or reset the current scenario.
-- **Resume last sandbox** returns to the saved test session, including after an app restart. UI tests use a separate Dev Lab storage scope.
-
-Live purchase acceptance and cloud accounts remain unconfigured. Optional local reminders are implemented; review and sandbox sessions disable notification delivery. Dev Lab displays the connection status and never creates a real subscription.
+In a Debug build, the wrench on the welcome screen (or the Dev Lab bar inside the app) opens isolated sandboxes, every setup screen with example answers, and shortcuts to individual features. Sandboxes never touch the normal data or credentials. Release builds omit these tools.
 
 ## What is connected
 
-**iOS works locally.** Entries are not sent to a server, model or analytics system. The API client and Keychain token utility are dormant integration seams; the app does not create accounts or call them automatically. This is not a medical, dosing or nutrition-assessment service.
-
-The companion API uses plain Cloudflare Worker handlers and D1 SQL. Its Node preview is local-only and marks non-persisted submissions honestly. Live Better Auth, OpenRouter/AI Gateway, Stripe and Tinybird remain disabled until configured and implemented. Native Superwall billing is implemented but needs account configuration and sandbox purchase verification. The web page uses React + Vite and is a separate validation preview, not the native application.
-
-No production deployment, real waitlist campaign, AI service, purchase, trial, cloud sync or TestFlight distribution has occurred. No new recurring costs were started.
+**iOS works locally.** Records are not sent to a server, model or analytics system. Sign in with Apple, Google and email are shown in setup but not connected. Native Superwall/StoreKit billing is implemented but needs App Store Connect products and account configuration. No production deployment, purchase, trial, cloud sync or TestFlight distribution has occurred.
 
 ## Local commands
 
@@ -51,7 +32,7 @@ bash scripts/dev-api.sh
 bash scripts/dev-web.sh
 ```
 
-The scripts use an installed Node 22.18+ binary or the bundled Codex Node runtime. Web dependencies need to have been installed in `apps/web`; the lockfile records the versions. Native tests require Xcode. UI tests are run through Xcode’s Test action and use an isolated review directory; they do not reset the normal journal or credentials. The Debug launch argument `--review-onboarding` also opens setup in that isolated directory.
+The scripts use an installed Node 22.18+ binary or the bundled Codex Node runtime. Web dependencies need to have been installed in `apps/web`; the lockfile records the versions. Native tests require Xcode. UI tests are run through Xcode’s Test action and use an isolated review directory; they do not reset the normal journal or credentials. The Debug launch argument `--setup-step <screen>` opens setup in that isolated directory.
 
 To regenerate the small Xcode project after adding Swift files:
 
@@ -63,6 +44,6 @@ The generated project and original icon are committed, so regeneration is not ne
 
 ## Product and validation
 
-Start with [the brief](docs/brief.md), [the niche assessment](docs/phase0-assessment.md), [the one-week validation kit](docs/validation-kit.md), and [actual implementation status](docs/progress.md).
+Start with [the build plan](docs/peptide-tracker-plan.md) and [actual implementation status](docs/progress.md). Older documents in `docs/` describe the retired GLP-1 journal and are kept for history.
 
-The user authorised this prototype before real market validation. The playbook’s Gate A is **not passed**: the deterministic core scores poorly on the AI-engine criterion and this product has no measured conversion or retention yet. Existing competitors validate a category, not Along’s business. AI is not being added merely to improve a score.
+The product has no measured conversion or retention yet.

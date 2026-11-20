@@ -1,25 +1,29 @@
-# Plateful agent guide
+# Along agent guide
 
-Working name: Along; original mascot: Pip. On 1 November 2026 the user explicitly approved: "A personal record of your GLP-1 journey, with a companion that helps you notice progress and maintain the routines you choose." Build an adult progress-led companion. Core: short daily check-ins, optional routines, personal milestones, a chronological journey, optional weight records, a factual weekly recap and gentle mascot development. Nutrition and strength support the journey. No pantry-first workflow or pediatric diabetes product. The old apps/ios/Plateful files are abandoned experiments and must not be compiled into Along.
+Working name: Along. Along is a peptide protocol tracker for adults who have just bought, or are about to start, peptides. Experienced users are a secondary audience. It keeps the protocol, every dose, reminders and progress in one place. It is a supporting tool: it never sells, recommends or replaces peptides or clinical care. The build plan is [docs/peptide-tracker-plan.md](docs/peptide-tracker-plan.md). The old GLP-1 journal and its companion, Pip, are retired. The old apps/ios/Plateful files are abandoned experiments and must not be compiled into Along.
 
-Follow the cloned ai-app-playbook. The user explicitly authorised building an iOS Swift app with mocks where accounts are unavailable. Build and test the prototype; market Gate A remains unverified and no production release is authorised.
+## Product
+
+- Onboarding is a Cal AI-style flow tailored to peptides, ending in a hard paywall: yearly and monthly plans, no free trial.
+- Core: a protocol of tracked peptides with schedules, one-tap dose logging, dose details (amount, time, injection site, note), per-peptide reminders and progress (adherence, history, optional weight trend).
+- Visual language: white surfaces, near-black ink, grey tiles and capsule buttons, as defined in `SetupDesign.swift`.
 
 ## Stack
 
 - SwiftUI, Observation and URLSession for iOS. No third-party UI libraries.
 - Cloudflare Worker with plain fetch handler; D1 with parameterised SQL; KV, R2 and Queues only when needed.
 - Better Auth for live identity; OpenRouter/DeepSeek behind Cloudflare AI Gateway for live AI.
-- Superwall for native payments, Stripe for web payments, Tinybird for events.
+- Superwall and StoreKit for native payments, Stripe for web payments, Tinybird for events.
 - React and Vite for the web waitlist. No new vendors, router framework, ORM or UI kit.
 
 ## Boundaries
 
-Demo mode must be conspicuous. Never present sample records as real history, a mock trial as a real purchase, or local test data as real demand. No medication advice, symptom treatment, calorie prescriptions or diagnostic claims. The mascot never suffers, loses progress or rewards weight loss, under-eating, doses or glucose readings. No streak penalties. Missing records are unknown. No secrets in clients. Production routes remain disabled until configured and reviewed. AI is optional; do not invent an AI dependency to inflate the niche score.
+No dosing advice: the app never suggests a peptide, dose amount, schedule, reconstitution volume or cycle length. Dose amounts and schedules come from the person. No treatment, diagnostic or efficacy claims. Missed logs are unknown, not failures; no streak penalties or shaming. Demo mode must be conspicuous. Never present sample records as real history, a mock purchase as a real one, or local test data as real demand. No secrets in clients. Production routes remain disabled until configured and reviewed. AI is optional; do not invent an AI dependency.
 
-Use separate git worktrees for parallel API, iOS and research work, as chapter 01 instructs. Own only assigned paths. Do not modify another contributor's files.
+Use separate git worktrees for parallel API, iOS and research work. Own only assigned paths. Do not modify another contributor's files.
 
 ## Verification
 
-Run the provided Node tests and Swift checks. Build the iOS Simulator target and inspect the running app where the environment permits. Document actual results and remaining account configuration in docs/progress.md. Never deploy production, make purchases, post social content or invent test results.
+Run `bash scripts/check.sh` and the Xcode UI tests. Build the iOS Simulator target and inspect the running app where the environment permits. Document actual results and remaining account configuration in docs/progress.md. Never deploy production, make purchases, post social content or invent test results.
 
-Named stack dependencies are authorised by the user's instruction. Ask before introducing other dependencies. Prefer platform APIs.
+Named stack dependencies are authorised. Ask before introducing others, including attribution SDKs such as AppsFlyer. Prefer platform APIs.
