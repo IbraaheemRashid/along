@@ -47,7 +47,7 @@ struct RootView: View {
                 TabView(selection: $store.selectedTab) {
                     HomeView().tabItem { Label("Today", systemImage: "house.fill") }.tag(0)
                     ProtocolView().tabItem { Label("Protocol", systemImage: "list.bullet.rectangle.portrait") }.tag(1)
-                    JourneyView().tabItem { Label("Progress", systemImage: "chart.bar.xaxis") }.tag(2)
+                    ProgressScreen().tabItem { Label("Progress", systemImage: "chart.bar.xaxis") }.tag(2)
                     SettingsView().tabItem { Label("Settings", systemImage: "gearshape") }.tag(3)
                 }
                 .tint(SetupTheme.ink)
