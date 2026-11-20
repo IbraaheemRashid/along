@@ -748,4 +748,30 @@ final class AlongUITests: XCTestCase {
         XCTAssertTrue(element("today.summary").waitForExistence(timeout: 8))
         XCTAssertTrue(element("today.summary").label.contains("1"), "Logs persist across launches")
     }
+
+    func testProtocolAddsAndEditsPeptide() {
+        launchSandbox(arguments: ["--setup-complete"])
+        XCTAssertTrue(element("today.summary").waitForExistence(timeout: 8))
+        app.tabBars.buttons["Protocol"].tap()
+        XCTAssertTrue(element("protocol.peptide.BPC-157").waitForExistence(timeout: 4))
+        capture("protocol-list")
+
+        tap("protocol.add")
+        XCTAssertTrue(element("peptide.search").waitForExistence(timeout: 4))
+        tap("peptide.pick.GHK-Cu")
+        let amount = app.textFields["peptide.amount"]
+        amount.tap(); amount.typeText("1")
+        app.buttons["Done"].firstMatch.tap()
+        tap("peptide.schedule.weekdays")
+        capture("peptide-editor")
+        tap("peptide.save")
+        XCTAssertTrue(element("protocol.peptide.GHK-Cu").waitForExistence(timeout: 4))
+
+        element("protocol.peptide.GHK-Cu").tap()
+        XCTAssertTrue(app.switches["peptide.pause"].waitForExistence(timeout: 4))
+        app.switches["peptide.pause"].tap()
+        tap("peptide.save")
+        XCTAssertTrue(element("protocol.peptide.GHK-Cu").waitForExistence(timeout: 4))
+        XCTAssertTrue(element("protocol.peptide.GHK-Cu").label.contains("Paused"), element("protocol.peptide.GHK-Cu").label)
+    }
 }
