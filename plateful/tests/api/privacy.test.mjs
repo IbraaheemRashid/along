@@ -12,21 +12,21 @@ const verified = async () => Response.json({ success: true, hostname: 'along.exa
 const waitlistRequest = body => request('/waitlist', body, { base: 'https://api.example.com', headers: { origin: 'https://along.example.com' } });
 
 test('client events accept only predefined low-detail metadata and never claim ingestion in demo', async () => {
-  const result = await call('/events', { name: 'core_action', properties: { feature: 'routine_checkin', platform: 'ios', result: 'success' } });
+  const result = await call('/events', { name: 'dose_logged', properties: { feature: 'dose', platform: 'ios', surface: 'today', result: 'success' } });
   assert.equal(result.status, 202);
   assert.equal(result.body.stored, false);
-  const sensitive = ['note', 'mood', 'appetite', 'email', 'dose', 'weight', 'ingredients', 'user_id', 'prompt'];
+  const sensitive = ['note', 'mood', 'appetite', 'email', 'dose', 'weight', 'ingredients', 'user_id', 'prompt', 'peptide'];
   for (const key of sensitive) {
-    const denied = await call('/events', { name: 'core_action', properties: { [key]: 'private' } });
+    const denied = await call('/events', { name: 'dose_logged', properties: { [key]: 'private' } });
     assert.equal(denied.status, 400, key);
   }
-  assert.equal((await call('/events', { name: 'core_action', properties: { feature: 'private health details' } })).status, 400);
+  assert.equal((await call('/events', { name: 'dose_logged', properties: { feature: 'private health details', platform: 'ios', surface: 'today', result: 'success' } })).status, 400);
   assert.equal((await call('/events', { name: 'subscription_started' })).status, 400);
   assert.equal((await call('/events', { name: 'app_opened', email: 'private@example.com' })).status, 400);
 });
 
 test('Tinybird adapter is disabled by default and emits only validated metadata to its regional host', async () => {
-  const event = validateEvent({ name: 'core_action', properties: { feature: 'journal', platform: 'ios' } }, new Date('2026-11-01T12:00:00Z'));
+  const event = validateEvent({ name: 'dose_logged', properties: { feature: 'dose', platform: 'ios', surface: 'today', result: 'success' } }, new Date('2026-11-01T12:00:00Z'));
   await assert.rejects(sendToTinybird([event], demoEnv), /not configured/);
   const env = { APP_ENV: 'staging', TINYBIRD_ENABLED: 'true', TINYBIRD_APPEND_TOKEN: 'test-token', TINYBIRD_API_URL: 'https://api.tinybird.co', TINYBIRD_DATASOURCE: 'along_events' };
   let calls = 0;

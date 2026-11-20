@@ -14,6 +14,7 @@ Working name: Along. Along is a peptide protocol tracker for adults who have jus
 - Cloudflare Worker with plain fetch handler; D1 with parameterised SQL; KV, R2 and Queues only when needed.
 - Better Auth for live identity; OpenRouter/DeepSeek behind Cloudflare AI Gateway for live AI.
 - Superwall and StoreKit for native payments, Stripe for web payments, Tinybird for events.
+- Optional Firebase Crashlytics only when `GoogleService-Info.plist` is present. Do not enable Firebase Analytics, Auth, Firestore, Messaging or Remote Config.
 - React and Vite for the web waitlist. No new vendors, router framework, ORM or UI kit.
 
 ## Boundaries

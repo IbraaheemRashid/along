@@ -1,10 +1,22 @@
 import { APIError, exactKeys } from './http.mjs';
 
-const eventNames = new Set(['app_opened', 'onboarding_completed', 'paywall_viewed', 'core_action', 'share_tapped', 'error']);
+// Peptide-tracker client events only. Never accept peptide names, doses, notes,
+// injection sites, weight values or other health details.
+const eventNames = new Set([
+  'app_opened',
+  'setup_step_viewed',
+  'setup_completed',
+  'paywall_viewed',
+  'purchase_completed',
+  'dose_logged',
+  'peptide_added',
+  'reminder_enabled',
+  'error',
+]);
 const metadata = {
   platform: new Set(['ios', 'web']),
-  feature: new Set(['routine_checkin', 'milestones', 'weekly_reflection', 'journal']),
-  surface: new Set(['onboarding', 'home', 'checkin', 'journey', 'milestone', 'reflection', 'settings', 'waitlist']),
+  feature: new Set(['setup', 'paywall', 'protocol', 'dose', 'reminders', 'progress', 'settings']),
+  surface: new Set(['welcome', 'setup', 'paywall', 'today', 'protocol', 'progress', 'settings']),
   result: new Set(['success', 'empty', 'cancelled', 'failure']),
 };
 
