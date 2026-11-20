@@ -16,6 +16,7 @@ import SwiftUI
 }
 struct RootView: View {
     @Environment(JournalStore.self) private var store
+    @Environment(ReminderStore.self) private var reminders
     @Environment(BillingStore.self) private var billing
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.alongReducedMotion) private var reduceMotion
@@ -55,7 +56,23 @@ struct RootView: View {
         }
         .preferredColorScheme(colorScheme)
         .task(id: ObjectIdentifier(billing)) { await billing.start() }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { store.referenceDate = .now; Task { await billing.refresh() } } }
+        .task(id: store.journal.protocolPeptides.map(\.id)) {
+            if reminders.preferences.isEnabled {
+                _ = await reminders.sync(sources: store.journal.reminderSources)
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                store.referenceDate = .now
+                Task {
+                    await billing.refresh()
+                    await reminders.refresh()
+                    if reminders.preferences.isEnabled {
+                        _ = await reminders.sync(sources: store.journal.reminderSources)
+                    }
+                }
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in store.referenceDate = .now }
         #if DEBUG
         .overlay(alignment: .topTrailing) {

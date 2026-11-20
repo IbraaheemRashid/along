@@ -164,10 +164,9 @@ struct SetupFlowView: View {
         requestingReminders = true
         Task {
             var preferences = reminders.preferences
-            preferences.dailyEnabled = true
-            preferences.dailyHour = draft.doseHour
-            preferences.dailyMinute = draft.doseMinute
-            let saved = await reminders.save(preferences)
+            preferences.enabled = true
+            // Sources are empty until setup finishes; sync runs after the protocol is created.
+            let saved = await reminders.save(preferences, sources: [])
             store.setup.remindersRequested = saved || !reminders.deliveryEnabled
             requestingReminders = false
             advance()

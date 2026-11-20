@@ -39,7 +39,7 @@ struct SettingsView: View {
                         }
                         Text("Hiding weight leaves your records intact. It never changes your companion’s progress.").font(.caption).foregroundStyle(Theme.secondaryInk)
                     }
-                    ReminderSettingsView(onboardingChoice: store.journal.onboardingPreferences?.reminder, reflectionDay: store.journal.onboardingPreferences?.reflectionDay)
+                    AlongSection(title: "Reminders") { ReminderSettingsView() }
                     AlongSection(title: "Your data") {
                         SettingsAction(title: "Privacy & your journal", symbol: "lock") { showPrivacy = true }
                         ShareLink(item: store.exportText, preview: SharePreview("Along journal export")) {

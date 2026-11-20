@@ -21,7 +21,7 @@ struct LocalDataView: View {
                         SettingsAction(title: "Privacy & your journal", symbol: "lock") { privacy = true }
                         SettingsAction(title: "Delete all local data", symbol: "trash", destructive: true) { confirmDelete = true }
                     }
-                    ReminderSettingsView(onboardingChoice: store.journal.onboardingPreferences?.reminder, reflectionDay: store.journal.onboardingPreferences?.reflectionDay)
+                    ReminderSettingsView()
                     if let message { Text(message).font(.subheadline).foregroundStyle(Theme.secondaryInk) }
                 }.padding(22).frame(maxWidth: 620)
             }.frame(maxWidth: .infinity).pageBackground().navigationTitle("Your data & reminders").navigationBarTitleDisplayMode(.inline)
