@@ -1,10 +1,16 @@
 # Along — playbook progress
 
-Updated 1 November 2026. Working name: Along; companion: Pip. The user approved the progress-companion direction and explicitly authorised a SwiftUI prototype with mocks. The earlier pantry concept was rejected and is not the current brief. **Market Gate A is not passed.**
+Updated 20 November 2026. Working name: Along. Along is a peptide protocol tracker (supporting tool, not medical advice). The GLP-1 journal and Pip companion are retired. **Market Gate A is not passed.**
 
-The native prototype is implemented and verified in Simulator. Local API and web verification are complete; live services and commercial validation remain pending. Results below distinguish source, local tests and unverified integrations.
+## Latest — peptide tracker core, 20 November 2026
 
-## Latest refinement — Pip retained, 1 November 2026
+Local commits (not pushed) deliver the build plan in `docs/peptide-tracker-plan.md`: protocol model, setup handover, Today / Protocol / Progress / Settings in the white onboarding design language, dose sheet, dose reminders, Settings rebuild, Pip UI removal, local StoreKit + Superwall `onboarding_end` placement, attribution no-op, peptide Tinybird event allowlist, and optional Crashlytics gated on `GoogleService-Info.plist`.
+
+Still needs accounts or approval: real App Store Connect products and Superwall key (Debug uses `Along.storekit` + `pk_local_storekit`), published legal URLs, Tinybird workspace + Worker deploy, Crashlytics plist, AppsFlyer, Sign in with Apple/Google/email, TestFlight and market validation. No push, purchase or production deploy from this work.
+
+Older sections below remain historical.
+
+## Historical — Pip retained, 1 November 2026
 
 Pip remains the original 2D companion. The app keeps plum, cream and apricot, all 26 onboarding screens and a hard membership gate with **no trial**. New work includes cumulative earned keepsakes and room decorations, one-tap routines, searchable/editable history, historical weekly reflections, editable personal preferences, local backup/restore, optional local reminders and the native Superwall/StoreKit purchase foundation.
 
