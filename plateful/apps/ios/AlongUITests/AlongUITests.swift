@@ -697,4 +697,55 @@ final class AlongUITests: XCTestCase {
         XCTAssertTrue(app.buttons["preferences.encouragement.straightforward"].isSelected, "Cancel must preserve the saved preference")
         capture("release-preferences")
     }
+
+    // MARK: Protocol tracker
+
+    private func element(_ identifier: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+    }
+
+    func testTodayLogsDosesAndDoseSheetSavesDetails() {
+        launchSandbox(arguments: ["--setup-complete"])
+        let summary = element("today.summary")
+        XCTAssertTrue(summary.waitForExistence(timeout: 8))
+        XCTAssertTrue(summary.label.contains("0") && summary.label.contains("2"), summary.label)
+        capture("today-fresh")
+
+        tap("today.dose.BPC-157.toggle")
+        XCTAssertTrue(element("today.dose.BPC-157").value as? String == "Taken")
+        tap("today.dose.BPC-157.toggle")
+        XCTAssertTrue(element("today.dose.BPC-157").value as? String == "Not logged", "A second tap undoes the log")
+
+        element("today.dose.Tirzepatide").tap()
+        let amount = app.textFields["dose.amount"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 4))
+        XCTAssertEqual(amount.value as? String, "Amount", "Setup never prefills a dose amount")
+        amount.tap(); amount.typeText("2.5")
+        app.buttons["Done"].firstMatch.tap()
+        tap("dose.site.abdomenLeft")
+        let note = element("dose.note")
+        reveal(note); note.tap(); note.typeText("First one. Felt fine.")
+        capture("dose-sheet")
+        tap("dose.save")
+        XCTAssertTrue(element("today.dose.Tirzepatide").waitForExistence(timeout: 4))
+        XCTAssertTrue(element("today.dose.Tirzepatide").label.contains("2.5"), element("today.dose.Tirzepatide").label)
+        XCTAssertTrue(element("today.dose.Tirzepatide").label.contains("L abdomen"))
+        XCTAssertEqual(element("today.dose.Tirzepatide").value as? String, "Taken")
+
+        element("today.dose.Tirzepatide").tap()
+        XCTAssertTrue(app.staticTexts["Last: L abdomen"].waitForExistence(timeout: 4) == false, "The record being edited is not its own last site")
+        app.buttons["dose.close"].tap()
+
+        tap("today.log-extra")
+        XCTAssertTrue(app.buttons["dose.peptide.BPC-157"].waitForExistence(timeout: 4))
+        app.buttons["dose.peptide.BPC-157"].tap()
+        capture("dose-extra")
+        tap("dose.save")
+        XCTAssertTrue(element("today.dose.BPC-157").waitForExistence(timeout: 4))
+
+        app.terminate()
+        launchSandbox(reset: false)
+        XCTAssertTrue(element("today.summary").waitForExistence(timeout: 8))
+        XCTAssertTrue(element("today.summary").label.contains("1"), "Logs persist across launches")
+    }
 }

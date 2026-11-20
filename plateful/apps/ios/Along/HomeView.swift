@@ -5,6 +5,7 @@ struct HomeView: View {
     @Environment(JournalStore.self) private var store
     @State private var selectedDay: String?
     @State private var feedback = 0
+    @State private var sheet: DoseSheet.Mode?
 
     private var today: String { store.todayKey }
     private var day: String { selectedDay ?? today }
@@ -24,10 +25,23 @@ struct HomeView: View {
                 }
                 doses
             }
-            .padding(.horizontal, 20).padding(.bottom, 32)
+            .padding(.horizontal, 20).padding(.bottom, 96)
         }
         .scrollIndicators(.hidden)
         .appBackground()
+        .overlay(alignment: .bottomTrailing) {
+            if !store.journal.protocolPeptides.isEmpty && !isFuture {
+                Button { sheet = .extra(dayKey: day) } label: {
+                    Image(systemName: "plus").font(.system(size: 22, weight: .semibold)).foregroundStyle(SetupTheme.inverseInk)
+                        .frame(width: 58, height: 58).background(SetupTheme.ink, in: Circle())
+                        .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
+                }
+                .buttonStyle(SetupPressStyle())
+                .accessibilityLabel("Log an extra dose").accessibilityIdentifier("today.log-extra")
+                .padding(.trailing, 20).padding(.bottom, 16)
+            }
+        }
+        .sheet(item: $sheet) { DoseSheet(mode: $0) }
         .sensoryFeedback(.success, trigger: feedback)
         .onChange(of: store.todayKey) { _, _ in selectedDay = nil }
     }
@@ -126,6 +140,7 @@ struct HomeView: View {
             } else {
                 ForEach(slots) { slot in
                     DoseRow(slot: slot, canLog: !isFuture, toggle: { toggle(slot) }, setStatus: { set(slot, $0) })
+                        .onTapGesture { if !isFuture { sheet = .slot(slot) } }
                 }
             }
         }
@@ -185,6 +200,11 @@ struct DoseRow: View {
                     .strikethrough(slot.isSkipped, color: SetupTheme.muted)
                 Text(slot.isSkipped ? "Skipped" : detail).font(.footnote).foregroundStyle(SetupTheme.muted)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityValue(slot.isTaken ? "Taken" : slot.isSkipped ? "Skipped" : "Not logged")
+            .accessibilityHint(canLog ? "Opens dose details" : "")
+            .accessibilityAddTraits(canLog ? .isButton : [])
+            .accessibilityIdentifier("today.dose.\(slot.peptide.name)")
             Spacer(minLength: 8)
             if canLog { checkButton }
         }
@@ -199,11 +219,7 @@ struct DoseRow: View {
                 if slot.log != nil { Button(role: .destructive) { setStatus(nil) } label: { Label("Clear", systemImage: "arrow.uturn.backward") } }
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(slot.peptide.name), \(slot.isSkipped ? "skipped" : detail)")
-        .accessibilityValue(slot.isTaken ? "Taken" : slot.isSkipped ? "Skipped" : "Not logged")
-        .accessibilityAction(named: slot.isTaken ? "Undo" : "Log dose") { toggle() }
-        .accessibilityIdentifier("today.dose.\(slot.peptide.name)")
+        .accessibilityElement(children: .contain)
     }
 
     private var checkButton: some View {
@@ -220,6 +236,7 @@ struct DoseRow: View {
             .contentShape(Circle())
         }
         .buttonStyle(SetupPressStyle())
+        .accessibilityLabel(slot.isTaken ? "Undo \(slot.peptide.name)" : "Log \(slot.peptide.name)")
         .accessibilityIdentifier("today.dose.\(slot.peptide.name).toggle")
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: slot.isTaken)
     }
