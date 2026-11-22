@@ -64,6 +64,7 @@ extension SetupStep {
         case .goals: "Goals"
         case .source: "Where did you hear about us"
         case .showcase: "Know what you took"
+        case .pinMap: "Pin site body map"
         case .birthday: "Date of birth"
         case .weight: "Current weight (weight goals only)"
         case .target: "Goal weight (weight goals only)"

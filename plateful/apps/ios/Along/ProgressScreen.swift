@@ -40,6 +40,7 @@ struct ProgressScreen: View {
                         PeptideReferenceChart(name: only.name)
                     }
                     batchSection
+                    siteMapSection
                     calendar
                     history
                     if showsWeight { weightSection }
@@ -156,6 +157,30 @@ struct ProgressScreen: View {
         if offset < 0 { return Color.red.opacity(0.85) }
         if offset <= 7 { return SetupTheme.ink }
         return SetupTheme.muted
+    }
+
+    private var siteMapSection: some View {
+        let heat = ProtocolSchedule.siteHeat(
+            logs: logs,
+            peptideID: selectedPeptide
+        )
+        return Group {
+            if heat.total > 0 {
+                VStack(alignment: .leading, spacing: 12) {
+                    AppSectionTitle(title: "Pin sites")
+                    Text("Recent logs by body region. Cooler spots are ones you’ve used less lately — rotate however you prefer.")
+                        .font(.caption).foregroundStyle(SetupTheme.muted)
+                    BodyMapView(
+                        selection: .constant(nil),
+                        heat: heat,
+                        interactive: false,
+                        autoRotate: true,
+                        accessibilityPrefix: "progress.site"
+                    )
+                }
+                .accessibilityIdentifier("progress.sites")
+            }
+        }
     }
 
     private var history: some View {

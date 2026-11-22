@@ -183,6 +183,14 @@ struct DoseSheet: View {
         }
     }
 
+    private var siteHeat: SiteHeat {
+        guard let peptideID else { return SiteHeat() }
+        return ProtocolSchedule.siteHeat(
+            logs: store.journal.protocolLogs.filter { $0.id != existing?.id },
+            peptideID: peptideID
+        )
+    }
+
     private var sitePicker: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
@@ -190,28 +198,9 @@ struct DoseSheet: View {
                 Spacer()
                 if let lastSite { Text("Last: \(lastSite.shortTitle)").font(.caption.weight(.medium)).foregroundStyle(SetupTheme.muted) }
             }
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                ForEach(InjectionSite.allCases) { item in
-                    Button { site = site == item ? nil : item } label: {
-                        HStack(spacing: 6) {
-                            Text(item.title).font(.system(.subheadline, weight: .medium)).lineLimit(1).minimumScaleFactor(0.85)
-                            Spacer(minLength: 0)
-                            if item == lastSite { Image(systemName: "clock.arrow.circlepath").font(.caption).foregroundStyle(site == item ? SetupTheme.inverseInk.opacity(0.7) : SetupTheme.muted) }
-                        }
-                        .foregroundStyle(site == item ? SetupTheme.inverseInk : SetupTheme.ink)
-                        .padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: 44)
-                        .background(site == item ? SetupTheme.ink : SetupTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(site == item ? SetupTheme.ink : SetupTheme.border))
-                        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                    .buttonStyle(SetupPressStyle())
-                    .accessibilityLabel(item.title + (item == lastSite ? ", used last time" : ""))
-                    .accessibilityAddTraits(site == item ? .isSelected : [])
-                    .accessibilityIdentifier("dose.site.\(item.rawValue)")
-                }
-            }
-            .sensoryFeedback(.selection, trigger: site)
-            Text("Optional. Along shows your last site so rotating is easy to keep track of.").font(.caption).foregroundStyle(SetupTheme.muted)
+            BodyMapView(selection: $site, heat: siteHeat, lastSite: lastSite, autoRotate: false, accessibilityPrefix: "dose.site")
+            Text("Optional. Heat shows where you’ve logged recently so you can rotate sites yourself — Along never picks one for you.")
+                .font(.caption).foregroundStyle(SetupTheme.muted)
         }
     }
 

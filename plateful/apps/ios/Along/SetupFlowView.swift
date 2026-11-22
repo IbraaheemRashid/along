@@ -186,6 +186,7 @@ struct SetupFlowView: View {
         case .goals: goalsScreen
         case .source: sourceScreen
         case .showcase: showcaseScreen
+        case .pinMap: pinMapScreen
         case .birthday: birthdayScreen
         case .weight: weightScreen
         case .target: targetScreen
@@ -249,6 +250,15 @@ struct SetupFlowView: View {
     private var showcaseScreen: some View {
         SetupQuestionPage(title: "Know exactly what you took, and when", subtitle: "Log each dose in one tap: the peptide, the amount and the time. Your whole week, at a glance.") {
             SetupWeekCard(pattern: [true, true, false, true, true, false, true], animated: !reduceMotion, footnote: "Next · BPC-157, tomorrow at 8:00")
+        }
+    }
+
+    private var pinMapScreen: some View {
+        SetupQuestionPage(
+            title: "Rotate pin sites with a body map",
+            subtitle: "Tap a region when you log a dose. Heat builds from your own history so you can see which spots you’ve used lately — Along never chooses a site for you."
+        ) {
+            PinMapOnboardingDemo(reduceMotion: reduceMotion)
         }
     }
 

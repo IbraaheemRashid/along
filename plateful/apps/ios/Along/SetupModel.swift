@@ -1,7 +1,7 @@
 import Foundation
 
 enum SetupStep: String, Codable, CaseIterable, Identifiable {
-    case welcome, experience, goals, source, showcase, birthday, weight, target, commitment
+    case welcome, experience, goals, source, showcase, pinMap, birthday, weight, target, commitment
     case compounds, frequency, doseTime, obstacles, trust, reminders, referral, ready, building, plan, paywall
     var id: String { rawValue }
 

@@ -41,6 +41,44 @@ enum InjectionSite: String, Codable, CaseIterable, Identifiable {
         case .gluteRight: "R glute"
         }
     }
+
+    /// Front-facing silhouette for abdomen/thigh/arm; back for glutes.
+    var isBack: Bool {
+        switch self {
+        case .gluteLeft, .gluteRight: true
+        default: false
+        }
+    }
+
+    /// Unit coordinates on the body silhouette (0…1 within the figure frame).
+    var bodyPoint: CGPoint {
+        switch self {
+        case .armLeft: CGPoint(x: 0.16, y: 0.34)
+        case .armRight: CGPoint(x: 0.84, y: 0.34)
+        case .abdomenLeft: CGPoint(x: 0.38, y: 0.46)
+        case .abdomenRight: CGPoint(x: 0.62, y: 0.46)
+        case .gluteLeft: CGPoint(x: 0.38, y: 0.54)
+        case .gluteRight: CGPoint(x: 0.62, y: 0.54)
+        case .thighLeft: CGPoint(x: 0.40, y: 0.72)
+        case .thighRight: CGPoint(x: 0.60, y: 0.72)
+        }
+    }
+}
+
+/// How often each site appears in recent logs — tracking heat only.
+struct SiteHeat: Equatable {
+    var counts: [InjectionSite: Int] = [:]
+    var lastUsed: [InjectionSite: Date] = [:]
+
+    var total: Int { counts.values.reduce(0, +) }
+
+    func count(for site: InjectionSite) -> Int { counts[site] ?? 0 }
+
+    /// 0…1 relative intensity for visualisation. Unused sites stay cool.
+    func intensity(for site: InjectionSite) -> Double {
+        guard let max = counts.values.max(), max > 0 else { return 0 }
+        return Double(counts[site] ?? 0) / Double(max)
+    }
 }
 
 struct DoseTime: Codable, Hashable, Comparable, Identifiable {
@@ -305,13 +343,28 @@ enum ProtocolSchedule {
         return nil
     }
 
-    /// The most recent site used for this peptide, to support rotation.
+    /// The most recent site used for this peptide, to support rotation tracking.
     static func lastSite(for peptideID: UUID, logs: [DoseLog]) -> InjectionSite? {
         logs.filter { $0.peptideID == peptideID && $0.status == .taken && $0.site != nil }
             .max { $0.takenAt < $1.takenAt }?.site
     }
 
-    /// A site different from the last one, cycling through the standard order.
+    /// Relative site use for heat maps. Optional peptide filter; taken logs with a site only.
+    static func siteHeat(logs: [DoseLog], peptideID: UUID? = nil, limit: Int = 40) -> SiteHeat {
+        let filtered = logs
+            .filter { $0.status == .taken && $0.site != nil && (peptideID == nil || $0.peptideID == peptideID) }
+            .sorted { $0.takenAt > $1.takenAt }
+            .prefix(limit)
+        var heat = SiteHeat()
+        for log in filtered {
+            guard let site = log.site else { continue }
+            heat.counts[site, default: 0] += 1
+            if heat.lastUsed[site] == nil { heat.lastUsed[site] = log.takenAt }
+        }
+        return heat
+    }
+
+    /// Cycles sample data through sites. Not shown as a medical recommendation in UI.
     static func suggestedSite(after last: InjectionSite?) -> InjectionSite {
         guard let last, let index = InjectionSite.allCases.firstIndex(of: last) else { return .abdomenLeft }
         return InjectionSite.allCases[(index + 1) % InjectionSite.allCases.count]

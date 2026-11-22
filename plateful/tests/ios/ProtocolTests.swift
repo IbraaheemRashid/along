@@ -74,6 +74,9 @@ import Foundation
         expect(ProtocolSchedule.lastSite(for: daily.id, logs: logs) == .abdomenLeft, "The last injection site is remembered")
         expect(ProtocolSchedule.suggestedSite(after: .abdomenLeft) == .abdomenRight && ProtocolSchedule.suggestedSite(after: .gluteRight) == .abdomenLeft, "Site rotation cycles through every site")
         expect(ProtocolSchedule.suggestedSite(after: nil) == .abdomenLeft, "The first site defaults to the start of the cycle")
+        let heat = ProtocolSchedule.siteHeat(logs: logs, peptideID: daily.id)
+        expect(heat.count(for: .abdomenLeft) == 1 && heat.intensity(for: .abdomenLeft) == 1, "Site heat reflects logged pin locations")
+        expect(InjectionSite.gluteLeft.isBack && !InjectionSite.abdomenLeft.isBack, "Glute sites sit on the back face of the body map")
 
         expect(!DoseLog(peptideID: daily.id, dayKey: "2026-11-09", takenAt: now).isValid(now: now), "Future dose days are rejected")
         expect(!DoseLog(peptideID: daily.id, dayKey: "2026-11-04", takenAt: now, note: String(repeating: "a", count: 501)).isValid(now: now), "Oversized dose notes are rejected")
