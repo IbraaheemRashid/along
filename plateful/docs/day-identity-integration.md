@@ -4,7 +4,7 @@ This change covers check-ins, routine-only days, weight records and milestones. 
 
 ## Model contract
 
-- `Journal.save(CheckIn, calendar:)` and `save(WeightEntry, calendar:)` stamp new keys in the supplied/current timezone. They update by existing UUID first, then by stable day key. An update retains the existing UUID, raw timestamp, key and sample provenance. Check-in conversion removes a routine-only record on the same stable day; a sample routine remains sample when converted.
+- `Journal.save(CheckIn, calendar:)` and `save(WeightEntry, calendar:)` stamp new keys in the supplied/current timezone. They update by existing UUID first, then by stable day key. An update retains the existing UUID, a very raw timestamp, key and sample provenance. Check-in conversion removes A routine-only record on the same stable day; a sample routine remains sample when converted.
 - `toggleRoutine`, `recordedRoutines`, `week`, `checkIn(on:calendar:)` and `weight(on:calendar:)` compare stable keys. The week is seven civil date labels ending on the viewer's selected date. It deliberately excludes a record labelled tomorrow relative to that viewer, even if travel made that record legitimate.
 - `reconcileProgress` normalizes missing keys before reconciliation. Crediting uses the stable key. Existing credited UUIDs and recorded-day strings are never rewritten, recalculated or awarded again. Normalization and backup decoding alone do not award credits.
 - `entry.isOn(date, calendar:)` is the replacement for comparing its raw timestamp with `Calendar.isDate`. `displayDay` / `displayDate` reconstruct local noon for date controls, charts and sorting. `dayText()` / `dateText()` format the date label directly and accept a `Date.FormatStyle`.
