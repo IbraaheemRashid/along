@@ -18,6 +18,7 @@ import UserNotifications
     private var stateRevision = 0
     /// Last peptide sources used for scheduling, so protocol edits can refresh.
     private var sources: [DoseReminderSource] = []
+    private var batchExpiries: [BatchExpiryReminderSource] = []
 
     init(defaults: UserDefaults = .standard, client: (any ReminderClient)? = nil,
          deliveryEnabled: Bool = true, arguments: [String] = ProcessInfo.processInfo.arguments) {
@@ -71,15 +72,19 @@ import UserNotifications
 
     /// Update the peptide sources used for planning. When reminders are already
     /// on, reschedules without prompting again.
-    @discardableResult func sync(sources: [DoseReminderSource]) async -> Bool {
+    @discardableResult func sync(sources: [DoseReminderSource],
+                                 batchExpiries: [BatchExpiryReminderSource] = []) async -> Bool {
         self.sources = sources
+        self.batchExpiries = batchExpiries
         guard deliveryEnabled, preferences.isEnabled, readablePreferences else { return preferences.isEnabled }
-        return await save(preferences, sources: sources)
+        return await save(preferences, sources: sources, batchExpiries: batchExpiries)
     }
 
     /// Invoke only from an explicit user action, such as Save reminders.
-    @discardableResult func save(_ requested: ReminderPreferences, sources: [DoseReminderSource]? = nil) async -> Bool {
+    @discardableResult func save(_ requested: ReminderPreferences, sources: [DoseReminderSource]? = nil,
+                                 batchExpiries: [BatchExpiryReminderSource]? = nil) async -> Bool {
         if let sources { self.sources = sources }
+        if let batchExpiries { self.batchExpiries = batchExpiries }
         guard deliveryEnabled else {
             message = "This preview cannot request permission or deliver reminders. Your device’s existing reminders are unchanged."
             return false
@@ -118,14 +123,14 @@ import UserNotifications
             message = "Notifications are off. You can allow them in iOS Settings, then return here and save your choices."
             return false
         }
-        let schedules = ReminderPlanner.schedules(for: requested, sources: self.sources)
+        let schedules = ReminderPlanner.schedules(for: requested, sources: self.sources, batchExpiries: self.batchExpiries)
         guard !schedules.isEmpty else {
             await client.removeAllAlongReminders()
             scheduledIDs = []
             persist(requested)
-            message = self.sources.isEmpty
+            message = self.sources.isEmpty && self.batchExpiries.isEmpty
                 ? "Reminders are on. Add a peptide to your protocol and they’ll schedule themselves."
-                : "No upcoming dose times could be scheduled. Check each peptide’s schedule."
+                : "No upcoming dose times or batch dates could be scheduled."
             return true
         }
         do {
@@ -152,6 +157,7 @@ import UserNotifications
     /// Call when the person explicitly deletes all local app data.
     @discardableResult func reset() async -> Bool {
         sources = []
+        batchExpiries = []
         let succeeded = await save(ReminderPreferences())
         if succeeded { defaults.removeObject(forKey: storageKey); hasSavedPreferences = false }
         return succeeded
@@ -170,7 +176,8 @@ import UserNotifications
     }
 
     static func isAlongReminder(_ id: String) -> Bool {
-        id.hasPrefix(ReminderPlanner.idPrefix) || ReminderPlanner.legacyIDs.contains(id)
+        id.hasPrefix(ReminderPlanner.idPrefix) || id.hasPrefix(ReminderPlanner.batchPrefix)
+            || ReminderPlanner.legacyIDs.contains(id)
     }
 }
 

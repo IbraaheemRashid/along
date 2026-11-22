@@ -12,8 +12,16 @@ extension TrackedPeptide {
         return DoseReminderSource(id: id.uuidString.lowercased(), name: name, amountText: amountText,
                                   cadence: cadence, times: schedule.sortedTimes.map { DoseReminderSource.Time(hour: $0.hour, minute: $0.minute) })
     }
+
+    var batchExpiryReminderSource: BatchExpiryReminderSource? {
+        guard let batchExpiryKey, DayIdentity.isValid(batchExpiryKey) else { return nil }
+        return BatchExpiryReminderSource(id: id.uuidString.lowercased(), name: name, expiryKey: batchExpiryKey)
+    }
 }
 
 extension Journal {
     var reminderSources: [DoseReminderSource] { protocolPeptides.compactMap(\.reminderSource) }
+    var batchExpiryReminderSources: [BatchExpiryReminderSource] {
+        protocolPeptides.compactMap(\.batchExpiryReminderSource)
+    }
 }

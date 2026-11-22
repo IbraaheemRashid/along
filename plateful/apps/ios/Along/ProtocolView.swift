@@ -80,6 +80,9 @@ struct PeptideCard: View {
                         .font(.footnote).foregroundStyle(SetupTheme.muted)
                     Text(peptide.isPaused ? "Paused" : peptide.schedule.timesSummary)
                         .font(.footnote).foregroundStyle(SetupTheme.muted)
+                    if let expiry = peptide.batchExpirySummary {
+                        Text(expiry).font(.footnote.weight(.medium)).foregroundStyle(SetupTheme.ink.opacity(0.7))
+                    }
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(SetupTheme.muted)

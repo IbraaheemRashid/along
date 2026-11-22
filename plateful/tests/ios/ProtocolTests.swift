@@ -35,6 +35,14 @@ import Foundation
         expect(!TrackedPeptide(name: "  ", startKey: "2026-11-01").isValid, "Blank names are rejected")
         expect(!TrackedPeptide(name: "X", amount: -1, startKey: "2026-11-01").isValid && !TrackedPeptide(name: "X", amount: .nan, startKey: "2026-11-01").isValid, "Invalid amounts are rejected")
         expect(!TrackedPeptide(name: "X", startKey: "2026-13-01").isValid, "Invalid start dates are rejected")
+        var withBatch = TrackedPeptide(name: "BPC-157", startKey: "2026-11-01")
+        withBatch.batchExpiryKey = "2026-12-01"
+        expect(withBatch.isValid && withBatch.batchExpiryOffset(from: "2026-11-04") == 27, "Batch expiry is tracked as a civil day offset")
+        withBatch.batchExpiryKey = "2026-13-40"
+        expect(!withBatch.isValid, "Invalid batch expiry keys are rejected")
+        let ref = Peptide.reference(for: "Semaglutide")
+        expect(ref.researchAttention >= 90 && Peptide.reference(for: "Unknown blend").practicalUse <= 40, "Reference bands cover known and custom peptides")
+        expect(PeptideReference.disclaimer.lowercased().contains("not medical advice"), "Reference copy stays non-clinical")
 
         // Slots, adherence and next dose
         let peptides = [daily, weekly, interval, paused]

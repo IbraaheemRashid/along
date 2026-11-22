@@ -34,6 +34,12 @@ struct ProgressScreen: View {
                     empty
                 } else {
                     adherenceCards
+                    if let selected = selectedPeptide.flatMap(store.peptide) {
+                        PeptideReferenceChart(name: selected.name)
+                    } else if peptides.count == 1, let only = peptides.first {
+                        PeptideReferenceChart(name: only.name)
+                    }
+                    batchSection
                     calendar
                     history
                     if showsWeight { weightSection }
@@ -106,6 +112,50 @@ struct ProgressScreen: View {
         .background(SetupTheme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(SetupTheme.border))
         .accessibilityIdentifier("progress.calendar")
+    }
+
+    private var batchSection: some View {
+        let batches = peptides.filter { $0.batchExpiryKey != nil }
+        return Group {
+            if !batches.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    AppSectionTitle(title: "Batch expiry")
+                    ForEach(batches) { peptide in
+                        let offset = peptide.batchExpiryOffset(from: today)
+                        AppCard {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(peptide.name).font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
+                                    Text(peptide.batchExpirySummary ?? "")
+                                        .font(.caption).foregroundStyle(SetupTheme.muted)
+                                }
+                                Spacer()
+                                Text(batchLabel(offset))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(batchColor(offset))
+                            }
+                        }
+                    }
+                }
+                .accessibilityIdentifier("progress.batches")
+            }
+        }
+    }
+
+    private func batchLabel(_ offset: Int?) -> String {
+        guard let offset else { return "" }
+        if offset > 1 { return "In \(offset) days" }
+        if offset == 1 { return "Tomorrow" }
+        if offset == 0 { return "Today" }
+        if offset == -1 { return "Yesterday" }
+        return "\(abs(offset)) days ago"
+    }
+
+    private func batchColor(_ offset: Int?) -> Color {
+        guard let offset else { return SetupTheme.muted }
+        if offset < 0 { return Color.red.opacity(0.85) }
+        if offset <= 7 { return SetupTheme.ink }
+        return SetupTheme.muted
     }
 
     private var history: some View {

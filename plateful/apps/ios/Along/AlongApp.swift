@@ -72,9 +72,10 @@ struct RootView: View {
                 _ = await attribution.capture(from: store.journal.setupProfile ?? store.setup)
             }
         }
-        .task(id: store.journal.protocolPeptides.map(\.id)) {
+        .task(id: store.journal.protocolPeptides.map { "\($0.id.uuidString)|\($0.batchExpiryKey ?? "")|\($0.isPaused)" }) {
             if reminders.preferences.isEnabled {
-                _ = await reminders.sync(sources: store.journal.reminderSources)
+                _ = await reminders.sync(sources: store.journal.reminderSources,
+                                        batchExpiries: store.journal.batchExpiryReminderSources)
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -84,7 +85,8 @@ struct RootView: View {
                     await billing.refresh()
                     await reminders.refresh()
                     if reminders.preferences.isEnabled {
-                        _ = await reminders.sync(sources: store.journal.reminderSources)
+                        _ = await reminders.sync(sources: store.journal.reminderSources,
+                                                batchExpiries: store.journal.batchExpiryReminderSources)
                     }
                 }
             }

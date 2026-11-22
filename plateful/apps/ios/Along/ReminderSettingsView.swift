@@ -9,17 +9,20 @@ struct ReminderSettingsView: View {
     @State private var loaded = false
 
     private var sources: [DoseReminderSource] { store.journal.reminderSources }
-    private var planned: [ReminderSchedule] { ReminderPlanner.schedules(for: draft, sources: sources) }
+    private var batches: [BatchExpiryReminderSource] { store.journal.batchExpiryReminderSources }
+    private var planned: [ReminderSchedule] {
+        ReminderPlanner.schedules(for: draft, sources: sources, batchExpiries: batches)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Along can remind you at each dose time. Notifications show the peptide name and amount only — never notes or injection sites.")
+            Text("Along can remind you at each dose time and before a batch expiry you set. Notifications show the peptide name and amount only — never notes, sites, or dosing advice.")
                 .font(.subheadline).foregroundStyle(SetupTheme.muted)
 
             Toggle(isOn: $draft.enabled) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Dose reminders").font(.system(.body, weight: .semibold)).foregroundStyle(SetupTheme.ink)
-                    Text("Uses the schedules in your protocol.").font(.caption).foregroundStyle(SetupTheme.muted)
+                    Text("Dose & batch reminders").font(.system(.body, weight: .semibold)).foregroundStyle(SetupTheme.ink)
+                    Text("Uses schedules and batch dates in your protocol.").font(.caption).foregroundStyle(SetupTheme.muted)
                 }
             }
             .tint(SetupTheme.ink)
@@ -27,7 +30,7 @@ struct ReminderSettingsView: View {
             .accessibilityIdentifier("reminders.enabled")
 
             if draft.enabled {
-                if sources.isEmpty {
+                if sources.isEmpty && batches.isEmpty {
                     Text("Add an active peptide in Protocol to choose reminder times.")
                         .font(.caption).foregroundStyle(SetupTheme.muted)
                 } else {
@@ -39,6 +42,13 @@ struct ReminderSettingsView: View {
                                 Spacer()
                                 Text(source.amountText ?? source.times.map(timeText).joined(separator: " · "))
                                     .font(.caption).foregroundStyle(SetupTheme.muted)
+                            }
+                        }
+                        ForEach(batches, id: \.id) { batch in
+                            HStack {
+                                Text(batch.name).font(.subheadline.weight(.medium)).foregroundStyle(SetupTheme.ink)
+                                Spacer()
+                                Text("Batch · \(batch.expiryKey)").font(.caption).foregroundStyle(SetupTheme.muted)
                             }
                         }
                         if planned.count >= ReminderPlanner.maximumSchedules {
@@ -68,7 +78,7 @@ struct ReminderSettingsView: View {
 
             SetupPrimaryButton(title: reminders.isBusy ? "Saving…" : "Save reminders", symbol: "bell",
                                enabled: !reminders.isBusy && reminders.deliveryEnabled, identifier: "reminders.save") {
-                Task { await reminders.save(draft, sources: sources) }
+                Task { await reminders.save(draft, sources: sources, batchExpiries: batches) }
             }
             .opacity(reminders.deliveryEnabled ? 1 : 0.5)
 
@@ -85,19 +95,25 @@ struct ReminderSettingsView: View {
             }
             await reminders.refresh()
             if reminders.preferences.isEnabled {
-                _ = await reminders.sync(sources: sources)
+                _ = await reminders.sync(sources: sources, batchExpiries: batches)
             }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 Task {
                     await reminders.refresh()
-                    if reminders.preferences.isEnabled { _ = await reminders.sync(sources: sources) }
+                    if reminders.preferences.isEnabled {
+                        _ = await reminders.sync(sources: sources, batchExpiries: batches)
+                    }
                 }
             }
         }
         .onChange(of: store.journal.protocolPeptides) { _, _ in
-            Task { if reminders.preferences.isEnabled { _ = await reminders.sync(sources: sources) } }
+            Task {
+                if reminders.preferences.isEnabled {
+                    _ = await reminders.sync(sources: sources, batchExpiries: batches)
+                }
+            }
         }
     }
 

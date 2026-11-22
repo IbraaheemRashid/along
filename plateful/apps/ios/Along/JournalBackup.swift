@@ -272,7 +272,10 @@ struct JournalBackup: Codable, Equatable {
         if let raw = content["peptides"] {
             guard let entries = raw as? [Any], entries.count <= TrackedPeptide.limit else { throw Failure.invalidArchive }
             for entry in entries {
-                let peptide = try object(entry, required: ["id", "name", "unit", "schedule", "startKey", "isPaused", "note", "isSample"], optional: ["amount"])
+                let peptide = try object(entry, required: ["id", "name", "unit", "schedule", "startKey", "isPaused", "note", "isSample"], optional: ["amount", "batchExpiryKey"])
+                if let rawKey = peptide["batchExpiryKey"] {
+                    guard let key = rawKey as? String, DayIdentity.isValid(key) else { throw Failure.invalidArchive }
+                }
                 let schedule = try object(peptide["schedule"], required: ["kind", "weekdays", "intervalDays", "times"])
                 guard let weekdays = schedule["weekdays"] as? [Int], Set(weekdays).count == weekdays.count,
                       let times = schedule["times"] as? [Any] else { throw Failure.invalidArchive }

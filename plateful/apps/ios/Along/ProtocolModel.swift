@@ -129,12 +129,27 @@ struct TrackedPeptide: Codable, Identifiable, Equatable {
     var isPaused = false
     var note = ""
     var isSample = false
+    /// Optional vial / batch expiry as a civil day key. Tracking only.
+    var batchExpiryKey: String?
 
     var category: String { Peptide.category(for: name) }
+    var reference: PeptideReference { Peptide.reference(for: name) }
 
     var amountText: String? {
         guard let amount else { return nil }
         return "\(amount.formatted(.number.precision(.fractionLength(0...3)))) \(unit.title)"
+    }
+
+    /// Days until (positive) or since (negative) batch expiry. Nil when unset.
+    func batchExpiryOffset(from dayKey: String) -> Int? {
+        guard let batchExpiryKey, DayIdentity.isValid(batchExpiryKey),
+              let days = ProtocolSchedule.days(from: dayKey, to: batchExpiryKey) else { return nil }
+        return days
+    }
+
+    var batchExpirySummary: String? {
+        guard let batchExpiryKey else { return nil }
+        return "Batch · \(DayIdentity.formatted(key: batchExpiryKey, rawDate: .now, style: .dateTime.day().month(.abbreviated).year()))"
     }
 
     var isValid: Bool {
@@ -142,6 +157,7 @@ struct TrackedPeptide: Codable, Identifiable, Equatable {
             && JournalValidation.text(note, limit: Self.noteLimit)
             && DayIdentity.isValid(startKey) && schedule.isValid
             && amount.map { $0.isFinite && $0 > 0 && $0 <= Self.maximumAmount } ?? true
+            && (batchExpiryKey.map(DayIdentity.isValid) ?? true)
     }
 }
 

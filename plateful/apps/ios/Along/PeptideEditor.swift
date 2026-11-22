@@ -27,6 +27,8 @@ struct PeptideEditor: View {
     @State private var intervalDays = 2
     @State private var times: [DoseTime] = [DoseTime(hour: 8, minute: 0)]
     @State private var startDate = Date.now
+    @State private var tracksBatchExpiry = false
+    @State private var batchExpiryDate = Date.now
     @State private var note = ""
     @State private var isPaused = false
     @State private var confirmRemove = false
@@ -59,12 +61,16 @@ struct PeptideEditor: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     if editing == nil { namePicker } else { nameField }
+                    if !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        PeptideReferenceChart(name: name)
+                    }
                     amountField
                     scheduleKind
                     if kind == .weekdays { weekdayPicker }
                     if kind == .interval { intervalPicker }
                     timesPicker
                     startPicker
+                    batchExpiryField
                     noteField
                     if editing != nil {
                         pauseToggle
@@ -304,6 +310,28 @@ struct PeptideEditor: View {
         }
     }
 
+    private var batchExpiryField: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle(isOn: $tracksBatchExpiry) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Track batch expiry").font(.system(.body, weight: .semibold)).foregroundStyle(SetupTheme.ink)
+                    Text("Optional. Along can remind you before the date you set — never what to dose.")
+                        .font(.caption).foregroundStyle(SetupTheme.muted)
+                }
+            }
+            .tint(SetupTheme.ink)
+            .accessibilityIdentifier("peptide.batch.toggle")
+            if tracksBatchExpiry {
+                HStack {
+                    label("Expires")
+                    Spacer()
+                    DatePicker("Expires", selection: $batchExpiryDate, displayedComponents: .date)
+                        .labelsHidden().accessibilityIdentifier("peptide.batch.expiry")
+                }
+            }
+        }
+    }
+
     private var noteField: some View {
         VStack(alignment: .leading, spacing: 10) {
             label("Note")
@@ -367,6 +395,13 @@ struct PeptideEditor: View {
         intervalDays = peptide.schedule.intervalDays
         times = peptide.schedule.sortedTimes
         startDate = DayIdentity.date(for: peptide.startKey) ?? .now
+        if let key = peptide.batchExpiryKey, let date = DayIdentity.date(for: key) {
+            tracksBatchExpiry = true
+            batchExpiryDate = date
+        } else {
+            tracksBatchExpiry = false
+            batchExpiryDate = Calendar.current.date(byAdding: .month, value: 3, to: .now) ?? .now
+        }
         note = peptide.note
         isPaused = peptide.isPaused
     }
@@ -379,6 +414,7 @@ struct PeptideEditor: View {
         peptide.unit = unit
         peptide.schedule = schedule
         peptide.startKey = startKey
+        peptide.batchExpiryKey = tracksBatchExpiry ? DayIdentity.key(for: batchExpiryDate) : nil
         peptide.note = note
         peptide.isPaused = isPaused
         if store.savePeptide(peptide) {

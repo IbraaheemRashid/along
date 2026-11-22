@@ -67,6 +67,14 @@ import Foundation
         expect(oneshots.count == ReminderPlanner.intervalHorizon && oneshots.allSatisfy { !$0.repeats }, "Interval peptides pre-schedule upcoming one-shot reminders")
         expect(oneshots.first?.dateComponents.hour == 9 && oneshots.first?.dateComponents.minute == 30, "Interval reminders keep the chosen clock time")
 
+        let batch = BatchExpiryReminderSource(id: "batch-a", name: "BPC-157", expiryKey: "2026-01-10")
+        let batchPlans = ReminderPlanner.schedules(for: preferences, batchExpiries: [batch], now: now, calendar: calendar)
+        expect(batchPlans.count == 3 && batchPlans.allSatisfy { !$0.repeats }, "Batch expiry schedules lead days before the marked date")
+        expect(batchPlans.allSatisfy { $0.id.hasPrefix(ReminderPlanner.batchPrefix) }, "Batch reminder IDs stay in their own namespace")
+        expect(batchPlans.allSatisfy { $0.dateComponents.hour == ReminderPlanner.batchHour }, "Batch reminders fire at the fixed morning hour")
+        let batchCopy = batchPlans.map { $0.title + " " + $0.body }.joined(separator: " ").lowercased()
+        expect(batchCopy.contains("batch") && !batchCopy.contains("dose"), "Batch copy talks about the vial date, not dosing")
+
         // Cap under iOS's 64 pending-notification limit.
         let many = (0..<40).map { DoseReminderSource(id: "p\($0)", name: "P\($0)", amountText: nil, cadence: .weekdays(Set(1...7)), times: [.init(hour: 8, minute: 0)]) }
         expect(ReminderPlanner.schedules(for: preferences, sources: many).count == ReminderPlanner.maximumSchedules, "Planner never exceeds the reserved notification budget")

@@ -74,6 +74,14 @@ struct DoseReminderSource: Equatable {
     var times: [Time]
 }
 
+/// One tracked batch expiry. Fires a few one-shot reminders before the day —
+/// tracking only, never dosing advice.
+struct BatchExpiryReminderSource: Equatable {
+    var id: String
+    var name: String
+    var expiryKey: String
+}
+
 struct ReminderSchedule: Equatable, Identifiable {
     var id: String
     var title: String
@@ -100,18 +108,35 @@ struct ReminderSchedule: Equatable, Identifiable {
 
 enum ReminderPlanner {
     static let idPrefix = "along.reminder.dose."
+    static let batchPrefix = "along.reminder.batch."
     static let legacyIDs = ["along.reminder.daily", "along.reminder.weekly"] + (1...7).map { "along.reminder.daily.\($0)" }
     /// Leave headroom under iOS's 64 pending-notification limit.
     static let maximumSchedules = 60
     /// How many upcoming interval doses to pre-schedule as one-shots.
     static let intervalHorizon = 14
+    /// Lead times (in days before expiry) for batch reminders, morning local time.
+    static let batchLeadDays = [7, 1, 0]
+    static let batchHour = 9
+    static let batchMinute = 0
 
     static func copy(for source: DoseReminderSource) -> (title: String, body: String) {
         let title = source.amountText.map { "\(source.name) · \($0)" } ?? source.name
         return (title, "Time for your dose, whenever you’re ready.")
     }
 
+    static func copy(for batch: BatchExpiryReminderSource, daysBefore: Int) -> (title: String, body: String) {
+        let title = "\(batch.name) · batch"
+        let body: String
+        switch daysBefore {
+        case 0: body = "This batch is marked as expiring today."
+        case 1: body = "This batch is marked as expiring tomorrow."
+        default: body = "This batch is marked as expiring in \(daysBefore) days."
+        }
+        return (title, body)
+    }
+
     static func schedules(for preferences: ReminderPreferences, sources: [DoseReminderSource] = [],
+                          batchExpiries: [BatchExpiryReminderSource] = [],
                           now: Date = .now, calendar: Calendar = .current) -> [ReminderSchedule] {
         guard preferences.isEnabled, preferences.isValid else { return [] }
         var result: [ReminderSchedule] = []
@@ -137,7 +162,31 @@ enum ReminderPlanner {
             }
             if result.count >= maximumSchedules { break }
         }
+        if result.count < maximumSchedules {
+            result.append(contentsOf: batchSchedules(batchExpiries, now: now, calendar: calendar, room: maximumSchedules - result.count))
+        }
         if result.count > maximumSchedules { return Array(result.prefix(maximumSchedules)) }
+        return result
+    }
+
+    private static func batchSchedules(_ batches: [BatchExpiryReminderSource], now: Date, calendar: Calendar, room: Int) -> [ReminderSchedule] {
+        guard room > 0 else { return [] }
+        var result: [ReminderSchedule] = []
+        for batch in batches {
+            guard let expiry = date(for: batch.expiryKey, calendar: calendar) else { continue }
+            for lead in batchLeadDays {
+                guard let fireDay = calendar.date(byAdding: .day, value: -lead, to: expiry),
+                      let moment = calendar.date(bySettingHour: batchHour, minute: batchMinute, second: 0, of: fireDay),
+                      moment > now else { continue }
+                let parts = calendar.dateComponents([.year, .month, .day], from: moment)
+                let copy = Self.copy(for: batch, daysBefore: lead)
+                result.append(ReminderSchedule(id: "\(batchPrefix)\(batch.id).d\(lead)",
+                                               title: copy.title, body: copy.body,
+                                               year: parts.year, month: parts.month, day: parts.day,
+                                               hour: batchHour, minute: batchMinute, repeats: false))
+                if result.count >= room { return result }
+            }
+        }
         return result
     }
 

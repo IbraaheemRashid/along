@@ -134,6 +134,23 @@ enum SetupObstacle: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// Public-catalogue reference signals for a peptide. Tracking context only —
+/// never dosing guidance, efficacy claims, or medical advice.
+struct PeptideReference: Equatable {
+    /// Relative research-mention interest (0…100).
+    var researchAttention: Int
+    /// Relative published-study volume band (0…100).
+    var studyVolume: Int
+    /// Relative practical tracking interest in community catalogues (0…100).
+    var practicalUse: Int
+
+    var points: [(label: String, value: Int)] {
+        [("Research", researchAttention), ("Studies", studyVolume), ("Tracking", practicalUse)]
+    }
+
+    static let disclaimer = "Reference signals from public catalogues for context only. Not medical advice, efficacy claims, or dosing guidance."
+}
+
 struct Peptide: Identifiable, Hashable {
     let name: String
     let category: String
@@ -227,6 +244,53 @@ struct Peptide: Identifiable, Hashable {
             $0.name.localizedCaseInsensitiveContains(q) || $0.category.localizedCaseInsensitiveContains(q)
         }
     }
+
+    /// Curated reference bands for known names; category defaults otherwise.
+    static func reference(for name: String) -> PeptideReference {
+        let key = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let known = referenceTable[key] { return known }
+        return categoryDefaults[category(for: name)] ?? PeptideReference(researchAttention: 35, studyVolume: 30, practicalUse: 35)
+    }
+
+    private static let referenceTable: [String: PeptideReference] = [
+        "semaglutide": .init(researchAttention: 96, studyVolume: 94, practicalUse: 92),
+        "tirzepatide": .init(researchAttention: 94, studyVolume: 90, practicalUse: 93),
+        "retatrutide": .init(researchAttention: 82, studyVolume: 70, practicalUse: 78),
+        "liraglutide": .init(researchAttention: 88, studyVolume: 92, practicalUse: 70),
+        "dulaglutide": .init(researchAttention: 80, studyVolume: 85, practicalUse: 62),
+        "bpc-157": .init(researchAttention: 72, studyVolume: 48, practicalUse: 88),
+        "tb-500": .init(researchAttention: 58, studyVolume: 36, practicalUse: 80),
+        "ghk-cu": .init(researchAttention: 64, studyVolume: 52, practicalUse: 76),
+        "ipamorelin": .init(researchAttention: 60, studyVolume: 44, practicalUse: 74),
+        "cjc-1295": .init(researchAttention: 55, studyVolume: 40, practicalUse: 70),
+        "cjc-1295 dac": .init(researchAttention: 52, studyVolume: 38, practicalUse: 66),
+        "tesamorelin": .init(researchAttention: 70, studyVolume: 68, practicalUse: 58),
+        "mots-c": .init(researchAttention: 62, studyVolume: 50, practicalUse: 64),
+        "epitalon": .init(researchAttention: 48, studyVolume: 34, practicalUse: 60),
+        "epithalon": .init(researchAttention: 48, studyVolume: 34, practicalUse: 60),
+        "pt-141": .init(researchAttention: 68, studyVolume: 60, practicalUse: 72),
+        "semax": .init(researchAttention: 50, studyVolume: 42, practicalUse: 58),
+        "selank": .init(researchAttention: 46, studyVolume: 38, practicalUse: 54),
+        "ss-31": .init(researchAttention: 66, studyVolume: 55, practicalUse: 60),
+        "thymosin alpha-1": .init(researchAttention: 74, studyVolume: 72, practicalUse: 56),
+        "nad+": .init(researchAttention: 78, studyVolume: 70, practicalUse: 82),
+        "mk-677": .init(researchAttention: 58, studyVolume: 45, practicalUse: 76),
+    ]
+
+    private static let categoryDefaults: [String: PeptideReference] = [
+        "GLP-1": .init(researchAttention: 85, studyVolume: 80, practicalUse: 78),
+        "GLP-1 / GIP": .init(researchAttention: 88, studyVolume: 82, practicalUse: 84),
+        "GLP-1 / GIP / GCG": .init(researchAttention: 80, studyVolume: 68, practicalUse: 76),
+        "GLP-1 / GCG": .init(researchAttention: 78, studyVolume: 70, practicalUse: 72),
+        "Recovery": .init(researchAttention: 55, studyVolume: 40, practicalUse: 72),
+        "Skin": .init(researchAttention: 50, studyVolume: 42, practicalUse: 65),
+        "GH secretagogue": .init(researchAttention: 52, studyVolume: 40, practicalUse: 68),
+        "Metabolic": .init(researchAttention: 58, studyVolume: 45, practicalUse: 62),
+        "Longevity": .init(researchAttention: 55, studyVolume: 42, practicalUse: 60),
+        "Cognitive": .init(researchAttention: 48, studyVolume: 38, practicalUse: 52),
+        "Immune": .init(researchAttention: 60, studyVolume: 55, practicalUse: 50),
+        "Custom": .init(researchAttention: 30, studyVolume: 25, practicalUse: 30),
+    ]
 }
 
 /// Answers from first-run setup. Persisted on every change so the flow resumes
