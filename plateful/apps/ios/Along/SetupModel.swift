@@ -139,46 +139,94 @@ struct Peptide: Identifiable, Hashable {
     let category: String
     var id: String { name }
 
+    /// Broad reference catalogue for search. Custom names remain allowed.
     static let library: [Peptide] = [
         Peptide(name: "Semaglutide", category: "GLP-1"),
         Peptide(name: "Tirzepatide", category: "GLP-1 / GIP"),
         Peptide(name: "Retatrutide", category: "GLP-1 / GIP / GCG"),
+        Peptide(name: "Liraglutide", category: "GLP-1"),
+        Peptide(name: "Dulaglutide", category: "GLP-1"),
+        Peptide(name: "Exenatide", category: "GLP-1"),
+        Peptide(name: "Cagrilintide", category: "Amylin"),
         Peptide(name: "BPC-157", category: "Recovery"),
         Peptide(name: "TB-500", category: "Recovery"),
+        Peptide(name: "Thymosin Beta-4", category: "Recovery"),
+        Peptide(name: "KPV", category: "Recovery"),
         Peptide(name: "GHK-Cu", category: "Skin"),
+        Peptide(name: "AHK-Cu", category: "Skin"),
+        Peptide(name: "Snap-8", category: "Skin"),
+        Peptide(name: "Argireline", category: "Skin"),
         Peptide(name: "Ipamorelin", category: "GH secretagogue"),
         Peptide(name: "CJC-1295", category: "GH secretagogue"),
-        Peptide(name: "MOTS-c", category: "Metabolic"),
-        Peptide(name: "NAD+", category: "Longevity"),
-        Peptide(name: "PT-141", category: "Sexual health"),
-        Peptide(name: "KPV", category: "Recovery"),
-        Peptide(name: "Liraglutide", category: "GLP-1"),
-        Peptide(name: "Cagrilintide", category: "Amylin"),
+        Peptide(name: "CJC-1295 DAC", category: "GH secretagogue"),
         Peptide(name: "Tesamorelin", category: "GH secretagogue"),
         Peptide(name: "Sermorelin", category: "GH secretagogue"),
+        Peptide(name: "GHRP-2", category: "GH secretagogue"),
+        Peptide(name: "GHRP-6", category: "GH secretagogue"),
+        Peptide(name: "Hexarelin", category: "GH secretagogue"),
+        Peptide(name: "MK-677", category: "GH secretagogue"),
+        Peptide(name: "MOTS-c", category: "Metabolic"),
         Peptide(name: "AOD-9604", category: "Metabolic"),
+        Peptide(name: "5-Amino-1MQ", category: "Metabolic"),
+        Peptide(name: "SLU-PP-332", category: "Metabolic"),
+        Peptide(name: "NAD+", category: "Longevity"),
+        Peptide(name: "NMN", category: "Longevity"),
+        Peptide(name: "NR", category: "Longevity"),
         Peptide(name: "Epitalon", category: "Longevity"),
+        Peptide(name: "FOXO4-DRI", category: "Longevity"),
+        Peptide(name: "Humanin", category: "Longevity"),
+        Peptide(name: "PT-141", category: "Sexual health"),
+        Peptide(name: "Melanotan II", category: "Sexual health"),
+        Peptide(name: "Oxytocin", category: "Sexual health"),
         Peptide(name: "Semax", category: "Cognitive"),
         Peptide(name: "Selank", category: "Cognitive"),
+        Peptide(name: "Dihexa", category: "Cognitive"),
+        Peptide(name: "P21", category: "Cognitive"),
+        Peptide(name: "Noopept", category: "Cognitive"),
+        Peptide(name: "Pinealon", category: "Cognitive"),
         Peptide(name: "DSIP", category: "Sleep"),
+        Peptide(name: "Epithalon", category: "Longevity"),
         Peptide(name: "Thymosin Alpha-1", category: "Immune"),
+        Peptide(name: "LL-37", category: "Immune"),
+        Peptide(name: "Thymalin", category: "Immune"),
+        Peptide(name: "SS-31", category: "Mitochondrial"),
+        Peptide(name: "Methylene Blue", category: "Mitochondrial"),
+        Peptide(name: "IGF-1 LR3", category: "Growth factor"),
+        Peptide(name: "PEG-MGF", category: "Growth factor"),
+        Peptide(name: "Follistatin 344", category: "Growth factor"),
+        Peptide(name: "ACE-031", category: "Growth factor"),
+        Peptide(name: "Kisspeptin-10", category: "Hormonal"),
+        Peptide(name: "Gonadorelin", category: "Hormonal"),
+        Peptide(name: "HCG", category: "Hormonal"),
+        Peptide(name: "VIP", category: "Gut / immune"),
+        Peptide(name: "Larazotide", category: "Gut / immune"),
+        Peptide(name: "BPC-157 Oral", category: "Recovery"),
+        Peptide(name: "Cerebrolysin", category: "Cognitive"),
+        Peptide(name: "PNC-27", category: "Research"),
+        Peptide(name: "ARA-290", category: "Recovery"),
+        Peptide(name: "BAM-15", category: "Metabolic"),
+        Peptide(name: "Cardarine", category: "Metabolic"),
+        Peptide(name: "GW501516", category: "Metabolic"),
+        Peptide(name: "Tesofensine", category: "Metabolic"),
+        Peptide(name: "Survodutide", category: "GLP-1 / GCG"),
+        Peptide(name: "Mazdutide", category: "GLP-1 / GCG"),
+        Peptide(name: "Orforglipron", category: "GLP-1"),
+        Peptide(name: "MariTide", category: "GLP-1 / GIP"),
     ]
+    /// Shown when search is empty. First twelve of the catalogue.
     static let popular = Array(library.prefix(12))
 
     static func category(for name: String) -> String {
         library.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?.category ?? "Custom"
     }
-}
 
-struct PeptideStack: Identifiable, Hashable {
-    let name: String
-    let peptides: [String]
-    var id: String { name }
-    static let popular = [
-        PeptideStack(name: "Wolverine", peptides: ["BPC-157", "TB-500"]),
-        PeptideStack(name: "GLOW", peptides: ["GHK-Cu", "BPC-157", "TB-500"]),
-        PeptideStack(name: "KLOW", peptides: ["GHK-Cu", "KPV", "BPC-157", "TB-500"]),
-    ]
+    static func matches(_ query: String) -> [Peptide] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return popular }
+        return library.filter {
+            $0.name.localizedCaseInsensitiveContains(q) || $0.category.localizedCaseInsensitiveContains(q)
+        }
+    }
 }
 
 /// Answers from first-run setup. Persisted on every change so the flow resumes
@@ -351,13 +399,6 @@ struct SetupDraft: Codable, Equatable {
         compounds.contains { $0.caseInsensitiveCompare(compound) == .orderedSame }
     }
 
-    mutating func toggleStack(_ stack: PeptideStack) {
-        if stack.peptides.allSatisfy(contains) {
-            compounds.removeAll { name in stack.peptides.contains { $0.caseInsensitiveCompare(name) == .orderedSame } }
-        } else {
-            for peptide in stack.peptides where !contains(peptide) && compounds.count < Self.compoundLimit { compounds.append(peptide) }
-        }
-    }
 
     // MARK: Validation
 

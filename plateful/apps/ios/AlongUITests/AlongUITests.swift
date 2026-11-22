@@ -98,7 +98,7 @@ final class AlongUITests: XCTestCase {
         case "experience": selectIfPresent("setup.experience.planning")
         case "goals": selectIfPresent("setup.goal.weightLoss"); selectIfPresent("setup.goal.recovery")
         case "source": selectIfPresent("setup.source.tiktok")
-        case "compounds": selectIfPresent("setup.stack.Wolverine")
+        case "compounds": selectIfPresent("setup.compound.BPC-157")
         case "frequency": selectIfPresent("setup.frequency.fewPerWeek")
         case "obstacles": selectIfPresent("setup.obstacle.forgetting")
         default: break

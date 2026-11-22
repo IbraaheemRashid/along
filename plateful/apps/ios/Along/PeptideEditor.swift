@@ -51,11 +51,7 @@ struct PeptideEditor: View {
         SetupDraft.validCompound(name.trimmingCharacters(in: .whitespacesAndNewlines))
             && amountIsValid && schedule.isValid && note.count <= TrackedPeptide.noteLimit
     }
-    private var matches: [Peptide] {
-        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return Peptide.popular }
-        return Peptide.library.filter { $0.name.localizedCaseInsensitiveContains(query) || $0.category.localizedCaseInsensitiveContains(query) }
-    }
+    private var matches: [Peptide] { Peptide.matches(search) }
 
     var body: some View {
         VStack(spacing: 0) {

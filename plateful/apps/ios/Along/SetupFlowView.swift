@@ -353,12 +353,6 @@ struct SetupFlowView: View {
 
             let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
             if query.isEmpty {
-                chipSection("Popular stacks") {
-                    ForEach(PeptideStack.popular) { stack in
-                        SetupChip(title: stack.name, detail: stack.peptides.joined(separator: " + "), selected: stack.peptides.allSatisfy(draft.contains),
-                                  leading: "square.stack.3d.up", identifier: "setup.stack.\(stack.name)") { store.setup.toggleStack(stack) }
-                    }
-                }
                 chipSection("Popular peptides") {
                     ForEach(Peptide.popular) { peptide in compoundChip(peptide.name) }
                 }
@@ -366,8 +360,10 @@ struct SetupFlowView: View {
                 if !custom.isEmpty {
                     chipSection("Also added") { ForEach(custom, id: \.self) { compoundChip($0) } }
                 }
+                Text("Search the full catalogue for anything else.")
+                    .font(.caption).foregroundStyle(SetupTheme.muted).padding(.top, 12)
             } else {
-                let matches = Peptide.library.filter { $0.name.localizedCaseInsensitiveContains(query) || $0.category.localizedCaseInsensitiveContains(query) }
+                let matches = Peptide.matches(query)
                 chipSection(matches.isEmpty ? "No matches" : "Results") {
                     ForEach(matches) { compoundChip($0.name, clearingSearch: true) }
                     if !matches.contains(where: { $0.name.caseInsensitiveCompare(query) == .orderedSame }) && SetupDraft.validCompound(query) {
