@@ -1,57 +1,54 @@
 import SwiftUI
 
-/// The person's protocol: every tracked peptide and its schedule.
-struct ProtocolView: View {
+/// Peptide list lives under Settings now that the former Protocol tab is Health.
+struct ProtocolPeptidesView: View {
     @Environment(JournalStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
     @State private var editor: PeptideEditor.Mode?
 
     private var active: [TrackedPeptide] { store.journal.activePeptides }
     private var paused: [TrackedPeptide] { store.journal.protocolPeptides.filter(\.isPaused) }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                header
-                if store.journal.protocolPeptides.isEmpty {
-                    empty
-                } else {
-                    if !active.isEmpty {
-                        AppSectionTitle(title: "Active", trailing: "\(active.count)")
-                        ForEach(active) { peptide in PeptideCard(peptide: peptide) { editor = .edit(peptide) } }
-                    }
-                    if !paused.isEmpty {
-                        AppSectionTitle(title: "Paused", trailing: "\(paused.count)")
-                        ForEach(paused) { peptide in PeptideCard(peptide: peptide) { editor = .edit(peptide) } }
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    if store.journal.protocolPeptides.isEmpty {
+                        empty
+                    } else {
+                        if !active.isEmpty {
+                            AppSectionTitle(title: "Active", trailing: "\(active.count)")
+                            ForEach(active) { peptide in PeptideCard(peptide: peptide) { editor = .edit(peptide) } }
+                        }
+                        if !paused.isEmpty {
+                            AppSectionTitle(title: "Paused", trailing: "\(paused.count)")
+                            ForEach(paused) { peptide in PeptideCard(peptide: peptide) { editor = .edit(peptide) } }
+                        }
                     }
                 }
+                .padding(.horizontal, 20).padding(.bottom, 96)
             }
-            .padding(.horizontal, 20).padding(.bottom, 96)
-        }
-        .scrollIndicators(.hidden)
-        .appBackground()
-        .overlay(alignment: .bottomTrailing) {
-            if store.journal.protocolPeptides.count < TrackedPeptide.limit {
-                Button { editor = .add } label: {
-                    Image(systemName: "plus").font(.system(size: 22, weight: .semibold)).foregroundStyle(SetupTheme.inverseInk)
-                        .frame(width: 58, height: 58).background(SetupTheme.ink, in: Circle())
-                        .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
+            .scrollIndicators(.hidden)
+            .background(SetupTheme.tile.ignoresSafeArea())
+            .navigationTitle("Your peptides")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if store.journal.protocolPeptides.count < TrackedPeptide.limit {
+                    Button { editor = .add } label: {
+                        Image(systemName: "plus").font(.system(size: 22, weight: .semibold)).foregroundStyle(SetupTheme.inverseInk)
+                            .frame(width: 58, height: 58).background(SetupTheme.ink, in: Circle())
+                            .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
+                    }
+                    .buttonStyle(SetupPressStyle())
+                    .accessibilityLabel("Add a peptide").accessibilityIdentifier("protocol.add")
+                    .padding(.trailing, 20).padding(.bottom, 16)
                 }
-                .buttonStyle(SetupPressStyle())
-                .accessibilityLabel("Add a peptide").accessibilityIdentifier("protocol.add")
-                .padding(.trailing, 20).padding(.bottom, 16)
             }
+            .sheet(item: $editor) { PeptideEditor(mode: $0) }
         }
-        .sheet(item: $editor) { PeptideEditor(mode: $0) }
-    }
-
-    private var header: some View {
-        HStack(alignment: .center) {
-            Text("Protocol").font(.system(size: 30, weight: .bold)).tracking(-0.6).foregroundStyle(SetupTheme.ink)
-                .accessibilityAddTraits(.isHeader)
-            Spacer()
-            PreviewBadge()
-        }
-        .padding(.top, 8)
     }
 
     private var empty: some View {

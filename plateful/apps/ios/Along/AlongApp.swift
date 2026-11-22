@@ -8,6 +8,7 @@ import SwiftUI
     @State private var previewBilling = BillingStore(configuration: .unconfigured(["Local design preview"]))
     @State private var attribution = AttributionStore()
     @State private var analytics = AnalyticsClient()
+    @State private var health = HealthKitStore()
     var body: some Scene {
         WindowGroup {
             RootView().environment(store)
@@ -15,6 +16,7 @@ import SwiftUI
                 .environment(store.journal.isDesignPreview == true || store.journal.hasSampleData ? previewBilling : billing)
                 .environment(attribution)
                 .environment(analytics)
+                .environment(health)
                 .tint(Theme.accent)
                 .task {
                     CrashReporting.start()
@@ -57,7 +59,7 @@ struct RootView: View {
             } else if store.journal.hasOnboarded && (billing.isEntitled || previewAccess) {
                 TabView(selection: $store.selectedTab) {
                     HomeView().tabItem { Label("Today", systemImage: "house.fill") }.tag(0)
-                    ProtocolView().tabItem { Label("Protocol", systemImage: "list.bullet.rectangle.portrait") }.tag(1)
+                    HealthDashboardView().tabItem { Label("Health", systemImage: "heart.text.square.fill") }.tag(1)
                     ProgressScreen().tabItem { Label("Progress", systemImage: "chart.bar.xaxis") }.tag(2)
                     SettingsView().tabItem { Label("Settings", systemImage: "gearshape") }.tag(3)
                 }

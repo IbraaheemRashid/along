@@ -248,7 +248,7 @@ private struct DevSandboxView: View {
             }.font(.system(size: 14, weight: .medium)).padding(.horizontal, 16).padding(.vertical, 5).background(SetupTheme.surface)
                 .dynamicTypeSize(.large)
             RootView(showsDevTools: false).environment(store).environment(reminders).environment(billing)
-                .environment(AttributionStore()).environment(AnalyticsClient())
+                .environment(AttributionStore()).environment(AnalyticsClient()).environment(HealthKitStore(arguments: ["--ui-testing"]))
                 .id(ObjectIdentifier(store))
                 .dynamicTypeSize(textSize.size ?? systemTextSize)
                 .environment(\.alongForcedReducedMotion, reduceMotion)

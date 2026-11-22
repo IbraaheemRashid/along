@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var showPrivacy = false
     @State private var showBackup = false
     @State private var showPaywall = false
+    @State private var showPeptides = false
     @State private var showOnboardingReview = false
     @State private var resetAction: String?
 
@@ -15,6 +16,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 22) {
                 header
                 membership
+                protocolSection
                 units
                 remindersSection
                 data
@@ -28,6 +30,7 @@ struct SettingsView: View {
         .sheet(isPresented: $showPrivacy) { PrivacyView() }
         .sheet(isPresented: $showBackup) { JournalBackupView(journal: { store.journal }, replace: store.restoreJournal) }
         .sheet(isPresented: $showPaywall) { MembershipView(canClose: true) }
+        .sheet(isPresented: $showPeptides) { ProtocolPeptidesView() }
         #if DEBUG
         .sheet(isPresented: $showOnboardingReview) { OnboardingCatalogView() }
         #endif
@@ -55,6 +58,16 @@ struct SettingsView: View {
             SettingsRow(title: billing.isEntitled ? "Along Membership" : "Membership & purchases",
                         detail: billing.isEntitled ? "Active on this Apple ID" : "Yearly or monthly · no trial",
                         symbol: "star") { showPaywall = true }
+        }
+    }
+
+    private var protocolSection: some View {
+        SettingsGroup(title: "Protocol") {
+            SettingsRow(title: "Your peptides",
+                        detail: store.journal.protocolPeptides.isEmpty
+                            ? "Add schedules you follow"
+                            : "\(store.journal.protocolPeptides.count) tracked",
+                        symbol: "list.bullet.rectangle.portrait") { showPeptides = true }
         }
     }
 

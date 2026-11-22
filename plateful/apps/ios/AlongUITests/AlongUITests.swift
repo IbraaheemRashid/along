@@ -22,7 +22,7 @@ final class AlongUITests: XCTestCase {
     private func navigationTab(_ title: String) -> XCUIElement {
         if UIDevice.current.userInterfaceIdiom != .pad { return app.tabBars.buttons[title] }
         // iPadOS presents the system tabs as top-bar buttons, not a TabBar.
-        let icons = ["Today": "house.fill", "Protocol": "list.bullet.rectangle.portrait", "Progress": "chart.bar.xaxis", "Settings": "gearshape"]
+        let icons = ["Today": "house.fill", "Health": "heart.text.square.fill", "Progress": "chart.bar.xaxis", "Settings": "gearshape"]
         return app.buttons.matching(identifier: icons[title] ?? title).matching(NSPredicate(format: "label == %@", title)).firstMatch
     }
 
@@ -325,7 +325,7 @@ final class AlongUITests: XCTestCase {
 
         launchSampleJourney()
         capture("style-today")
-        for tab in ["Protocol", "Progress", "Settings"] {
+        for tab in ["Health", "Progress", "Settings"] {
             navigationTab(tab).tap()
             capture("style-\(tab.lowercased())")
         }
@@ -732,6 +732,18 @@ final class AlongUITests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: identifier).firstMatch
     }
 
+    func testHealthDashboardShowsComposition() {
+        launchSandbox(arguments: ["--setup-complete"])
+        XCTAssertTrue(element("today.summary").waitForExistence(timeout: 8))
+        app.tabBars.buttons["Health"].tap()
+        XCTAssertTrue(element("health.dashboard").waitForExistence(timeout: 6))
+        XCTAssertTrue(element("health.composition").exists)
+        XCTAssertTrue(element("health.chart").exists)
+        capture("health-dashboard")
+        tap("health.window.7")
+        XCTAssertTrue(element("health.score").waitForExistence(timeout: 3))
+    }
+
     func testTodayLogsDosesAndDoseSheetSavesDetails() {
         launchSandbox(arguments: ["--setup-complete"])
         let summary = element("today.summary")
@@ -780,7 +792,8 @@ final class AlongUITests: XCTestCase {
     func testProtocolAddsAndEditsPeptide() {
         launchSandbox(arguments: ["--setup-complete"])
         XCTAssertTrue(element("today.summary").waitForExistence(timeout: 8))
-        app.tabBars.buttons["Protocol"].tap()
+        app.tabBars.buttons["Settings"].tap()
+        app.buttons["Your peptides"].tap()
         XCTAssertTrue(element("protocol.peptide.BPC-157").waitForExistence(timeout: 4))
         capture("protocol-list")
 

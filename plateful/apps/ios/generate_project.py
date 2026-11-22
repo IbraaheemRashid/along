@@ -20,14 +20,17 @@ obj("assetbuild", f'isa = PBXBuildFile; fileRef = {ident("assets")};')
 obj("privacy", 'isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>";')
 obj("privacybuild", f'isa = PBXBuildFile; fileRef = {ident("privacy")};')
 obj("storekit", 'isa = PBXFileReference; lastKnownFileType = text; path = Along.storekit; sourceTree = "<group>";')
-obj("sourcegroup", f'isa = PBXGroup; children = ({",".join(ident("file:"+f.name) for f in files)},{ident("assets")},{ident("privacy")},{ident("storekit")},); path = Along; sourceTree = "<group>";')
+obj("entitlements", 'isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Along.entitlements; sourceTree = "<group>";')
+obj("healthkit", 'isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = System/Library/Frameworks/HealthKit.framework; sourceTree = SDKROOT;')
+obj("healthkitbuild", f'isa = PBXBuildFile; fileRef = {ident("healthkit")};')
+obj("sourcegroup", f'isa = PBXGroup; children = ({",".join(ident("file:"+f.name) for f in files)},{ident("assets")},{ident("privacy")},{ident("storekit")},{ident("entitlements")},); path = Along; sourceTree = "<group>";')
 obj("productgroup", f'isa = PBXGroup; children = ({ident("product")},); name = Products; sourceTree = "<group>";')
 obj("rootgroup", f'isa = PBXGroup; children = ({ident("sourcegroup")},{ident("uitestgroup")},{ident("productgroup")},); sourceTree = "<group>";')
 obj("sources", f'isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ({",".join(ident("build:"+f.name) for f in files)},); runOnlyForDeploymentPostprocessing = 0;')
 obj("superwallpackage", 'isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/superwall/Superwall-iOS.git"; requirement = { kind = exactVersion; version = 4.18.3; };')
 obj("superwallproduct", f'isa = XCSwiftPackageProductDependency; package = {ident("superwallpackage")}; productName = SuperwallKit;')
 obj("superwallbuild", f'isa = PBXBuildFile; productRef = {ident("superwallproduct")};')
-obj("frameworks", f'isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ({ident("superwallbuild")},); runOnlyForDeploymentPostprocessing = 0;')
+obj("frameworks", f'isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ({ident("superwallbuild")},{ident("healthkitbuild")},); runOnlyForDeploymentPostprocessing = 0;')
 obj("resources", f'isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ({ident("assetbuild")},{ident("privacybuild")},); runOnlyForDeploymentPostprocessing = 0;')
 for scope in ["project", "target"]:
     for config in ["Debug", "Release"]:
@@ -36,7 +39,7 @@ for scope in ["project", "target"]:
             settings += ' ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;'
             for key in ["ALONG_BILLING_ANNUAL_PRODUCT_ID", "ALONG_BILLING_MONTHLY_PRODUCT_ID", "ALONG_SUPERWALL_PUBLIC_KEY", "ALONG_BILLING_ENTITLEMENT_ID", "ALONG_TERMS_URL", "ALONG_PRIVACY_URL"]:
                 settings += f' INFOPLIST_KEY_{key} = "$({key})";'
-            settings += ' PRODUCT_NAME = Along; PRODUCT_BUNDLE_IDENTIFIER = dev.along.prototype; TARGETED_DEVICE_FAMILY = "1,2"; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = Along; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness"; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; INFOPLIST_KEY_FIREBASE_ANALYTICS_COLLECTION_ENABLED = NO; CURRENT_PROJECT_VERSION = 4; MARKETING_VERSION = 0.4.0; CODE_SIGN_STYLE = Automatic; SWIFT_EMIT_LOC_STRINGS = YES;'
+            settings += ' PRODUCT_NAME = Along; PRODUCT_BUNDLE_IDENTIFIER = dev.along.prototype; TARGETED_DEVICE_FAMILY = "1,2"; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = Along; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness"; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; INFOPLIST_KEY_NSHealthShareUsageDescription = "Along reads Apple Health samples you already track — steps, energy, sleep, heart rate and weight — to show your Health dashboard. Nothing is diagnosed or prescribed."; INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Along does not write health records. This permission is unused."; INFOPLIST_KEY_FIREBASE_ANALYTICS_COLLECTION_ENABLED = NO; CURRENT_PROJECT_VERSION = 4; MARKETING_VERSION = 0.4.0; CODE_SIGN_STYLE = Automatic; CODE_SIGN_ENTITLEMENTS = Along/Along.entitlements; SWIFT_EMIT_LOC_STRINGS = YES;'
         if config == "Debug":
             settings += ' ONLY_ACTIVE_ARCH = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = dwarf; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;'
             if scope == "target":
