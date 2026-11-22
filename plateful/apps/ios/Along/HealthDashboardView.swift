@@ -7,6 +7,7 @@ struct HealthDashboardView: View {
     @Environment(JournalStore.self) private var store
     @Environment(HealthKitStore.self) private var health
     @Environment(\.alongReducedMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var window: Window = .month
     @State private var appeared = false
 
@@ -272,29 +273,40 @@ struct HealthDashboardView: View {
         }
     }
 
-    /// Inline metric ribbon — one flowing strip, not separate cards.
+    /// Inline metric ribbon — one strip, every stat visible without scrolling.
+    /// Five equal columns; at accessibility text sizes it wraps to 3 + 2 rows.
     private var ribbon: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Today’s signals")
+        let steps = metric("Steps", value: latest?.steps.map { $0.formatted(.number.precision(.fractionLength(0))) }, unit: nil, symbol: "figure.walk")
+        let active = metric("Active", value: latest?.activeEnergyKcal.map { "\(Int($0.rounded()))" }, unit: " kcal", symbol: "flame")
+        let sleep = metric("Sleep", value: latest?.sleepHours.map { String(format: "%.1f", $0) }, unit: "h", symbol: "moon.zzz")
+        let hrv = metric("HRV", value: latest?.hrvSDNN.map { "\(Int($0.rounded()))" }, unit: " ms", symbol: "waveform.path.ecg")
+        let resting = metric("Resting", value: latest?.restingHeartRate.map { "\(Int($0.rounded()))" }, unit: " bpm", symbol: "heart")
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Today’s stats")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(SetupTheme.muted)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
-                    metric("Steps", value: latest?.steps.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—", symbol: "figure.walk")
-                    divider
-                    metric("Active", value: latest?.activeEnergyKcal.map { "\(Int($0.rounded())) kcal" } ?? "—", symbol: "flame")
-                    divider
-                    metric("Sleep", value: latest?.sleepHours.map { String(format: "%.1fh", $0) } ?? "—", symbol: "moon.zzz")
-                    divider
-                    metric("HRV", value: latest?.hrvSDNN.map { "\(Int($0.rounded())) ms" } ?? "—", symbol: "waveform.path.ecg")
-                    divider
-                    metric("Resting", value: latest?.restingHeartRate.map { "\(Int($0.rounded())) bpm" } ?? "—", symbol: "heart")
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(spacing: 12) {
+                        HStack(spacing: 0) { steps; divider; active; divider; sleep }
+                            .fixedSize(horizontal: false, vertical: true)
+                        Rectangle().fill(SetupTheme.border).frame(height: 1).padding(.horizontal, 12)
+                        HStack(spacing: 0) { hrv; divider; resting }
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else {
+                    HStack(spacing: 0) { steps; divider; active; divider; sleep; divider; hrv; divider; resting }
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.vertical, 14)
-                .padding(.horizontal, 4)
-                .background(SetupTheme.surface.opacity(0.7), in: Capsule())
-                .overlay(Capsule().strokeBorder(SetupTheme.border.opacity(0.7)))
             }
+            .padding(.vertical, 14)
+            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity)
+            .background(SetupTheme.surface.opacity(0.7), in: shape)
+            .overlay(shape.strokeBorder(SetupTheme.border.opacity(0.7)))
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("health.ribbon")
         }
     }
@@ -302,21 +314,29 @@ struct HealthDashboardView: View {
     private var divider: some View {
         Rectangle()
             .fill(SetupTheme.border)
-            .frame(width: 1, height: 28)
-            .padding(.horizontal, 6)
+            .frame(width: 1)
+            .padding(.vertical, 6)
     }
 
-    private func metric(_ title: String, value: String, symbol: String) -> some View {
-        HStack(spacing: 8) {
+    private func metric(_ title: String, value: String?, unit: String?, symbol: String) -> some View {
+        let number = Text(value ?? "—").font(.subheadline.weight(.semibold))
+        let suffix = Text(value == nil ? "" : unit ?? "").font(.caption2.weight(.medium))
+        return VStack(spacing: 4) {
             Image(systemName: symbol)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(SetupTheme.ink.opacity(0.7))
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.caption2).foregroundStyle(SetupTheme.muted)
-                Text(value).font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
-            }
+            Text("\(number)\(suffix)")
+                .foregroundStyle(SetupTheme.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(dynamicTypeSize.isAccessibilitySize ? 0.4 : 0.6)
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(SetupTheme.muted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
-        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 2)
         .accessibilityElement(children: .combine)
     }
 }
