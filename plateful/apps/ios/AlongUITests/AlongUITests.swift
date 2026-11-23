@@ -732,16 +732,14 @@ final class AlongUITests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: identifier).firstMatch
     }
 
-    func testHealthDashboardShowsComposition() {
+    func testThreeMainDestinations() {
         launchSandbox(arguments: ["--setup-complete"])
         XCTAssertTrue(element("today.summary").waitForExistence(timeout: 8))
-        app.tabBars.buttons["Health"].tap()
-        XCTAssertTrue(element("health.dashboard").waitForExistence(timeout: 6))
-        XCTAssertTrue(element("health.composition").exists)
-        XCTAssertTrue(element("health.chart").exists)
-        capture("health-dashboard")
-        tap("health.window.7")
-        XCTAssertTrue(element("health.score").waitForExistence(timeout: 3))
+        XCTAssertFalse(navigationTab("Health").exists)
+        navigationTab("Progress").tap()
+        XCTAssertTrue(element("progress.adherence").waitForExistence(timeout: 4))
+        navigationTab("Settings").tap()
+        XCTAssertTrue(element("settings.weightUnit").waitForExistence(timeout: 4))
     }
 
     func testTodayLogsDosesAndDoseSheetSavesDetails() {

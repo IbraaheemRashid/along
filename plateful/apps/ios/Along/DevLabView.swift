@@ -93,7 +93,7 @@ private enum DevScenario: String, CaseIterable, Identifiable {
 }
 
 private enum DevSheet: String, Identifiable {
-    case membership, data, weight
+    case membership, data, weight, peptides
     var id: String { rawValue }
 }
 
@@ -145,7 +145,7 @@ struct DevLabView: View {
                 }
                 Section("Jump to a feature · sample data") {
                     feature("Today", symbol: "house.fill", tab: 0)
-                    feature("Protocol", symbol: "list.bullet.rectangle.portrait", tab: 1)
+                    feature("Protocol", symbol: "list.bullet.rectangle.portrait", sheet: .peptides)
                     feature("Progress", symbol: "chart.bar.xaxis", tab: 2)
                     feature("Settings", symbol: "gearshape", tab: 3)
                     feature("Membership offer", symbol: "lock", sheet: .membership)
@@ -248,7 +248,7 @@ private struct DevSandboxView: View {
             }.font(.system(size: 14, weight: .medium)).padding(.horizontal, 16).padding(.vertical, 5).background(SetupTheme.surface)
                 .dynamicTypeSize(.large)
             RootView(showsDevTools: false).environment(store).environment(reminders).environment(billing)
-                .environment(AttributionStore()).environment(AnalyticsClient()).environment(HealthKitStore(arguments: ["--ui-testing"]))
+                .environment(AttributionStore()).environment(AnalyticsClient())
                 .id(ObjectIdentifier(store))
                 .dynamicTypeSize(textSize.size ?? systemTextSize)
                 .environment(\.alongForcedReducedMotion, reduceMotion)
@@ -281,6 +281,7 @@ private struct DevSandboxView: View {
         switch item {
         case .membership: MembershipView(canClose: true)
         case .weight: WeightLogSheet()
+        case .peptides: ProtocolPeptidesView()
         case .data: DevJournalInspector(journal: store.journal, draft: store.onboardingDraft, setup: store.setup)
         }
     }

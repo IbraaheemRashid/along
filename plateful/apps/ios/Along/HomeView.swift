@@ -5,6 +5,7 @@ struct HomeView: View {
     @Environment(JournalStore.self) private var store
     @State private var selectedDay: String?
     @State private var feedback = 0
+    @State private var addingPeptide = false
     @State private var sheet: DoseSheet.Mode?
 
     private var today: String { store.todayKey }
@@ -42,6 +43,7 @@ struct HomeView: View {
             }
         }
         .sheet(item: $sheet) { DoseSheet(mode: $0) }
+        .sheet(isPresented: $addingPeptide) { PeptideEditor(mode: .add) }
         .sensoryFeedback(.success, trigger: feedback)
         .onChange(of: store.todayKey) { _, _ in selectedDay = nil }
     }
@@ -152,7 +154,7 @@ struct HomeView: View {
                 Text("Your protocol is empty").font(.headline).foregroundStyle(SetupTheme.ink)
                 Text("Add each peptide with the schedule you’ve chosen. Along keeps track of every dose from there.")
                     .font(.subheadline).foregroundStyle(SetupTheme.muted).fixedSize(horizontal: false, vertical: true)
-                SetupPrimaryButton(title: "Add a peptide", symbol: "plus", identifier: "today.add-peptide") { store.selectedTab = 1 }
+                SetupPrimaryButton(title: "Add a peptide", symbol: "plus", identifier: "today.add-peptide") { addingPeptide = true }
             }
         }
     }

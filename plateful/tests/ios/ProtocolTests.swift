@@ -98,17 +98,6 @@ import Foundation
         expect(spotHeat.count(for: InjectionSpot(id: "abdomen.left.lower.2")!) == 1 && spotHeat.count(for: lowerLeft) == 0, "Spot heat counts exact spots")
         expect(spotHeat.historyText(for: lowerLeft, now: now) == "Not in your recent logs", "Unused spots read as not recent, never as advice")
 
-        // Health analytics (pure; no HealthKit)
-        expect(HealthAnalytics.recoveryScore(sleep: 8, hrv: 80, resting: 50) == 100, "Ideal recovery inputs saturate at 100")
-        expect(HealthAnalytics.activityScore(steps: 5_000, energy: 250, exercise: 15).map { abs($0 - 50) < 0.1 } == true, "Half-target activity lands near 50")
-        let rising = HealthAnalytics.project([40, 50, 60, 70], startKey: "2026-11-04", days: 3)
-        expect(rising.end.map { $0 > 70 } == true && rising.points.count == 3, "Projection continues an upward series")
-        let preview = HealthAnalytics.previewSnapshot(todayKey: "2026-11-22", days: 14)
-        expect(preview.days.count == 14 && preview.hasAnyMetric, "Preview Health snapshots fill wearable-style series")
-        let insight = HealthAnalytics.insight(from: preview, goals: [.weightLoss], window: 14, todayKey: "2026-11-22")
-        expect(insight.overallScore != nil && !insight.series.isEmpty, "Insights blend activity and recovery into chart series")
-        expect(insight.headline.lowercased().contains("weight") || insight.detail.lowercased().contains("preview"), "Goal-aware copy stays non-clinical")
-
         expect(!DoseLog(peptideID: daily.id, dayKey: "2026-11-09", takenAt: now).isValid(now: now), "Future dose days are rejected")
         expect(!DoseLog(peptideID: daily.id, dayKey: "2026-11-04", takenAt: now, note: String(repeating: "a", count: 501)).isValid(now: now), "Oversized dose notes are rejected")
 
