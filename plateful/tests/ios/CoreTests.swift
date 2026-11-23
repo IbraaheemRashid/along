@@ -108,11 +108,15 @@ import Foundation
         defer { try? FileManager.default.removeItem(at: testRoot) }
         let storeDirectory = testRoot.appendingPathComponent("round-trip", isDirectory: true)
         let store = JournalStore(directory: storeDirectory, arguments: [], clearCredentials: {})
+        expect(store.requestPeptide("  My blend  ") && store.requestPeptide("my BLEND"), "Unknown requests are trimmed and deduplicated")
+        expect(!store.requestPeptide("BPC-157") && !store.requestPeptide(" "), "Empty and catalogue searches cannot create requests")
+        expect(store.journal.requestedPeptides == ["My blend"] && store.journal.protocolPeptides.isEmpty, "A request does not create a tracked peptide")
         store.onboardingDraft = readyDraft()
         expect(store.onboardingEntry == nil, "Draft-only examples are not presented as persisted journal entries")
         store.onboardingDraft.step = 4
         store.onboardingDraft.name = "Ada B"
         let resumed = JournalStore(directory: storeDirectory, arguments: [], clearCredentials: {})
+        expect(resumed.hasRequestedPeptide("My blend"), "Requests persist when the store reopens")
         expect(resumed.onboardingDraft == store.onboardingDraft && resumed.onboardingDraft.step == 4, "Back navigation and answer edits autosave and resume exactly")
         resumed.onboardingDraft.step = 22
         let entryTime = Date(timeIntervalSince1970: floor(Date().timeIntervalSince1970))

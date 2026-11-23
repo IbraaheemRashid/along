@@ -35,6 +35,7 @@ struct JournalBackup: Codable, Equatable {
         var pipProgress: PipProgress?
         var routineDays: [RoutineDay]?
         var peptides: [TrackedPeptide]?
+        var requestedPeptides: [String]?
         var doseLogs: [DoseLog]?
 
         init(_ journal: Journal) {
@@ -49,6 +50,7 @@ struct JournalBackup: Codable, Equatable {
             setupProfile = journal.setupProfile
             companionDiscoveries = journal.companionDiscoveries
             pipProgress = journal.pipProgress; routineDays = journal.routineDays
+            requestedPeptides = journal.requestedPeptides
             peptides = journal.peptides; doseLogs = journal.doseLogs
         }
     }
@@ -114,6 +116,7 @@ struct JournalBackup: Codable, Equatable {
         restored.setupProfile = content.setupProfile
         restored.companionDiscoveries = content.companionDiscoveries
         restored.pipProgress = content.pipProgress; restored.routineDays = content.routineDays
+        restored.requestedPeptides = content.requestedPeptides
         restored.peptides = content.peptides; restored.doseLogs = content.doseLogs
         restored.hasOnboarded = current.hasOnboarded
         restored.isDesignPreview = current.isDesignPreview
@@ -168,6 +171,11 @@ struct JournalBackup: Codable, Equatable {
               content.checkIns.count <= Self.maximumRecords, content.weights.count <= Self.maximumRecords,
               content.milestones.count <= Self.maximumRecords, (content.routineDays?.count ?? 0) <= Self.maximumRecords else { throw Failure.invalidArchive }
 
+        if let requests = content.requestedPeptides {
+            guard requests.count <= Self.maximumRecords,
+                  requests.allSatisfy({ SetupDraft.validCompound($0) && $0 == $0.trimmingCharacters(in: .whitespacesAndNewlines) }),
+                  Set(requests.map { $0.lowercased() }).count == requests.count else { throw Failure.invalidArchive }
+        }
         var identifiers = Set<UUID>()
         var checkInDays = Set<String>(), weightDays = Set<String>(), routineDays = Set<String>()
         func unique(_ id: UUID) -> Bool { identifiers.insert(id).inserted }
@@ -250,7 +258,7 @@ struct JournalBackup: Codable, Equatable {
             guard let values = value as? [String], Set(values.map { lowercase ? $0.lowercased() : $0 }).count == values.count else { throw Failure.invalidArchive }
         }
         _ = try object(envelope, required: ["format", "schemaVersion", "exportedAt", "timeZoneID", "content"])
-        let content = try object(envelope["content"], required: ["journalVersion", "name", "companionName", "routines", "checkIns", "milestones", "weights", "weightUnit", "showWeight", "accessory", "unlockedAccessories", "hasSampleData", "startDate"], optional: ["onboardingPreferences", "setupProfile", "companionDiscoveries", "pipProgress", "routineDays", "peptides", "doseLogs"])
+        let content = try object(envelope["content"], required: ["journalVersion", "name", "companionName", "routines", "checkIns", "milestones", "weights", "weightUnit", "showWeight", "accessory", "unlockedAccessories", "hasSampleData", "startDate"], optional: ["onboardingPreferences", "setupProfile", "companionDiscoveries", "pipProgress", "routineDays", "peptides", "doseLogs", "requestedPeptides"])
         try strings(content["routines"]); try strings(content["unlockedAccessories"])
         for (key, fields) in [
             ("checkIns", Set(["id", "day", "mood", "appetite", "routines", "note", "isSample"])),

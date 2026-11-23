@@ -90,6 +90,7 @@ struct Journal: Codable, Equatable {
     var routineDays: [RoutineDay]?
     // Optional so journals saved before the protocol tracker decode unchanged.
     var peptides: [TrackedPeptide]?
+    var requestedPeptides: [String]?
     var doseLogs: [DoseLog]?
     // Local restore boundary; never included in exported backup content.
     var restoreGeneration: UUID?

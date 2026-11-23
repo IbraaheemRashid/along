@@ -573,6 +573,9 @@ final class AlongUITests: XCTestCase {
                       "A searched peptide joins the selection")
         search.tap()
         search.typeText("My blend")
+        tap("peptide.request")
+        XCTAssertEqual(element("peptide.request.status").label, "Request saved on this device.")
+        XCTAssertFalse(app.buttons["peptide.request"].isEnabled)
         tap("setup.compounds.add")
         let custom = app.buttons["setup.compound.My blend"]
         XCTAssertTrue(custom.waitForExistence(timeout: 5) && custom.isSelected, "A custom peptide can be added from search")

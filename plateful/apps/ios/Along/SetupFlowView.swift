@@ -364,10 +364,14 @@ struct SetupFlowView: View {
                     .font(.caption).foregroundStyle(SetupTheme.muted).padding(.top, 12)
             } else {
                 let matches = Peptide.matches(query)
-                chipSection(matches.isEmpty ? "No matches" : "Results") {
-                    ForEach(matches) { compoundChip($0.name, clearingSearch: true) }
-                    if !matches.contains(where: { $0.name.caseInsensitiveCompare(query) == .orderedSame }) && SetupDraft.validCompound(query) {
-                        SetupChip(title: "Add “\(query)”", selected: false, identifier: "setup.compounds.add") { addSearchedCompound() }
+                if matches.isEmpty {
+                    MissingPeptideActions(query: query, customIdentifier: "setup.compounds.add", addCustom: addSearchedCompound)
+                } else {
+                    chipSection("Results") {
+                        ForEach(matches) { compoundChip($0.name, clearingSearch: true) }
+                        if !matches.contains(where: { $0.name.caseInsensitiveCompare(query) == .orderedSame }) && SetupDraft.validCompound(query) {
+                            SetupChip(title: "Add “\(query)”", selected: false, identifier: "setup.compounds.add") { addSearchedCompound() }
+                        }
                     }
                 }
             }

@@ -335,6 +335,38 @@ struct SetupFlowLayout: Layout {
     }
 }
 
+struct MissingPeptideActions: View {
+    @Environment(JournalStore.self) private var store
+    let query: String
+    let customIdentifier: String
+    let addCustom: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Can’t find your peptide?").font(.subheadline.weight(.semibold))
+            if SetupDraft.validCompound(query) {
+                SetupFlowLayout {
+                    Button("Add as custom", action: addCustom)
+                        .accessibilityIdentifier(customIdentifier)
+                    Button("Request this peptide") { store.requestPeptide(query) }
+                        .disabled(store.hasRequestedPeptide(query))
+                        .accessibilityIdentifier("peptide.request")
+                }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+                Text(store.hasRequestedPeptide(query) ? "Request saved on this device." : "Requests are saved on this device.")
+                    .font(.caption).foregroundStyle(SetupTheme.muted)
+                    .accessibilityIdentifier("peptide.request.status")
+            } else {
+                Text("Enter a name of up to \(SetupDraft.compoundNameLimit) characters.")
+                    .font(.caption).foregroundStyle(SetupTheme.muted)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 8)
+    }
+}
+
 struct SetupChip: View {
     var title: String
     var detail: String?

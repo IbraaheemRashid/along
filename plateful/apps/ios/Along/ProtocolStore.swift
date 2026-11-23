@@ -11,6 +11,23 @@ extension JournalStore {
 
     func peptide(_ id: UUID) -> TrackedPeptide? { journal.protocolPeptides.first { $0.id == id } }
 
+    func hasRequestedPeptide(_ name: String) -> Bool {
+        let key = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return journal.requestedPeptides?.contains { $0.lowercased() == key } == true
+    }
+
+    @discardableResult func requestPeptide(_ query: String) -> Bool {
+        let name = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard SetupDraft.validCompound(name), Peptide.matches(name).isEmpty else { return false }
+        if hasRequestedPeptide(name) { return true }
+        let existing = journal.requestedPeptides ?? []
+        guard existing.count < JournalBackup.maximumRecords else {
+            error = "The list of saved requests on this device is full."
+            return false
+        }
+        return updateJournal { $0.requestedPeptides = existing + [name] }
+    }
+
     @discardableResult func savePeptide(_ peptide: TrackedPeptide) -> Bool {
         var item = peptide
         item.name = item.name.trimmingCharacters(in: .whitespacesAndNewlines)

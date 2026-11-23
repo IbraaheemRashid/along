@@ -169,6 +169,7 @@ struct PeptideEditor: View {
                 .padding(.horizontal, 16).frame(minHeight: 50)
                 .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 
+                let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
                 SetupFlowLayout {
                     ForEach(matches) { peptide in
                         SetupChip(title: peptide.name, detail: peptide.category, selected: false,
@@ -176,11 +177,13 @@ struct PeptideEditor: View {
                             name = peptide.name; search = ""; focused = nil
                         }
                     }
-                    let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !query.isEmpty && !Peptide.library.contains(where: { $0.name.caseInsensitiveCompare(query) == .orderedSame })
+                    if !matches.isEmpty && !query.isEmpty && !Peptide.library.contains(where: { $0.name.caseInsensitiveCompare(query) == .orderedSame })
                         && SetupDraft.validCompound(query) {
                         SetupChip(title: "Add “\(query)”", selected: false, identifier: "peptide.pick.custom") { addCustomName() }
                     }
+                }
+                if !query.isEmpty && matches.isEmpty {
+                    MissingPeptideActions(query: query, customIdentifier: "peptide.pick.custom", addCustom: addCustomName)
                 }
             } else {
                 HStack {
