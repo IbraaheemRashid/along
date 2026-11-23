@@ -2,7 +2,15 @@
 
 Updated 23 November 2026. Working name: Along. Along is a peptide protocol tracker (supporting tool, not medical advice). The GLP-1 journal and Pip companion are retired. **Market Gate A is not passed.**
 
-## Latest — 3D injection-site picker, 23 November 2026
+## Peptide tracking updates, 23 November 2026
+
+Today, Progress and Settings are the three main tabs. Today opens the peptide editor directly from an empty protocol. The editor offers nine colours, with the original category colour as the default for older records. The calendar keeps the adherence ring and adds a dot per peptide, with a count when more than three are present. Setup skips the 2D body demo and resumes drafts saved there at the birthday question. Progress retains its existing body map.
+
+The two peptide searches can save a missing catalogue name in the local journal. Adding a custom peptide is a separate action. Dev Lab → Syringe prototype opens an isolated fictional vial with a fixed U-100 scale for testing typing, switching mass units and dragging. Leaving the prototype discards its inputs.
+
+Linux verification passed 30 API/web tests, 200 core checks, 140 protocol checks, 60 debug and 61 release backup checks, 66 civil-date checks and 49 billing checks. The Swift model suites used temporary stand-ins for Apple file access, the journal store’s framework import and the keychain clear operation. Swift parsed the app in Debug and Release and parsed the UI tests. Xcode build, UI tests, VoiceOver and rendered layout checks remain pending on a Mac. App Store product, signing and subscription setup remain open.
+
+## 3D injection-site picker, 23 November 2026
 
 Branch `feature/3d-injection-site-picker`: choosing a peptide in the dose sheet opens a full-screen SceneKit body (gender-neutral mannequin). Drag spins it 360°; tapping an area (abdomen quadrants, delts, triceps, love handles, ventroglute, dorsoglute, outer thigh) zooms the camera in and shows that area's exact spots with recent-use heat. Logs store the exact spot in the new optional `DoseLog.spot` (e.g. `abdomen.left.lower.3`) and the nearest legacy `site`, so Progress, exports and old logs keep working; backups accept and validate `spot`. The body and spots come from `tools/body-model` and ship as two data assets. The picker records history only and never ranks or suggests a spot.
 

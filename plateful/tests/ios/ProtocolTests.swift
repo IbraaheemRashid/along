@@ -44,6 +44,28 @@ import Foundation
         expect(ref.researchAttention >= 90 && Peptide.reference(for: "Unknown blend").practicalUse <= 40, "Reference bands cover known and custom peptides")
         expect(PeptideReference.disclaimer.lowercased().contains("not medical advice"), "Reference copy stays non-clinical")
 
+        // Fixed, fictional Dev Lab vial.
+        var sample = SyringeSample()
+        expect(sample.reading == .empty, "No initial sample amount")
+        sample.amountText = "0,5"
+        expect(sample.reading == .inRange(milligrams: 0.5, volume: 0.1, marks: 10), "A typed amount moves the sample plunger")
+        sample.changeUnit(to: .mcg)
+        expect(sample.amountText == "500" && sample.reading == .inRange(milligrams: 0.5, volume: 0.1, marks: 10), "Changing unit preserves quantity")
+        for mark in 0...SyringeSample.capacity {
+            sample.move(to: mark)
+            let volume = Decimal(mark) / 100
+            expect(sample.reading == .inRange(milligrams: volume * 5, volume: volume, marks: Decimal(mark)), "Every sample mark round-trips")
+        }
+        sample.changeUnit(to: .mg)
+        sample.amountText = "0.525"
+        expect(sample.reading == .inRange(milligrams: 0.525, volume: 0.105, marks: 10.5), "Typed amounts between marks remain exact")
+        sample.amountText = "2.51"
+        expect(sample.reading == .overCapacity, "Oversized entries are not drawn on the sample barrel")
+        for invalid in ["-1", "1 mg", "1.0.2", "NaN", "1e2", "."] {
+            sample.amountText = invalid
+            expect(sample.reading == .invalid, "Invalid sample input clears the mark")
+        }
+
         // Slots, adherence and next dose
         let peptides = [daily, weekly, interval, paused]
         var logs = [

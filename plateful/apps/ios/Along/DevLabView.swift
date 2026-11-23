@@ -93,7 +93,7 @@ private enum DevScenario: String, CaseIterable, Identifiable {
 }
 
 private enum DevSheet: String, Identifiable {
-    case membership, data, weight, peptides
+    case membership, data, weight, peptides, syringe
     var id: String { rawValue }
 }
 
@@ -149,6 +149,7 @@ struct DevLabView: View {
                     feature("Progress", symbol: "chart.bar.xaxis", tab: 2)
                     feature("Settings", symbol: "gearshape", tab: 3)
                     feature("Membership offer", symbol: "lock", sheet: .membership)
+                    feature("Syringe prototype", symbol: "syringe", sheet: .syringe)
                     feature("Log weight", symbol: "scalemass", sheet: .weight)
                 }
                 Section("Preview settings") {
@@ -282,6 +283,7 @@ private struct DevSandboxView: View {
         case .membership: MembershipView(canClose: true)
         case .weight: WeightLogSheet()
         case .peptides: ProtocolPeptidesView()
+        case .syringe: SyringePrototypeView()
         case .data: DevJournalInspector(journal: store.journal, draft: store.onboardingDraft, setup: store.setup)
         }
     }

@@ -5,7 +5,7 @@ source "$(dirname "$0")/runtime.sh"
 mkdir -p .build/ModuleCache
 env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swiftc -D DEBUG -module-cache-path .build/ModuleCache apps/ios/Along/Models.swift apps/ios/Along/WeekSummary.swift apps/ios/Along/DayIdentity.swift apps/ios/Along/PipProgression.swift apps/ios/Along/JournalBackup.swift apps/ios/Along/OnboardingModel.swift apps/ios/Along/SetupModel.swift apps/ios/Along/ProtocolModel.swift apps/ios/Along/InjectionSpot.swift apps/ios/Along/JournalStore.swift apps/ios/Along/ProtocolStore.swift apps/ios/Along/API.swift tests/ios/CoreTests.swift -o .build/core-tests
 .build/core-tests
-env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swiftc -D DEBUG -module-cache-path .build/ModuleCache apps/ios/Along/Models.swift apps/ios/Along/DayIdentity.swift apps/ios/Along/PipProgression.swift apps/ios/Along/JournalBackup.swift apps/ios/Along/OnboardingModel.swift apps/ios/Along/SetupModel.swift apps/ios/Along/ProtocolModel.swift apps/ios/Along/InjectionSpot.swift tests/ios/ProtocolTests.swift -o .build/protocol-tests
+env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swiftc -D DEBUG -module-cache-path .build/ModuleCache apps/ios/Along/Models.swift apps/ios/Along/DayIdentity.swift apps/ios/Along/PipProgression.swift apps/ios/Along/JournalBackup.swift apps/ios/Along/OnboardingModel.swift apps/ios/Along/SetupModel.swift apps/ios/Along/ProtocolModel.swift apps/ios/Along/InjectionSpot.swift apps/ios/Along/SyringeSample.swift tests/ios/ProtocolTests.swift -o .build/protocol-tests
 .build/protocol-tests
 bash scripts/check-billing.sh
 bash scripts/check-reminders.sh

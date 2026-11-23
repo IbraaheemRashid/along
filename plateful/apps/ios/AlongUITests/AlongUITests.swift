@@ -798,6 +798,23 @@ final class AlongUITests: XCTestCase {
         XCTAssertTrue(element("today.summary").label.contains("1"), "Logs persist across launches")
     }
 
+    func testSyringePrototypeConvertsSampleAndRespondsToDrag() {
+        launchSandbox()
+        tap("dev.open")
+        tap("dev.feature.syringe")
+        let amount = app.textFields["syringe.amount"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 5))
+        amount.tap()
+        amount.typeText("0.5")
+        XCTAssertEqual(element("syringe.readout").label, "10 units")
+        tap("Done typing")
+        let scale = element("syringe.plunger")
+        let centre = scale.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        scale.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5)).press(forDuration: 0.1, thenDragTo: centre)
+        XCTAssertEqual(element("syringe.readout").label, "25 units")
+        XCTAssertEqual(amount.value as? String, "1.25")
+    }
+
     func testProtocolAddsAndEditsPeptide() {
         launchSandbox(arguments: ["--setup-complete"])
         XCTAssertTrue(element("today.summary").waitForExistence(timeout: 8))
