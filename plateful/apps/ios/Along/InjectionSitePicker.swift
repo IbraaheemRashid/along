@@ -20,6 +20,9 @@ struct InjectionSitePicker: View {
     static let cool = Color(red: 0.72, green: 0.82, blue: 0.78)
     static let warm = Color(red: 0.92, green: 0.78, blue: 0.48)
     static let hot = Color(red: 0.86, green: 0.42, blue: 0.36)
+    /// Ink for anything drawn over the 3D body, which stays light in dark mode.
+    /// Matches `SetupTheme.ink` in light mode.
+    static let onBody = Color(red: 0.07, green: 0.07, blue: 0.09)
 
     private var focusedRegion: BodyRegion? { model.focusedArea?.region }
 
@@ -125,9 +128,6 @@ struct InjectionSitePicker: View {
         .background(SetupTheme.tile)
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(SetupTheme.border))
-        .background(GeometryReader { geo in
-            Color.clear.onChange(of: geo.size) { _, _ in model.refreshSpotPoints() }
-        })
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: model.focusedArea?.id)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("site.body")
@@ -166,7 +166,7 @@ struct InjectionSitePicker: View {
                     let x = points.map(\.x).reduce(0, +) / CGFloat(points.count)
                     let y = quadrant == .upper ? (points.map(\.y).min() ?? 0) - 30 : (points.map(\.y).max() ?? 0) + 30
                     Text("\(quadrant.title) \(side.rawValue)")
-                        .font(.caption.weight(.semibold)).foregroundStyle(SetupTheme.ink.opacity(0.75))
+                        .font(.caption.weight(.semibold)).foregroundStyle(Self.onBody.opacity(0.75))
                         .position(x: x, y: y)
                         .accessibilityHidden(true)
                 }
@@ -276,7 +276,7 @@ private struct SpotDot: View {
     var isSelected: Bool
 
     private var fill: Color {
-        if isSelected { return SetupTheme.ink }
+        if isSelected { return InjectionSitePicker.onBody }
         switch count {
         case 0: return .white
         case 1: return InjectionSitePicker.cool
@@ -289,15 +289,15 @@ private struct SpotDot: View {
         let size: CGFloat = isSelected ? 38 : 32
         ZStack {
             Circle().fill(fill)
-                .overlay(Circle().strokeBorder(isSelected ? SetupTheme.ink : .white, lineWidth: isSelected ? 3 : 2))
+                .overlay(Circle().strokeBorder(isSelected ? InjectionSitePicker.onBody : .white, lineWidth: isSelected ? 3 : 2))
                 .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
             if isSelected {
-                Circle().strokeBorder(SetupTheme.ink, lineWidth: 2).frame(width: size + 12, height: size + 12)
-                Image(systemName: "checkmark").font(.system(size: 14, weight: .bold)).foregroundStyle(SetupTheme.inverseInk)
+                Circle().strokeBorder(InjectionSitePicker.onBody, lineWidth: 2).frame(width: size + 12, height: size + 12)
+                Image(systemName: "checkmark").font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
             } else if isLast {
-                Image(systemName: "clock.arrow.circlepath").font(.system(size: 13, weight: .bold)).foregroundStyle(SetupTheme.ink)
+                Image(systemName: "clock.arrow.circlepath").font(.system(size: 13, weight: .bold)).foregroundStyle(InjectionSitePicker.onBody)
             } else if count > 0 {
-                Text("\(count)").font(.system(size: 13, weight: .bold)).foregroundStyle(SetupTheme.ink)
+                Text("\(count)").font(.system(size: 13, weight: .bold)).foregroundStyle(InjectionSitePicker.onBody)
             }
         }
         .frame(width: size, height: size)
