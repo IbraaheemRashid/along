@@ -356,7 +356,10 @@ struct BodySceneView: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIView(context: Context) -> SCNView {
-        let view = SCNView(frame: .zero)
+        let view = LayoutAwareSCNView(frame: .zero)
+        // Re-project spots once the view has its new bounds (rotation, resize);
+        // SwiftUI's size change arrives before SceneKit's viewport updates.
+        view.onResize = { [weak model] in model?.refreshSpotPoints() }
         view.scene = model.scene
         view.backgroundColor = background
         view.antialiasingMode = .multisampling4X
@@ -374,6 +377,18 @@ struct BodySceneView: UIViewRepresentable {
     func updateUIView(_ view: SCNView, context: Context) {
         context.coordinator.parent = self
         view.backgroundColor = background
+    }
+
+    final class LayoutAwareSCNView: SCNView {
+        var onResize: (() -> Void)?
+        private var lastSize: CGSize = .zero
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            guard bounds.size != lastSize else { return }
+            lastSize = bounds.size
+            onResize?()
+        }
     }
 
     @MainActor
