@@ -1,7 +1,7 @@
 import Foundation
 
 enum SetupStep: String, Codable, CaseIterable, Identifiable {
-    case welcome, experience, goals, source, showcase, pinMap, birthday, weight, target, commitment
+    case welcome, experience, goals, source, showcase, birthday, weight, target, commitment
     case compounds, frequency, doseTime, obstacles, trust, reminders, referral, ready, building, plan, paywall
     var id: String { rawValue }
 
@@ -333,7 +333,8 @@ struct SetupDraft: Codable, Equatable {
         // to defaults, so older drafts still open.
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let base = SetupDraft()
-        step = (try? c.decodeIfPresent(SetupStep.self, forKey: .step)) ?? base.step
+        let savedStep = try? c.decode(String.self, forKey: .step)
+        step = savedStep == "pinMap" ? .birthday : (savedStep.flatMap(SetupStep.init(rawValue:)) ?? base.step)
         experience = (try? c.decodeIfPresent(PeptideExperience.self, forKey: .experience)) ?? nil
         goals = try c.decodeIfPresent(Set<SetupGoal>.self, forKey: .goals) ?? []
         heardFrom = try c.decodeIfPresent(HeardFrom.self, forKey: .heardFrom)

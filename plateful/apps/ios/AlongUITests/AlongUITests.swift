@@ -106,7 +106,7 @@ final class AlongUITests: XCTestCase {
         if step == "reminders" { tap("setup.reminders.skip") } else { tap("setup.continue") }
     }
 
-    private let setupOrder = ["welcome", "experience", "goals", "source", "showcase", "pinMap", "birthday", "weight", "target",
+    private let setupOrder = ["welcome", "experience", "goals", "source", "showcase", "birthday", "weight", "target",
                               "commitment", "compounds", "frequency", "doseTime", "obstacles", "trust", "reminders", "referral", "ready"]
 
     /// Walks the real flow from welcome through the loader and plan reveal.
@@ -512,7 +512,7 @@ final class AlongUITests: XCTestCase {
         assertSetupStep("goals")
         selectIfPresent("setup.goal.skin")
         tap("setup.continue")
-        for step in ["source", "showcase", "pinMap", "birthday"] { assertSetupStep(step); answerAndContinue(step) }
+        for step in ["source", "showcase", "birthday"] { assertSetupStep(step); answerAndContinue(step) }
         assertSetupStep("commitment")
         tap("setup.back")
         assertSetupStep("birthday")
@@ -587,8 +587,6 @@ final class AlongUITests: XCTestCase {
         app.terminate()
         launchSandbox(reset: false)
         assertSetupStep("birthday")
-        tap("setup.back")
-        assertSetupStep("pinMap")
         tap("setup.back")
         assertSetupStep("showcase")
         tap("setup.back")

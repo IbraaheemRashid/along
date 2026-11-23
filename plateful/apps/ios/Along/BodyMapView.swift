@@ -170,42 +170,6 @@ struct BodyMapView: View {
     }
 }
 
-/// Demo heat for onboarding — illustrative only, not the person's history.
-struct PinMapOnboardingDemo: View {
-    var reduceMotion: Bool
-    @State private var selection: InjectionSite? = .abdomenLeft
-
-    private var demoHeat: SiteHeat {
-        var heat = SiteHeat()
-        heat.counts = [
-            .abdomenLeft: 5, .abdomenRight: 2, .thighLeft: 1, .thighRight: 3,
-            .armLeft: 0, .armRight: 1, .gluteLeft: 2, .gluteRight: 0
-        ]
-        heat.lastUsed[.abdomenLeft] = .now
-        return heat
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            BodyMapView(
-                selection: $selection,
-                heat: demoHeat,
-                lastSite: .abdomenLeft,
-                autoRotate: !reduceMotion,
-                accessibilityPrefix: "setup.pin"
-            )
-            if let selection {
-                Text("Selected · \(selection.title)")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(SetupTheme.ink)
-                    .accessibilityIdentifier("setup.pin.selected")
-            }
-            Text("This is a walkthrough with sample heat. Your real map fills in as you log doses.")
-                .font(.caption).foregroundStyle(SetupTheme.muted)
-        }
-    }
-}
-
 /// Simple anatomical silhouette. Front and back share the torso outline; back
 /// softens the chest notch so glute hotspots read clearly.
 private struct BodySilhouette: Shape {

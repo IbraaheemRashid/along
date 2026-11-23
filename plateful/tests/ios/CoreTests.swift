@@ -353,6 +353,9 @@ import Foundation
         let setupData = try JSONEncoder().encode(setup)
         expect(try JSONDecoder().decode(SetupDraft.self, from: setupData) == setup, "Setup survives persistence round trip")
         expect(try JSONDecoder().decode(SetupDraft.self, from: Data("{\"step\":\"goals\"}".utf8)).step == .goals, "Partial setup files decode with defaults")
+        let oldDemo = try JSONDecoder().decode(SetupDraft.self, from: Data(#"{"step":"pinMap","compounds":["BPC-157"]}"#.utf8))
+        expect(oldDemo.step == .birthday && oldDemo.compounds == ["BPC-157"], "An interrupted body demo resumes at birthday with saved answers")
+        expect(setup.step(after: .showcase) == .birthday && setup.step(before: .birthday) == .showcase, "Setup skips the removed demo in both directions")
         let retired = try JSONDecoder().decode(SetupDraft.self, from: Data("{\"step\":\"height\",\"experience\":\"stack\",\"obstacles\":[\"forgetting\",\"retired\"]}".utf8))
         expect(retired.step == .welcome && retired.experience == nil && retired.obstacles == [.forgetting], "Retired screens and answers fall back safely")
 
