@@ -47,7 +47,7 @@ import Foundation
         // Slots, adherence and next dose
         let peptides = [daily, weekly, interval, paused]
         var logs = [
-            DoseLog(peptideID: daily.id, dayKey: "2026-11-04", scheduledTime: morning, takenAt: now.addingTimeInterval(-4 * 3600), amount: 250, unit: .mcg, site: .abdomenLeft),
+            DoseLog(peptideID: daily.id, dayKey: "2026-11-04", scheduledTime: morning, takenAt: now.addingTimeInterval(-4 * 3600), amount: 250, unit: .mcg, site: .abdomenLeft, spot: InjectionSpot(id: "abdomen.left.lower.2")),
             DoseLog(peptideID: weekly.id, dayKey: "2026-11-04", scheduledTime: morning, status: .skipped, takenAt: now.addingTimeInterval(-3 * 3600)),
             DoseLog(peptideID: interval.id, dayKey: "2026-11-04", takenAt: now.addingTimeInterval(-3600)),
         ]
@@ -77,6 +77,26 @@ import Foundation
         let heat = ProtocolSchedule.siteHeat(logs: logs, peptideID: daily.id)
         expect(heat.count(for: .abdomenLeft) == 1 && heat.intensity(for: .abdomenLeft) == 1, "Site heat reflects logged pin locations")
         expect(InjectionSite.gluteLeft.isBack && !InjectionSite.abdomenLeft.isBack, "Glute sites sit on the back face of the body map")
+
+        // Exact spots from the 3D picker
+        expect(InjectionSpot.all.count == 52, "The picker offers 16 abdomen spots and 36 sided spots")
+        expect(Set(InjectionSpot.all.map(\.id)).count == InjectionSpot.all.count, "Spot ids are unique")
+        expect(InjectionSpot.all.allSatisfy { InjectionSpot(id: $0.id) == $0 }, "Every spot id round-trips")
+        for bad in ["", "abdomen.left.3", "abdomen.left.middle.1", "ventroglute.left.lower.1", "ventroglute.up.1", "ventroglute.left.4",
+                    "ventroglute.left.0", "ventroglute.left.02", "elbow.left.1", "delt.left.1.extra"] {
+            expect(InjectionSpot(id: bad) == nil, "Rejects spot id '\(bad)'")
+        }
+        let lowerLeft = InjectionSpot(id: "abdomen.left.lower.3")!
+        expect(lowerLeft.title == "Abdomen · Lower left · Spot 3" && lowerLeft.shortTitle == "L abdomen, lower #3", "Abdomen spots name their quadrant")
+        let vg = InjectionSpot(id: "ventroglute.right.2")!
+        expect(vg.title == "Ventroglute · Right · Spot 2" && vg.shortTitle == "R ventroglute #2" && vg.areaID == "ventroglute.right", "Sided spots name their side")
+        expect(lowerLeft.legacySite == .abdomenLeft && vg.legacySite == .gluteRight && InjectionSpot(id: "tricep.left.1")!.legacySite == .armLeft,
+               "Spots map onto the original eight sites")
+        expect(try JSONDecoder().decode(InjectionSpot.self, from: try JSONEncoder().encode(vg)) == vg, "Spots encode as their id")
+        expect(ProtocolSchedule.lastSpot(for: daily.id, logs: logs)?.id == "abdomen.left.lower.2", "The last exact spot is remembered")
+        let spotHeat = ProtocolSchedule.spotHeat(logs: logs, peptideID: daily.id)
+        expect(spotHeat.count(for: InjectionSpot(id: "abdomen.left.lower.2")!) == 1 && spotHeat.count(for: lowerLeft) == 0, "Spot heat counts exact spots")
+        expect(spotHeat.historyText(for: lowerLeft, now: now) == "Not in your recent logs", "Unused spots read as not recent, never as advice")
 
         // Health analytics (pure; no HealthKit)
         expect(HealthAnalytics.recoveryScore(sleep: 8, hrv: 80, resting: 50) == 100, "Ideal recovery inputs saturate at 100")
@@ -129,6 +149,8 @@ import Foundation
         rejectContent("negative amount", editPeptide { $0["amount"] = -2 })
         rejectContent("orphaned dose", editLog { $0["peptideID"] = UUID().uuidString })
         rejectContent("unknown injection site", editLog { $0["site"] = "elbow" })
+        rejectContent("unknown injection spot", editLog { $0["spot"] = "abdomen.left.middle.1" })
+        rejectContent("non-string injection spot", editLog { $0["spot"] = 4 })
         rejectContent("future dose", editLog { $0["dayKey"] = "2026-12-01" })
         rejectContent("duplicate dose ID") { body in
             var list = body["doseLogs"] as! [[String: Any]]

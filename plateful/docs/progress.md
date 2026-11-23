@@ -2,6 +2,12 @@
 
 Updated 20 November 2026. Working name: Along. Along is a peptide protocol tracker (supporting tool, not medical advice). The GLP-1 journal and Pip companion are retired. **Market Gate A is not passed.**
 
+## Latest — 3D injection-site picker, 23 November 2026
+
+Branch `feature/3d-injection-site-picker` (built in a cloud session without Xcode, so **not yet compiled or run**): choosing a peptide in the dose sheet opens a full-screen SceneKit body (gender-neutral mannequin). Drag spins it 360°; tapping an area (abdomen quadrants, delts, triceps, love handles, ventroglute, dorsoglute, outer thigh) zooms the camera in and shows that area's exact spots with recent-use heat. Logs store the exact spot in the new optional `DoseLog.spot` (e.g. `abdomen.left.lower.3`) and the nearest legacy `site`, so Progress, exports and old logs keep working; backups accept and validate `spot`. The body and spots come from `tools/body-model` and ship as two data assets. The picker records history only and never ranks or suggests a spot.
+
+To verify: `bash scripts/check.sh`, Xcode build, and the UI test `testTodayLogsAndEditsDoses` flow (now opens the picker, zooms to the abdomen and picks `abdomen.left.lower.1`).
+
 ## Latest — peptide tracker core, 20 November 2026
 
 Local commits (not pushed) deliver the build plan in `docs/peptide-tracker-plan.md`: protocol model, setup handover, Today / Protocol / Progress / Settings in the white onboarding design language, dose sheet, dose reminders, Settings rebuild, Pip UI removal, local StoreKit + Superwall `onboarding_end` placement, attribution no-op, peptide Tinybird event allowlist, and optional Crashlytics gated on `GoogleService-Info.plist`.

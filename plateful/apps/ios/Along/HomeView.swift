@@ -188,7 +188,7 @@ struct DoseRow: View {
         if let amount = slot.log?.amountText ?? slot.peptide.amountText { parts.append(amount) }
         if slot.isExtra, let log = slot.log { parts.append("Extra · \(log.takenAt.formatted(date: .omitted, time: .shortened))") }
         else if let time = slot.time { parts.append(time.text) }
-        if let site = slot.log?.site { parts.append(site.shortTitle) }
+        if let label = slot.log?.spot?.shortTitle ?? slot.log?.site?.shortTitle { parts.append(label) }
         return parts.joined(separator: " · ")
     }
 

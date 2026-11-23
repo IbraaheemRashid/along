@@ -22,6 +22,8 @@ struct DoseSheet: View {
     @State private var amountText = ""
     @State private var unit: DoseUnit = .mg
     @State private var site: InjectionSite?
+    @State private var spot: InjectionSpot?
+    @State private var showSitePicker = false
     @State private var note = ""
     @State private var confirmDelete = false
     @FocusState private var focused: Bool
@@ -35,6 +37,14 @@ struct DoseSheet: View {
     private var lastSite: InjectionSite? {
         guard let peptideID else { return nil }
         return ProtocolSchedule.lastSite(for: peptideID, logs: store.journal.protocolLogs.filter { $0.id != existing?.id })
+    }
+    private var lastSpot: InjectionSpot? {
+        guard let peptideID else { return nil }
+        return ProtocolSchedule.lastSpot(for: peptideID, logs: store.journal.protocolLogs.filter { $0.id != existing?.id })
+    }
+    private var spotHeat: SpotHeat {
+        guard let peptideID else { return SpotHeat() }
+        return ProtocolSchedule.spotHeat(logs: store.journal.protocolLogs.filter { $0.id != existing?.id }, peptideID: peptideID)
     }
     private var amount: Double? {
         let trimmed = amountText.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
@@ -74,6 +84,20 @@ struct DoseSheet: View {
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(32)
         .onAppear(perform: prefill)
+        .fullScreenCover(isPresented: $showSitePicker) {
+            InjectionSitePicker(
+                peptideName: peptide?.name ?? "Dose",
+                heat: spotHeat,
+                lastSpot: lastSpot,
+                initial: spot,
+                onFinish: { choice in
+                    spot = choice
+                    if choice == nil { site = nil }
+                    showSitePicker = false
+                },
+                onCancel: { showSitePicker = false }
+            )
+        }
         .confirmationDialog("Delete this dose record?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) { if let existing, store.removeDose(existing.id) { dismiss() } }
         } message: { Text("This removes it from your history. It can’t be undone.") }
@@ -119,6 +143,9 @@ struct DoseSheet: View {
                         amountText = item.amount.map(Self.format) ?? ""
                         unit = item.unit
                         site = nil
+                        spot = nil
+                        // The 3D body opens once a peptide is chosen.
+                        if status == .taken { showSitePicker = true }
                     }
                 }
             }
@@ -183,22 +210,35 @@ struct DoseSheet: View {
         }
     }
 
-    private var siteHeat: SiteHeat {
-        guard let peptideID else { return SiteHeat() }
-        return ProtocolSchedule.siteHeat(
-            logs: store.journal.protocolLogs.filter { $0.id != existing?.id },
-            peptideID: peptideID
-        )
-    }
-
     private var sitePicker: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 label("Injection site")
                 Spacer()
-                if let lastSite { Text("Last: \(lastSite.shortTitle)").font(.caption.weight(.medium)).foregroundStyle(SetupTheme.muted) }
+                if let last = lastSpot?.shortTitle ?? lastSite?.shortTitle {
+                    Text("Last: \(last)").font(.caption.weight(.medium)).foregroundStyle(SetupTheme.muted)
+                }
             }
-            BodyMapView(selection: $site, heat: siteHeat, lastSite: lastSite, autoRotate: false, accessibilityPrefix: "dose.site")
+            Button { showSitePicker = true } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "figure.stand").font(.system(size: 18, weight: .semibold))
+                        .frame(width: 40, height: 40).background(SetupTheme.surface, in: Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(spot?.title ?? site?.title ?? "Choose on the body")
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
+                        Text(spot == nil && site == nil ? "Spin, zoom in and tap a spot" : "Tap to change")
+                            .font(.caption).foregroundStyle(SetupTheme.muted)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundStyle(SetupTheme.muted)
+                }
+                .foregroundStyle(SetupTheme.ink)
+                .padding(12)
+                .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(spot?.title ?? site?.title ?? "None")
+            .accessibilityIdentifier("dose.site.choose")
             Text("Optional. Heat shows where you’ve logged recently so you can rotate sites yourself — Along never picks one for you.")
                 .font(.caption).foregroundStyle(SetupTheme.muted)
         }
@@ -225,7 +265,7 @@ struct DoseSheet: View {
         case .slot(let slot):
             peptideID = slot.peptide.id
             if let log = existing {
-                status = log.status; takenAt = log.takenAt; site = log.site; note = log.note
+                status = log.status; takenAt = log.takenAt; site = log.site; spot = log.spot; note = log.note
                 amountText = log.amount.map(Self.format) ?? ""; unit = log.unit
             } else {
                 amountText = slot.peptide.amount.map(Self.format) ?? ""; unit = slot.peptide.unit
@@ -251,7 +291,8 @@ struct DoseSheet: View {
         log.takenAt = min(takenAt, .now)
         log.amount = status == .taken ? amount : nil
         log.unit = unit
-        log.site = status == .taken ? site : nil
+        log.spot = status == .taken ? spot : nil
+        log.site = status == .taken ? (spot?.legacySite ?? site) : nil
         log.note = note
         if store.saveDose(log) {
             store.showToast(status == .taken ? "\(peptide?.name ?? "Dose") logged" : "Marked as skipped")

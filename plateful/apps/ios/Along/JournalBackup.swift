@@ -285,8 +285,11 @@ struct JournalBackup: Codable, Equatable {
         if let raw = content["doseLogs"] {
             guard let entries = raw as? [Any], entries.count <= DoseLog.limit else { throw Failure.invalidArchive }
             for entry in entries {
-                let log = try object(entry, required: ["id", "peptideID", "dayKey", "status", "takenAt", "unit", "note", "isSample"], optional: ["scheduledTime", "amount", "site"])
+                let log = try object(entry, required: ["id", "peptideID", "dayKey", "status", "takenAt", "unit", "note", "isSample"], optional: ["scheduledTime", "amount", "site", "spot"])
                 if let time = log["scheduledTime"] { _ = try object(time, required: ["hour", "minute"]) }
+                if let spot = log["spot"] {
+                    guard let id = spot as? String, InjectionSpot(id: id) != nil else { throw Failure.invalidArchive }
+                }
             }
         }
         if let raw = content["onboardingPreferences"] {

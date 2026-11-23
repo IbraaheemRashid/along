@@ -215,6 +215,8 @@ struct DoseLog: Codable, Identifiable, Equatable {
     var amount: Double?
     var unit: DoseUnit = .mg
     var site: InjectionSite?
+    /// Exact spot from the 3D picker. `site` keeps the nearest legacy region.
+    var spot: InjectionSpot?
     var note = ""
     var isSample = false
 

@@ -472,7 +472,7 @@ private struct OnboardingArchive: Codable {
         for log in journal.protocolLogs.sorted(by: { $0.takenAt < $1.takenAt }) {
             let name = peptide(log.peptideID)?.name ?? "Peptide"
             let amount = log.amountText ?? ""
-            let site = log.site?.shortTitle ?? ""
+            let site = log.spot?.shortTitle ?? log.site?.shortTitle ?? ""
             lines.append("\(log.isSample ? "[SAMPLE] " : "")Dose · \(log.dayKey) · \(name) · \(log.status.rawValue)\(amount.isEmpty ? "" : " · \(amount)")\(site.isEmpty ? "" : " · \(site)")")
             if !log.note.isEmpty { lines.append(log.note) }
         }
