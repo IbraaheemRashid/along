@@ -1,12 +1,31 @@
 # Along — playbook progress
 
-Updated 20 November 2026. Working name: Along. Along is a peptide protocol tracker (supporting tool, not medical advice). The GLP-1 journal and Pip companion are retired. **Market Gate A is not passed.**
+Updated 23 November 2026. Working name: Along. Along is a peptide protocol tracker (supporting tool, not medical advice). The GLP-1 journal and Pip companion are retired. **Market Gate A is not passed.**
 
 ## Latest — 3D injection-site picker, 23 November 2026
 
-Branch `feature/3d-injection-site-picker` (built in a cloud session without Xcode, so **not yet compiled or run**): choosing a peptide in the dose sheet opens a full-screen SceneKit body (gender-neutral mannequin). Drag spins it 360°; tapping an area (abdomen quadrants, delts, triceps, love handles, ventroglute, dorsoglute, outer thigh) zooms the camera in and shows that area's exact spots with recent-use heat. Logs store the exact spot in the new optional `DoseLog.spot` (e.g. `abdomen.left.lower.3`) and the nearest legacy `site`, so Progress, exports and old logs keep working; backups accept and validate `spot`. The body and spots come from `tools/body-model` and ship as two data assets. The picker records history only and never ranks or suggests a spot.
+Branch `feature/3d-injection-site-picker`: choosing a peptide in the dose sheet opens a full-screen SceneKit body (gender-neutral mannequin). Drag spins it 360°; tapping an area (abdomen quadrants, delts, triceps, love handles, ventroglute, dorsoglute, outer thigh) zooms the camera in and shows that area's exact spots with recent-use heat. Logs store the exact spot in the new optional `DoseLog.spot` (e.g. `abdomen.left.lower.3`) and the nearest legacy `site`, so Progress, exports and old logs keep working; backups accept and validate `spot`. The body and spots come from `tools/body-model` and ship as two data assets. The picker records history only and never ranks or suggests a spot.
 
-To verify: `bash scripts/check.sh`, Xcode build, and the UI test `testTodayLogsAndEditsDoses` flow (now opens the picker, zooms to the abdomen and picks `abdomen.left.lower.1`).
+**Verified 23 November 2026** (Xcode 27.2, iOS 27.2 Simulator; iPhone 18 Pro, iPhone SE 3rd gen, iPad Pro 11-inch):
+
+- The patch compiled without changes: no errors and no warnings from the new files. `bash scripts/check.sh` passes: 30/30 Node tests, 194 domain, 81 protocol (including the new spot tests), 49 billing, 45 reminder, 60 + 61 backup and 66 day-identity checks. The web build was skipped because `apps/web` dependencies aren't installed.
+- `testTodayLogsDosesAndDoseSheetSavesDetails` passes, picking `abdomen.left.lower.1` through the picker. Full `AlongUITests`: 13 passed, 13 skipped (retired Pip tests), 4 failed. The same 4 fail identically on `main` (Health chart, Protocol tab, Journey and Dev Lab scenarios), so none comes from this branch.
+- Checked in the Simulator, using temporary UI-test drivers and screenshots (`docs/screenshots/3d-site-picker/`):
+  - The body renders light grey with smooth lighting, no inverted faces and no z-fighting.
+  - Drag spins it through Right side → Back → Left side.
+  - Tapping a zone zooms in and fades the other zones. The spot counts are 16 abdomen, 3 ventroglute, 4 dorsoglute, 3 love handles, 2 delts, 2 triceps and 4 outer thigh.
+  - Tapping the hip on the screen's right opens Ventroglute · Left. The Left/Right toggle and every area chip work.
+  - Choosing a spot fills the card ("Abdomen · Lower left", "Spot 3 · Not in your recent logs") and the dose row ("Abdomen · Lower left · Spot 3"). Today shows "L abdomen, lower #3".
+  - Heat counts and the last-used clock icon show. Editing a log zooms straight to its saved spot. Skip clears the site and Back changes nothing.
+  - With Reduce Motion on, spots appear about 0.7 s sooner because the camera move is skipped. VoiceOver reads each spot's title and history.
+- Two fixes were made after running it:
+  - **Rotation and resize:** spots were re-projected before SceneKit had its new viewport, so they drifted off the zone after an iPad rotation. They are now re-projected from the `SCNView`'s own layout.
+  - **Dark mode:** quadrant labels, spot badges and the selected spot used the adaptive ink, which turned white over the always-light body. They now use a fixed dark ink, so light mode is unchanged.
+- Known issues, left for a re-export of `tools/body-model`:
+  - zone edges are stair-stepped, because decals are whole mesh triangles;
+  - love-handle spots 2 and 3 overlap, because the `flank` focus yaw is too side-on;
+  - abdomen spots crowd and overlap, worst on iPhone SE and iPad landscape, because the abdomen `halfHeight` is fixed in `export_asset.py`.
+- Release momentum still adds about 15° even after a pause before lifting the finger. This was seen with synthesized touches and hasn't been checked on a device.
 
 ## Latest — peptide tracker core, 20 November 2026
 
