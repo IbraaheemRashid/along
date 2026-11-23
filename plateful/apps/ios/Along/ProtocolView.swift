@@ -70,7 +70,7 @@ struct PeptideCard: View {
     var body: some View {
         Button(action: open) {
             HStack(spacing: 14) {
-                PeptideBadge(name: peptide.name, dimmed: peptide.isPaused)
+                PeptideBadge(name: peptide.name, colour: peptide.displayColour, dimmed: peptide.isPaused)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(peptide.name).font(.system(.body, weight: .semibold)).foregroundStyle(SetupTheme.ink)
                     Text([peptide.amountText ?? "Dose not set", peptide.schedule.summary].joined(separator: " · "))

@@ -106,7 +106,11 @@ struct DoseSheet: View {
     private var header: some View {
         ZStack {
             VStack(spacing: 2) {
-                Text(peptide?.name ?? "Log a dose").font(.headline).foregroundStyle(SetupTheme.ink)
+                HStack(spacing: 7) {
+                    if let peptide { PeptideBadge(name: peptide.name, colour: peptide.displayColour, size: 26) }
+                    Text(peptide?.name ?? "Log a dose").font(.headline).foregroundStyle(SetupTheme.ink)
+                }
+                .padding(.horizontal, 44)
                 Text(subtitle).font(.caption).foregroundStyle(SetupTheme.muted)
             }
             HStack {
@@ -138,7 +142,7 @@ struct DoseSheet: View {
             label("Peptide")
             SetupFlowLayout {
                 ForEach(store.journal.protocolPeptides) { item in
-                    SetupChip(title: item.name, selected: peptideID == item.id, leading: "circle", identifier: "dose.peptide.\(item.name)") {
+                    SetupChip(title: item.name, selected: peptideID == item.id, marker: item.displayColour.tint, identifier: "dose.peptide.\(item.name)") {
                         peptideID = item.id
                         amountText = item.amount.map(Self.format) ?? ""
                         unit = item.unit

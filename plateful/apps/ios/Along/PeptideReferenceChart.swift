@@ -5,6 +5,7 @@ import SwiftUI
 /// never dosing guidance or efficacy claims.
 struct PeptideReferenceChart: View {
     var name: String
+    var colour: PeptideColour
     private var reference: PeptideReference { Peptide.reference(for: name) }
 
     var body: some View {
@@ -18,7 +19,7 @@ struct PeptideReferenceChart: View {
                     x: .value("Signal", point.value),
                     y: .value("Band", point.label)
                 )
-                .foregroundStyle(SetupTheme.ink.opacity(0.85))
+                .foregroundStyle(colour.tint)
                 .cornerRadius(6)
             }
             .chartXScale(domain: 0...100)

@@ -340,12 +340,16 @@ struct SetupChip: View {
     var detail: String?
     var selected: Bool
     var leading: String?
+    var marker: Color?
     var identifier: String
     var action: () -> Void
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                Image(systemName: selected ? "checkmark" : (leading ?? "plus")).font(.system(size: 12, weight: .bold))
+                if let marker { Circle().fill(marker).frame(width: 10, height: 10) }
+                if marker == nil || selected {
+                    Image(systemName: selected ? "checkmark" : (leading ?? "plus")).font(.system(size: 12, weight: .bold))
+                }
                 Text(title).font(.system(.subheadline, weight: .medium)).lineLimit(1).layoutPriority(1)
                 if let detail { Text(detail).font(.caption).foregroundStyle(selected ? SetupTheme.inverseInk.opacity(0.7) : SetupTheme.muted).lineLimit(1) }
             }

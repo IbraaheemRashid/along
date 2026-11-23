@@ -35,9 +35,9 @@ struct ProgressScreen: View {
                 } else {
                     adherenceCards
                     if let selected = selectedPeptide.flatMap(store.peptide) {
-                        PeptideReferenceChart(name: selected.name)
+                        PeptideReferenceChart(name: selected.name, colour: selected.displayColour)
                     } else if peptides.count == 1, let only = peptides.first {
-                        PeptideReferenceChart(name: only.name)
+                        PeptideReferenceChart(name: only.name, colour: only.displayColour)
                     }
                     batchSection
                     siteMapSection
@@ -105,7 +105,7 @@ struct ProgressScreen: View {
                     Text(symbol).font(.caption2.weight(.semibold)).foregroundStyle(SetupTheme.muted).frame(maxWidth: .infinity)
                 }
                 ForEach(days, id: \.self) { key in
-                    DayCell(key: key, today: today, fraction: fraction(on: key), inMonth: isInDisplayedMonth(key, monthStart))
+                    DayCell(key: key, today: today, summary: DoseCalendarDay(slots: store.slots(on: key)), inMonth: isInDisplayedMonth(key, monthStart))
                 }
             }
         }
@@ -125,6 +125,7 @@ struct ProgressScreen: View {
                         let offset = peptide.batchExpiryOffset(from: today)
                         AppCard {
                             HStack {
+                                PeptideBadge(name: peptide.name, colour: peptide.displayColour, size: 28)
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(peptide.name).font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
                                     Text(peptide.batchExpirySummary ?? "")
@@ -190,7 +191,7 @@ struct ProgressScreen: View {
                 HStack(spacing: 8) {
                     FilterChip(title: "All", selected: selectedPeptide == nil) { selectedPeptide = nil }
                     ForEach(peptides) { peptide in
-                        FilterChip(title: peptide.name, selected: selectedPeptide == peptide.id) {
+                        FilterChip(title: peptide.name, colour: peptide.displayColour, selected: selectedPeptide == peptide.id) {
                             selectedPeptide = selectedPeptide == peptide.id ? nil : peptide.id
                         }
                     }
@@ -203,7 +204,7 @@ struct ProgressScreen: View {
                 }
             } else {
                 ForEach(noted.prefix(20)) { log in
-                    NoteRow(log: log, peptideName: store.peptide(log.peptideID)?.name ?? "Peptide")
+                    NoteRow(log: log, peptide: store.peptide(log.peptideID))
                 }
             }
         }
@@ -267,11 +268,6 @@ struct ProgressScreen: View {
         return Calendar.current.isDate(date, equalTo: monthStart, toGranularity: .month)
     }
 
-    private func fraction(on key: String) -> Double? {
-        let due = store.slots(on: key).filter { !$0.isExtra }
-        guard !due.isEmpty, key <= today else { return nil }
-        return Double(due.filter(\.isTaken).count) / Double(due.count)
-    }
 }
 
 private struct AdherenceCard: View {
@@ -304,30 +300,36 @@ private struct AdherenceCard: View {
 private struct DayCell: View {
     var key: String
     var today: String
-    var fraction: Double?
+    var summary: DoseCalendarDay
     var inMonth: Bool
     var body: some View {
         let day = DayIdentity.formatted(key: key, rawDate: .now, style: .dateTime.day())
         VStack(spacing: 4) {
-            DoseRing(fraction: inMonth ? fraction : nil, lineWidth: 2.5, tint: SetupTheme.ink) {
+            DoseRing(fraction: inMonth && key <= today ? summary.fraction : nil, lineWidth: 2.5, tint: SetupTheme.ink) {
                 Text(day).font(.system(size: 11, weight: key == today ? .bold : .medium))
                     .foregroundStyle(inMonth ? (key > today ? SetupTheme.muted : SetupTheme.ink) : SetupTheme.disabled)
             }
             .frame(width: 30, height: 30)
+            PeptideDayDots(peptides: inMonth ? summary.peptides : [])
         }
         .frame(maxWidth: .infinity, minHeight: 36)
         .opacity(inMonth ? 1 : 0.35)
+        .accessibilityValue(inMonth ? summary.names : "")
         .accessibilityLabel(DayIdentity.formatted(key: key, rawDate: .now, style: .dateTime.weekday(.wide).day().month(.wide)))
     }
 }
 
 private struct FilterChip: View {
     var title: String
+    var colour: PeptideColour?
     var selected: Bool
     var action: () -> Void
     var body: some View {
         Button(action: action) {
-            Text(title).font(.system(.subheadline, weight: .semibold)).lineLimit(1)
+            HStack(spacing: 6) {
+                if let colour { Circle().fill(colour.tint).frame(width: 9, height: 9) }
+                Text(title).font(.system(.subheadline, weight: .semibold)).lineLimit(1)
+            }
                 .foregroundStyle(selected ? SetupTheme.inverseInk : SetupTheme.ink)
                 .padding(.horizontal, 14).frame(minHeight: 36)
                 .background(selected ? SetupTheme.ink : SetupTheme.surface, in: Capsule())
@@ -339,11 +341,12 @@ private struct FilterChip: View {
 
 private struct NoteRow: View {
     var log: DoseLog
-    var peptideName: String
+    var peptide: TrackedPeptide?
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(peptideName).font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
+                if let peptide { PeptideBadge(name: peptide.name, colour: peptide.displayColour, size: 24) }
+                Text(peptide?.name ?? "Peptide").font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
                 Spacer()
                 Text(DayIdentity.formatted(key: log.dayKey, rawDate: log.takenAt, style: .dateTime.month(.abbreviated).day()))
                     .font(.caption).foregroundStyle(SetupTheme.muted)

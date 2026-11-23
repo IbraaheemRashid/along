@@ -104,6 +104,8 @@ import Foundation
         // Persistence and backup
         var journal = Journal()
         journal.startDate = now.addingTimeInterval(-86400 * 10)
+        expect(daily.colour == nil && daily.displayColour == .mint, "Existing recovery peptides keep their category colour")
+        daily.colour = .teal
         journal.peptides = [daily, weekly, interval]
         journal.doseLogs = logs
         let stored = try JSONDecoder().decode(Journal.self, from: try JSONEncoder().encode(journal))
@@ -115,6 +117,10 @@ import Foundation
         let data = try archive.encoded(now: now)
         let restored = try JournalBackup.decode(data, now: now).restoring(into: Journal(), now: now)
         expect(restored.peptides == journal.peptides && restored.doseLogs == journal.doseLogs, "Backups preserve peptides and every dose")
+
+        expect(restored.peptides?.first?.displayColour == .teal, "A chosen colour survives backup and restore")
+        let calendarDay = DoseCalendarDay(slots: today)
+        expect(calendarDay.peptides.count == 3, "Multiple times and extra doses give one calendar marker per peptide")
 
         let raw = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         func rejectContent(_ name: String, _ change: (inout [String: Any]) -> Void) {

@@ -152,6 +152,22 @@ struct DoseSchedule: Codable, Equatable {
     var timesSummary: String { sortedTimes.map(\.text).joined(separator: " · ") }
 }
 
+enum PeptideColour: String, Codable, CaseIterable {
+    case blue, mint, rose, lilac, apricot, indigo, slate, teal, gold
+
+    static func categoryDefault(for name: String) -> Self {
+        switch Peptide.category(for: name) {
+        case let category where category.hasPrefix("GLP-1"): .blue
+        case "Recovery": .mint
+        case "Skin": .rose
+        case "GH secretagogue": .lilac
+        case "Longevity", "Metabolic": .apricot
+        case "Cognitive", "Sleep": .indigo
+        default: .slate
+        }
+    }
+}
+
 struct TrackedPeptide: Codable, Identifiable, Equatable {
     static let nameLimit = 40
     static let noteLimit = 300
@@ -169,6 +185,9 @@ struct TrackedPeptide: Codable, Identifiable, Equatable {
     var isSample = false
     /// Optional vial / batch expiry as a civil day key. Tracking only.
     var batchExpiryKey: String?
+    var colour: PeptideColour?
+
+    var displayColour: PeptideColour { colour ?? .categoryDefault(for: name) }
 
     var category: String { Peptide.category(for: name) }
     var reference: PeptideReference { Peptide.reference(for: name) }
@@ -244,6 +263,20 @@ struct DoseSlot: Identifiable, Equatable {
     var isTaken: Bool { log?.status == .taken }
     var isSkipped: Bool { log?.status == .skipped }
     var isExtra: Bool { time == nil }
+}
+
+struct DoseCalendarDay {
+    let peptides: [TrackedPeptide]
+    let fraction: Double?
+
+    init(slots: [DoseSlot]) {
+        var seen = Set<UUID>()
+        peptides = slots.map(\.peptide).filter { seen.insert($0.id).inserted }
+        let scheduled = slots.filter { !$0.isExtra }
+        fraction = scheduled.isEmpty ? nil : Double(scheduled.filter(\.isTaken).count) / Double(scheduled.count)
+    }
+
+    var names: String { peptides.map(\.name).joined(separator: ", ") }
 }
 
 struct Adherence: Equatable {

@@ -19,7 +19,7 @@ struct HomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
-                DayStrip(selected: day, today: today, fraction: fraction(on:)) { selectedDay = $0 }
+                DayStrip(selected: day, today: today, slots: store.slots(on:)) { selectedDay = $0 }
                 summary
                 if isToday, let next = ProtocolSchedule.nextDose(after: store.referenceDate, peptides: store.journal.protocolPeptides, logs: store.journal.protocolLogs) {
                     nextDose(next.slot, at: next.at)
@@ -58,12 +58,6 @@ struct HomeView: View {
             PreviewBadge()
         }
         .padding(.top, 8)
-    }
-
-    private func fraction(on key: String) -> Double? {
-        let due = store.slots(on: key).filter { !$0.isExtra }
-        guard !due.isEmpty else { return nil }
-        return Double(due.filter(\.isTaken).count) / Double(due.count)
     }
 
     private var dayTitle: String {
@@ -113,8 +107,7 @@ struct HomeView: View {
         let when = calendar.isDateInToday(moment) ? moment.formatted(date: .omitted, time: .shortened)
             : moment.formatted(.dateTime.weekday(.abbreviated).hour().minute())
         return HStack(spacing: 12) {
-            Image(systemName: "clock").font(.system(size: 15, weight: .semibold)).foregroundStyle(SetupTheme.ink)
-                .frame(width: 36, height: 36).background(SetupTheme.surface, in: Circle())
+            PeptideBadge(name: slot.peptide.name, colour: slot.peptide.displayColour, size: 36)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Next dose").font(.caption).foregroundStyle(SetupTheme.muted)
                 Text([slot.peptide.name, slot.peptide.amountText].compactMap { $0 }.joined(separator: " · "))
@@ -196,7 +189,7 @@ struct DoseRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            PeptideBadge(name: slot.peptide.name, dimmed: slot.isSkipped)
+            PeptideBadge(name: slot.peptide.name, colour: slot.peptide.displayColour, dimmed: slot.isSkipped)
             VStack(alignment: .leading, spacing: 3) {
                 Text(slot.peptide.name).font(.system(.body, weight: .semibold)).foregroundStyle(SetupTheme.ink)
                     .strikethrough(slot.isSkipped, color: SetupTheme.muted)
@@ -248,7 +241,7 @@ struct DoseRow: View {
 struct DayStrip: View {
     var selected: String
     var today: String
-    var fraction: (String) -> Double?
+    var slots: (String) -> [DoseSlot]
     var select: (String) -> Void
 
     private var days: [String] { (-27...3).compactMap { ProtocolSchedule.key(today, adding: $0) } }
@@ -266,16 +259,18 @@ struct DayStrip: View {
 
     private func cell(_ key: String) -> some View {
         let isSelected = key == selected, isFuture = key > today
+        let summary = DoseCalendarDay(slots: slots(key))
         let weekday = DayIdentity.formatted(key: key, rawDate: .now, style: .dateTime.weekday(.narrow))
         let number = DayIdentity.formatted(key: key, rawDate: .now, style: .dateTime.day())
         return Button { select(key) } label: {
             VStack(spacing: 6) {
                 Text(weekday).font(.caption2.weight(.semibold)).foregroundStyle(isSelected ? SetupTheme.ink : SetupTheme.muted)
-                DoseRing(fraction: fraction(key), lineWidth: 3, tint: isFuture ? SetupTheme.disabled : SetupTheme.ink) {
+                DoseRing(fraction: summary.fraction, lineWidth: 3, tint: isFuture ? SetupTheme.disabled : SetupTheme.ink) {
                     Text(number).font(.system(size: 14, weight: key == today ? .bold : .medium))
                         .foregroundStyle(isFuture ? SetupTheme.muted : SetupTheme.ink)
                 }
                 .frame(width: 34, height: 34)
+                PeptideDayDots(peptides: summary.peptides)
             }
             .padding(.vertical, 8).frame(width: 46)
             .background(isSelected ? SetupTheme.surface : Color.clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -284,6 +279,7 @@ struct DayStrip: View {
         .buttonStyle(.plain)
         .accessibilityLabel(DayIdentity.formatted(key: key, rawDate: .now, style: .dateTime.weekday(.wide).day().month(.wide)))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityValue(summary.names)
         .accessibilityIdentifier("today.day.\(key)")
     }
 }

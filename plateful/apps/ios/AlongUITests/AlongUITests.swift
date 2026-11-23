@@ -811,12 +811,14 @@ final class AlongUITests: XCTestCase {
         let amount = app.textFields["peptide.amount"]
         amount.tap(); amount.typeText("1")
         app.buttons["Done"].firstMatch.tap()
+        tap("peptide.colour.teal")
         tap("peptide.schedule.weekdays")
         capture("peptide-editor")
         tap("peptide.save")
         XCTAssertTrue(element("protocol.peptide.GHK-Cu").waitForExistence(timeout: 4))
 
         element("protocol.peptide.GHK-Cu").tap()
+        XCTAssertTrue(app.buttons["peptide.colour.teal"].isSelected)
         XCTAssertTrue(app.switches["peptide.pause"].waitForExistence(timeout: 4))
         app.switches["peptide.pause"].tap()
         tap("peptide.save")

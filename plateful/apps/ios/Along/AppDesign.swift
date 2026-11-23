@@ -26,23 +26,44 @@ struct AppSectionTitle: View {
     }
 }
 
-/// A round monogram for a peptide, tinted by category so stacks are easy to scan.
-struct PeptideBadge: View {
-    var name: String
-    var size: CGFloat = 44
-    var dimmed = false
-
-    static func tint(for category: String) -> Color {
-        switch category {
-        case let value where value.hasPrefix("GLP-1"): Color(red: 0.42, green: 0.62, blue: 0.93)
-        case "Recovery": Color(red: 0.36, green: 0.72, blue: 0.56)
-        case "Skin": Color(red: 0.93, green: 0.55, blue: 0.62)
-        case "GH secretagogue": Color(red: 0.66, green: 0.55, blue: 0.85)
-        case "Longevity", "Metabolic": Color(red: 0.93, green: 0.65, blue: 0.36)
-        case "Cognitive", "Sleep": Color(red: 0.45, green: 0.52, blue: 0.85)
-        default: Color(red: 0.6, green: 0.6, blue: 0.65)
+extension PeptideColour {
+    var tint: Color {
+        switch self {
+        case .blue: Color(red: 0.42, green: 0.62, blue: 0.93)
+        case .mint: Color(red: 0.36, green: 0.72, blue: 0.56)
+        case .rose: Color(red: 0.93, green: 0.55, blue: 0.62)
+        case .lilac: Color(red: 0.66, green: 0.55, blue: 0.85)
+        case .apricot: Color(red: 0.93, green: 0.65, blue: 0.36)
+        case .indigo: Color(red: 0.45, green: 0.52, blue: 0.85)
+        case .slate: Color(red: 0.6, green: 0.6, blue: 0.65)
+        case .teal: Color(red: 0.20, green: 0.66, blue: 0.68)
+        case .gold: Color(red: 0.85, green: 0.70, blue: 0.30)
         }
     }
+}
+
+struct PeptideDayDots: View {
+    let peptides: [TrackedPeptide]
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(peptides.prefix(3)) { peptide in
+                Circle().fill(peptide.displayColour.tint).frame(width: 5, height: 5)
+            }
+            if peptides.count > 3 {
+                Text("+\(peptides.count - 3)").font(.system(size: 8, weight: .semibold))
+            }
+        }
+        .frame(height: 10)
+        .accessibilityHidden(true)
+    }
+}
+
+struct PeptideBadge: View {
+    var name: String
+    var colour: PeptideColour
+    var size: CGFloat = 44
+    var dimmed = false
 
     var monogram: String {
         let letters = name.filter { $0.isLetter || $0.isNumber }
@@ -50,10 +71,10 @@ struct PeptideBadge: View {
     }
 
     var body: some View {
-        let tint = Self.tint(for: Peptide.category(for: name))
+        let tint = colour.tint
         Text(monogram)
             .font(.system(size: size * 0.34, weight: .bold, design: .rounded))
-            .foregroundStyle(dimmed ? SetupTheme.muted : tint)
+            .foregroundStyle(tint.opacity(dimmed ? 0.75 : 1))
             .frame(width: size, height: size)
             .background((dimmed ? SetupTheme.tile : tint.opacity(0.14)), in: Circle())
             .accessibilityHidden(true)

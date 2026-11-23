@@ -20,6 +20,7 @@ struct PeptideEditor: View {
 
     @State private var name = ""
     @State private var search = ""
+    @State private var colour: PeptideColour?
     @State private var amountText = ""
     @State private var unit: DoseUnit = .mg
     @State private var kind: DoseSchedule.Kind = .daily
@@ -62,9 +63,10 @@ struct PeptideEditor: View {
                 VStack(alignment: .leading, spacing: 22) {
                     if editing == nil { namePicker } else { nameField }
                     if !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        PeptideReferenceChart(name: name)
+                        PeptideReferenceChart(name: name, colour: displayColour)
                     }
                     amountField
+                    if !name.isEmpty { colourPicker }
                     scheduleKind
                     if kind == .weekdays { weekdayPicker }
                     if kind == .interval { intervalPicker }
@@ -119,6 +121,36 @@ struct PeptideEditor: View {
         Text(text).font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
     }
 
+    private var displayColour: PeptideColour { colour ?? .categoryDefault(for: name) }
+
+    private var colourPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            label("Colour · \(displayColour.rawValue.capitalized)")
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), alignment: .leading, spacing: 2) {
+                ForEach(PeptideColour.allCases, id: \.self) { swatch in
+                    let selected = displayColour == swatch
+                    Button { colour = swatch } label: {
+                        Circle().fill(swatch.tint)
+                            .frame(width: 30, height: 30)
+                            .overlay {
+                                if selected {
+                                    Image(systemName: "checkmark").font(.caption.bold()).foregroundStyle(.black)
+                                }
+                            }
+                            .padding(3)
+                            .overlay { if selected { Circle().strokeBorder(SetupTheme.ink, lineWidth: 2) } }
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(swatch.rawValue.capitalized)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityIdentifier("peptide.colour.\(swatch.rawValue)")
+                }
+            }
+        }
+    }
+
     private var namePicker: some View {
         VStack(alignment: .leading, spacing: 10) {
             label("Peptide")
@@ -152,7 +184,7 @@ struct PeptideEditor: View {
                 }
             } else {
                 HStack {
-                    PeptideBadge(name: name)
+                    PeptideBadge(name: name, colour: displayColour)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(name).font(.system(.body, weight: .semibold)).foregroundStyle(SetupTheme.ink)
                         Text(Peptide.category(for: name)).font(.caption).foregroundStyle(SetupTheme.muted)
@@ -388,6 +420,7 @@ struct PeptideEditor: View {
             return
         }
         name = peptide.name
+        colour = peptide.colour
         amountText = peptide.amount.map { $0.formatted(.number.precision(.fractionLength(0...3)).grouping(.never)) } ?? ""
         unit = peptide.unit
         kind = peptide.schedule.kind
@@ -410,6 +443,7 @@ struct PeptideEditor: View {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         var peptide = editing ?? TrackedPeptide(name: trimmed, schedule: schedule, startKey: startKey)
         peptide.name = trimmed
+        peptide.colour = colour
         peptide.amount = amount
         peptide.unit = unit
         peptide.schedule = schedule
