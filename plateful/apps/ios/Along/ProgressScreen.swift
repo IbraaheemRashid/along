@@ -142,7 +142,8 @@ struct ProgressScreen: View {
                 }
             }
             .padding(.top, 4)
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Colour key: \(active.map(\.name).joined(separator: ", "))")
             .accessibilityIdentifier("progress.calendar.legend")
         }
     }

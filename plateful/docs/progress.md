@@ -10,7 +10,14 @@ Branch `feature/peptide-colours`: people pick a colour for each peptide from 10 
 
 - Protocol checks went from 81 to 101, covering legacy decoding, the round trip, the old tints and backup accept/reject. Billing (49), reminder (45), backup (60 + 61) and day-identity (66) checks pass.
 - `bash scripts/check.sh` **fails before reaching these, on `main` as well**: CoreTests' "Going back never replays the loader" is stale since `5dd619e` added the `account` step before the paywall. With only that line removed, 193 domain checks pass.
-- New UI tests `testPeptideColourPersistsAfterEditing` and `testPeptideColoursReview` pass. `openPeptideList` matches the Settings row by label prefix, because the row label now includes its detail.
+- New UI tests `testPeptideColourPersistsAfterEditing` and `testPeptideColoursReview` pass. `openPeptideList` matches the Settings row by label prefix, because the row label now includes its detail. The legend has a "Colour key: …" VoiceOver label, and the test finds it by that label because the calendar's `progress.calendar` identifier can mask identifiers inside it.
+- Full `AlongUITests`: 32 tests, 13 skipped (retired Pip), 8 failed. The 8 were:
+  - `testPeptideColoursReview`: flaky legend lookup, fixed as above. It now passes.
+  - `testUnpaidDataControlsRemainAvailable`: the Simulator failed to launch the app. It passes on rerun.
+  - Six that come from earlier work on `main`, not this branch:
+    - Health chart, Protocol tab and Dev Lab scenarios: known since 23 November. Protocol still taps the old "Your peptides" label.
+    - `testWeightAndDataReset`: taps the retired Journey tab.
+    - `testFullSetupStopsAtPaywallAndCanOpenExplicitDesignPreview` and `testUnconnectedPurchaseAndRestoreNeverUnlockApp`: setup changed with the account step.
 - An untouched peptide's badge is pixel-identical between `main` and this branch: 0 of 79,488 pixels differ. Screenshots are in `docs/screenshots/peptide-colours/`.
 - Building and running needed two local-only patches, which are not committed. The project lists `GoogleService-Info.plist` as a build input, and `AuthStore.start()` calls `Auth.auth()` unguarded, which crashes at launch without that plist. Both affect `main`.
 - Already wrong on `main`: the Progress calendar's weekday headings start on Sunday while the grid starts on Monday.

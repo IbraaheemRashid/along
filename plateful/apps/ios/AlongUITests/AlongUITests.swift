@@ -924,9 +924,10 @@ final class AlongUITests: XCTestCase {
         app.buttons["dose.close"].tap()
 
         navigationTab("Progress").tap()
-        let legend = element("progress.calendar.legend")
-        XCTAssertTrue(legend.waitForExistence(timeout: 4))
+        // Found by label: the calendar's own identifier can mask identifiers inside it.
+        let legend = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Colour key:")).firstMatch
         reveal(legend)
+        XCTAssertEqual(legend.label, "Colour key: Tirzepatide, BPC-157, GHK-Cu")
         let todayCell = app.descendants(matching: .any).matching(NSPredicate(format: "label ENDSWITH %@", "Tirzepatide, BPC-157, GHK-Cu taken")).firstMatch
         XCTAssertTrue(todayCell.exists, "The day reads the peptides taken, in protocol order")
         capture("colour-progress-calendar")
