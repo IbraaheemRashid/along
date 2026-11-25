@@ -335,6 +335,7 @@ private struct OnboardingArchive: Codable {
         guard setup.isValid, setup.isAdult(now: now) else {
             error = "Some setup answers need another look before continuing. Your journal is unchanged."; return nil
         }
+        _ = saveSetup()
         var candidate = journal
         candidate.setupProfile = setup
         candidate.weightUnit = setup.weightUnit
@@ -355,6 +356,7 @@ private struct OnboardingArchive: Codable {
         candidate.reconcileProgress(now: now)
         guard persist(candidate) else { return false }
         journal = candidate
+        _ = saveSetup()
         return true
     }
     @discardableResult func finishSetupPreview(now: Date = .now) -> Bool {
@@ -364,6 +366,7 @@ private struct OnboardingArchive: Codable {
         candidate.reconcileProgress(now: now)
         guard persist(candidate) else { return false }
         journal = candidate
+        _ = saveSetup()
         return true
         #else
         error = "Design preview access is only available in a development build. No subscription has been activated."

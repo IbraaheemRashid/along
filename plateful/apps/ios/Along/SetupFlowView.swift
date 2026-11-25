@@ -4,6 +4,7 @@ struct SetupFlowView: View {
     @Environment(JournalStore.self) private var store
     @Environment(BillingStore.self) private var billing
     @Environment(ReminderStore.self) private var reminders
+    @Environment(AuthStore.self) private var auth
     @Environment(\.alongReducedMotion) private var reduceMotion
     @State private var forward = true
     @State private var showBackup = false
@@ -12,6 +13,7 @@ struct SetupFlowView: View {
     @State private var showPreviewConfirmation = false
     @State private var requestingReminders = false
     @State private var search = ""
+    @State private var accountPassword = ""
     @FocusState private var fieldFocused: Bool
 
     private var draft: SetupDraft { store.setup }
@@ -38,17 +40,29 @@ struct SetupFlowView: View {
         .sheet(isPresented: $showBackup) { JournalBackupView(journal: { store.journal }, replace: store.restoreJournal) }
         .sheet(isPresented: $showLocalData) { LocalDataView() }
         .sheet(isPresented: $showSignIn) {
-            SetupSignInSheet {
-                showSignIn = false
-                Task { try? await Task.sleep(for: .seconds(0.4)); showBackup = true }
-            }
+            SetupSignInSheet(
+                restoreBackup: {
+                    showSignIn = false
+                    Task { try? await Task.sleep(for: .seconds(0.4)); showBackup = true }
+                },
+                onSignedIn: {
+                    showSignIn = false
+                }
+            )
         }
         .alert("Open the local design preview?", isPresented: $showPreviewConfirmation) {
-            Button("Open design preview") { _ = store.finishSetupPreview() }
+            Button("Open design preview") { Task { await completePreviewSetup() } }
             Button("Stay here", role: .cancel) {}
         } message: { Text("This developer preview does not purchase or activate a subscription.") }
         .onChange(of: billing.isEntitled) { _, entitled in
-            if entitled && step == .paywall { _ = store.finishSetup() }
+            if entitled && step == .paywall {
+                Task { await completePaidSetup() }
+            }
+        }
+        .onChange(of: auth.user?.id) { _, id in
+            if id != nil, step == .account, let email = auth.user?.email, !email.isEmpty {
+                store.setup.accountEmail = email
+            }
         }
     }
 
@@ -105,8 +119,21 @@ struct SetupFlowView: View {
             }
         case .ready: return FooterAction(title: "Build my protocol", action: advance)
         case .plan: return FooterAction(title: "Let’s get started", action: advance)
+        case .account: return accountAction
         case .paywall: return paywallAction
         default: return FooterAction(title: "Continue", enabled: draft.canContinue(at: step), action: advance)
+        }
+    }
+
+    private var accountAction: FooterAction {
+        if auth.isSignedIn {
+            return FooterAction(title: "Continue", action: advance)
+        }
+        let emailOK = SetupDraft.validEmail(draft.accountEmail)
+        let passwordOK = accountPassword.count >= 6
+        return FooterAction(title: "Continue", enabled: emailOK && passwordOK) {
+            auth.stageOnboardingCredentials(email: draft.accountEmail, password: accountPassword)
+            advance()
         }
     }
 
@@ -151,6 +178,7 @@ struct SetupFlowView: View {
         next.step = destination
         forward = true
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.28)) { store.setup = next }
+        _ = store.saveSetup()
     }
 
     private func back() {
@@ -201,8 +229,101 @@ struct SetupFlowView: View {
         case .ready: readyScreen
         case .building: SetupBuildingView(draft: draft, reduceMotion: reduceMotion) { advance() }
         case .plan: SetupPlanView(draft: draft)
+        case .account: accountScreen
         case .paywall: paywallScreen
         }
+    }
+
+    private var accountScreen: some View {
+        SetupScrollPage {
+            SetupHeading(
+                title: "Save your protocol",
+                subtitle: "Add your email now. We’ll sign you in automatically when you subscribe so your plan syncs across devices."
+            )
+            VStack(spacing: 12) {
+                TextField("Email", text: binding(\.accountEmail))
+                    .textContentType(.emailAddress)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .focused($fieldFocused)
+                    .padding(14)
+                    .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .accessibilityIdentifier("setup.account.email")
+                if !auth.isSignedIn {
+                    SecureField("Password (min 6 characters)", text: $accountPassword)
+                        .textContentType(.newPassword)
+                        .padding(14)
+                        .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .accessibilityIdentifier("setup.account.password")
+                }
+                if auth.isSignedIn {
+                    Label(auth.user?.email ?? "Signed in", systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(SetupTheme.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 4)
+                        .accessibilityIdentifier("setup.account.signed-in")
+                }
+            }
+            .padding(.top, 20)
+
+            if !auth.isSignedIn {
+                HStack(spacing: 12) {
+                    Rectangle().fill(SetupTheme.border).frame(height: 1)
+                    Text("or").font(.caption.weight(.medium)).foregroundStyle(SetupTheme.muted)
+                    Rectangle().fill(SetupTheme.border).frame(height: 1)
+                }
+                .padding(.vertical, 8)
+
+                accountProvider("Continue with Apple", identifier: "apple", filled: true) {
+                    Image(systemName: "apple.logo").font(.system(size: 19, weight: .medium))
+                } action: {
+                    Task {
+                        await auth.signInWithApple()
+                        if auth.isSignedIn {
+                            if let email = auth.user?.email { store.setup.accountEmail = email }
+                            advance()
+                        }
+                    }
+                }
+                accountProvider("Continue with Google", identifier: "google", filled: false) {
+                    Text("G").font(.system(size: 19, weight: .bold, design: .rounded))
+                        .foregroundStyle(LinearGradient(colors: [Color(red: 0.26, green: 0.52, blue: 0.96), Color(red: 0.92, green: 0.26, blue: 0.21), Color(red: 0.98, green: 0.74, blue: 0.02), Color(red: 0.2, green: 0.66, blue: 0.33)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                } action: {
+                    Task {
+                        await auth.signInWithGoogle()
+                        if auth.isSignedIn {
+                            if let email = auth.user?.email { store.setup.accountEmail = email }
+                            advance()
+                        }
+                    }
+                }
+
+                if let notice = auth.message {
+                    Text(notice).font(.footnote).foregroundStyle(SetupTheme.muted).multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity).padding(.top, 4)
+                        .accessibilityIdentifier("setup.account.notice")
+                }
+            }
+        }
+        .disabled(auth.isBusy)
+    }
+
+    private func accountProvider<Icon: View>(_ title: String, identifier: String, filled: Bool, @ViewBuilder icon: () -> Icon, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                icon().frame(width: 22)
+                Text(title).font(.system(.body, weight: .semibold))
+            }
+            .foregroundStyle(filled ? SetupTheme.inverseInk : SetupTheme.ink)
+            .frame(maxWidth: .infinity, minHeight: 56)
+            .background(filled ? SetupTheme.ink : SetupTheme.surface, in: Capsule())
+            .overlay(Capsule().strokeBorder(filled ? Color.clear : SetupTheme.border, lineWidth: 1.5))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(SetupPressStyle())
+        .accessibilityIdentifier("setup.account.\(identifier)")
     }
 
     private var welcome: some View {
@@ -591,14 +712,35 @@ struct SetupFlowView: View {
     }
 
     private var paywallAction: FooterAction {
-        if billing.isEntitled { return FooterAction(title: "Open Along") { _ = store.finishSetup() } }
-        if billing.isBusy { return FooterAction(title: "Please wait…", enabled: false) {} }
+        if billing.isEntitled {
+            return FooterAction(title: "Open Along") {
+                Task { await completePaidSetup() }
+            }
+        }
+        if billing.isBusy || auth.isBusy { return FooterAction(title: "Please wait…", enabled: false) {} }
         return FooterAction(title: "Continue", enabled: billing.canPurchase) {
             Task {
                 _ = await billing.purchase(plan: draft.plan.billingPlan)
-                if billing.isEntitled { _ = store.finishSetup() }
+                if billing.isEntitled { await completePaidSetup() }
             }
         }
+    }
+
+    /// Persist setup answers first, then create/sign-in so cloud restore cannot clobber them.
+    private func completePaidSetup() async {
+        guard store.finishSetup() else { return }
+        await signInAfterSetupIfNeeded()
+    }
+
+    private func completePreviewSetup() async {
+        guard store.finishSetupPreview() else { return }
+        await signInAfterSetupIfNeeded()
+    }
+
+    private func signInAfterSetupIfNeeded() async {
+        guard !auth.isSignedIn else { return }
+        auth.stageOnboardingCredentials(email: draft.accountEmail, password: accountPassword)
+        _ = await auth.ensureSignedInAfterPurchase(email: draft.accountEmail)
     }
 
     private var paywallFinePrint: some View {
@@ -620,8 +762,13 @@ struct SetupFlowView: View {
 
     @ViewBuilder private var paywallLinks: some View {
         MembershipLegalLinks(compact: true)
-        Button("Restore") { Task { await billing.restore(); if billing.isEntitled { _ = store.finishSetup() } } }
-            .disabled(billing.isBusy).frame(minHeight: 32).accessibilityIdentifier("setup.restore")
+        Button("Restore") {
+            Task {
+                await billing.restore()
+                if billing.isEntitled { await completePaidSetup() }
+            }
+        }
+            .disabled(billing.isBusy || auth.isBusy).frame(minHeight: 32).accessibilityIdentifier("setup.restore")
         Button("Your data") { showLocalData = true }.frame(minHeight: 32).accessibilityIdentifier("setup.local-data")
     }
 }

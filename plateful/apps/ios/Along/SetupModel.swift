@@ -2,12 +2,12 @@ import Foundation
 
 enum SetupStep: String, Codable, CaseIterable, Identifiable {
     case welcome, experience, goals, source, showcase, pinMap, birthday, weight, target, commitment
-    case compounds, frequency, doseTime, obstacles, trust, reminders, referral, ready, building, plan, paywall
+    case compounds, frequency, doseTime, obstacles, trust, reminders, referral, ready, building, plan, account, paywall
     var id: String { rawValue }
 
-    /// Steps that count towards the progress bar. The welcome, loader, reveal and
-    /// paywall sit outside the questionnaire.
-    var showsProgress: Bool { ![.welcome, .building, .plan, .paywall].contains(self) }
+    /// Steps that count towards the progress bar. The welcome, loader, reveal,
+    /// account gate and paywall sit outside the questionnaire.
+    var showsProgress: Bool { ![.welcome, .building, .plan, .account, .paywall].contains(self) }
     var showsBack: Bool { ![.welcome, .building, .plan].contains(self) }
 }
 
@@ -318,6 +318,8 @@ struct SetupDraft: Codable, Equatable {
     var remindersRequested: Bool?
     var referralCode = ""
     var plan: OnboardingPlan = .annual
+    /// Collected before paywall; Firebase account is created on successful purchase.
+    var accountEmail = ""
 
     static var defaultBirthDate: Date {
         var components = Calendar.current.dateComponents([.year], from: .now)
@@ -335,7 +337,11 @@ struct SetupDraft: Codable, Equatable {
         let base = SetupDraft()
         step = (try? c.decodeIfPresent(SetupStep.self, forKey: .step)) ?? base.step
         experience = (try? c.decodeIfPresent(PeptideExperience.self, forKey: .experience)) ?? nil
-        goals = try c.decodeIfPresent(Set<SetupGoal>.self, forKey: .goals) ?? []
+        if let goalValues = try c.decodeIfPresent([String].self, forKey: .goals) {
+            goals = Set(goalValues.compactMap(SetupGoal.init(rawValue:)))
+        } else {
+            goals = try c.decodeIfPresent(Set<SetupGoal>.self, forKey: .goals) ?? []
+        }
         heardFrom = try c.decodeIfPresent(HeardFrom.self, forKey: .heardFrom)
         birthDate = try c.decodeIfPresent(Date.self, forKey: .birthDate) ?? base.birthDate
         usesMetric = try c.decodeIfPresent(Bool.self, forKey: .usesMetric) ?? base.usesMetric
@@ -350,11 +356,34 @@ struct SetupDraft: Codable, Equatable {
         remindersRequested = try c.decodeIfPresent(Bool.self, forKey: .remindersRequested)
         referralCode = try c.decodeIfPresent(String.self, forKey: .referralCode) ?? ""
         plan = try c.decodeIfPresent(OnboardingPlan.self, forKey: .plan) ?? .annual
+        accountEmail = try c.decodeIfPresent(String.self, forKey: .accountEmail) ?? ""
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(step, forKey: .step)
+        try c.encodeIfPresent(experience, forKey: .experience)
+        try c.encode(goals.map(\.rawValue).sorted(), forKey: .goals)
+        try c.encodeIfPresent(heardFrom, forKey: .heardFrom)
+        try c.encode(birthDate, forKey: .birthDate)
+        try c.encode(usesMetric, forKey: .usesMetric)
+        try c.encode(weightKg, forKey: .weightKg)
+        try c.encode(targetKg, forKey: .targetKg)
+        try c.encode(hasChosenTarget, forKey: .hasChosenTarget)
+        try c.encode(compounds, forKey: .compounds)
+        try c.encodeIfPresent(frequency, forKey: .frequency)
+        try c.encode(doseHour, forKey: .doseHour)
+        try c.encode(doseMinute, forKey: .doseMinute)
+        try c.encode(obstacles.map(\.rawValue).sorted(), forKey: .obstacles)
+        try c.encodeIfPresent(remindersRequested, forKey: .remindersRequested)
+        try c.encode(referralCode, forKey: .referralCode)
+        try c.encode(plan, forKey: .plan)
+        try c.encode(accountEmail, forKey: .accountEmail)
     }
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case step, experience, goals, heardFrom, birthDate, usesMetric, weightKg, targetKg, hasChosenTarget
-        case compounds, frequency, doseHour, doseMinute, obstacles, remindersRequested, referralCode, plan
+        case compounds, frequency, doseHour, doseMinute, obstacles, remindersRequested, referralCode, plan, accountEmail
     }
 
     // MARK: Flow
@@ -402,6 +431,7 @@ struct SetupDraft: Codable, Equatable {
         case .frequency: frequency != nil
         case .obstacles: !obstacles.isEmpty
         case .referral: referralCode.isEmpty || Self.validReferral(referralCode)
+        case .account: Self.validEmail(accountEmail)
         default: true
         }
     }
@@ -473,6 +503,14 @@ struct SetupDraft: Codable, Equatable {
     static func validReferral(_ code: String) -> Bool {
         code.count <= referralLimit && !code.isEmpty
             && code.unicodeScalars.allSatisfy { CharacterSet.alphanumerics.contains($0) || $0 == "-" || $0 == "_" }
+    }
+
+    static func validEmail(_ email: String) -> Bool {
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count <= 254, trimmed.contains("@") else { return false }
+        let parts = trimmed.split(separator: "@", maxSplits: 1, omittingEmptySubsequences: false)
+        guard parts.count == 2, !parts[0].isEmpty, parts[1].contains(".") else { return false }
+        return trimmed.unicodeScalars.allSatisfy { !CharacterSet.whitespacesAndNewlines.contains($0) }
     }
 
     #if DEBUG

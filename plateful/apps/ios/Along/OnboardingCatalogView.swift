@@ -54,6 +54,7 @@ private struct OnboardingScreenPreview: View {
             }.padding(.horizontal, 24).padding(.vertical, 10).background(Theme.paper)
             RootView(showsDevTools: false).environment(previewStore).environment(billing).environment(reminders)
                 .environment(HealthKitStore(arguments: ["--ui-testing"]))
+                .environment(AuthStore()).environment(CloudSync())
         }
     }
 }
@@ -80,6 +81,7 @@ extension SetupStep {
         case .ready: "Time to build"
         case .building: "Building your protocol"
         case .plan: "Your protocol"
+        case .account: "Create account"
         case .paywall: "Paywall"
         }
     }
