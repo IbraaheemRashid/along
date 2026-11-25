@@ -138,7 +138,7 @@ struct DoseSheet: View {
             label("Peptide")
             SetupFlowLayout {
                 ForEach(store.journal.protocolPeptides) { item in
-                    SetupChip(title: item.name, selected: peptideID == item.id, leading: "circle", identifier: "dose.peptide.\(item.name)") {
+                    SetupChip(title: item.name, selected: peptideID == item.id, dot: item.displayColor.color, identifier: "dose.peptide.\(item.name)") {
                         peptideID = item.id
                         amountText = item.amount.map(Self.format) ?? ""
                         unit = item.unit

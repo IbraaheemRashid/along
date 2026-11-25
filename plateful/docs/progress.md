@@ -2,7 +2,20 @@
 
 Updated 23 November 2026. Working name: Along. Along is a peptide protocol tracker (supporting tool, not medical advice). The GLP-1 journal and Pip companion are retired. **Market Gate A is not passed.**
 
-## Latest — 3D injection-site picker, 23 November 2026
+## Latest — peptide colours, 25 November 2026
+
+Branch `feature/peptide-colours`: people pick a colour for each peptide from 10 swatches (`PeptideColor`) in the add/edit screen, and it shows on the badge in Today and the peptide list, the Next dose card, the dose-sheet chips, and as up to three dots per day (then "+") with a legend on the Progress calendar. `TrackedPeptide.color` is optional; nil follows `PeptideColor.default(for:)`, which reproduces the old category tints exactly, so existing peptides look the same. Backups accept `color` and reject unknown values. Colour is for recognition only, and the monogram stays so colour is never the only cue. The 3D site picker is unchanged.
+
+**Verified 25 November 2026** (Xcode 27.2, iPhone 18 Pro Simulator, iOS 27.2):
+
+- Protocol checks went from 81 to 101, covering legacy decoding, the round trip, the old tints and backup accept/reject. Billing (49), reminder (45), backup (60 + 61) and day-identity (66) checks pass.
+- `bash scripts/check.sh` **fails before reaching these, on `main` as well**: CoreTests' "Going back never replays the loader" is stale since `5dd619e` added the `account` step before the paywall. With only that line removed, 193 domain checks pass.
+- New UI tests `testPeptideColourPersistsAfterEditing` and `testPeptideColoursReview` pass. `openPeptideList` matches the Settings row by label prefix, because the row label now includes its detail.
+- An untouched peptide's badge is pixel-identical between `main` and this branch: 0 of 79,488 pixels differ. Screenshots are in `docs/screenshots/peptide-colours/`.
+- Building and running needed two local-only patches, which are not committed. The project lists `GoogleService-Info.plist` as a build input, and `AuthStore.start()` calls `Auth.auth()` unguarded, which crashes at launch without that plist. Both affect `main`.
+- Already wrong on `main`: the Progress calendar's weekday headings start on Sunday while the grid starts on Monday.
+
+## 3D injection-site picker, 23 November 2026
 
 Branch `feature/3d-injection-site-picker`: choosing a peptide in the dose sheet opens a full-screen SceneKit body (gender-neutral mannequin). Drag spins it 360°; tapping an area (abdomen quadrants, delts, triceps, love handles, ventroglute, dorsoglute, outer thigh) zooms the camera in and shows that area's exact spots with recent-use heat. Logs store the exact spot in the new optional `DoseLog.spot` (e.g. `abdomen.left.lower.3`) and the nearest legacy `site`, so Progress, exports and old logs keep working; backups accept and validate `spot`. The body and spots come from `tools/body-model` and ship as two data assets. The picker records history only and never ranks or suggests a spot.
 

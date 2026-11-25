@@ -115,8 +115,11 @@ struct HomeView: View {
                 .frame(width: 36, height: 36).background(SetupTheme.surface, in: Circle())
             VStack(alignment: .leading, spacing: 2) {
                 Text("Next dose").font(.caption).foregroundStyle(SetupTheme.muted)
-                Text([slot.peptide.name, slot.peptide.amountText].compactMap { $0 }.joined(separator: " · "))
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
+                HStack(spacing: 6) {
+                    PeptideDot(color: slot.peptide.displayColor)
+                    Text([slot.peptide.name, slot.peptide.amountText].compactMap { $0 }.joined(separator: " · "))
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
+                }
             }
             Spacer()
             Text(when).font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
@@ -194,7 +197,7 @@ struct DoseRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            PeptideBadge(name: slot.peptide.name, dimmed: slot.isSkipped)
+            PeptideBadge(name: slot.peptide.name, color: slot.peptide.displayColor, dimmed: slot.isSkipped)
             VStack(alignment: .leading, spacing: 3) {
                 Text(slot.peptide.name).font(.system(.body, weight: .semibold)).foregroundStyle(SetupTheme.ink)
                     .strikethrough(slot.isSkipped, color: SetupTheme.muted)

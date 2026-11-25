@@ -84,6 +84,7 @@ struct ProgressScreen: View {
     private var calendar: some View {
         let monthStart = monthAnchor
         let days = monthDays(around: monthStart)
+        let taken = takenPeptides(on: Set(days))
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
                 AppSectionTitle(title: monthStart.formatted(.dateTime.month(.wide).year()))
@@ -105,14 +106,45 @@ struct ProgressScreen: View {
                     Text(symbol).font(.caption2.weight(.semibold)).foregroundStyle(SetupTheme.muted).frame(maxWidth: .infinity)
                 }
                 ForEach(days, id: \.self) { key in
-                    DayCell(key: key, today: today, fraction: fraction(on: key), inMonth: isInDisplayedMonth(key, monthStart))
+                    DayCell(key: key, today: today, fraction: fraction(on: key), inMonth: isInDisplayedMonth(key, monthStart),
+                            taken: taken[key] ?? [])
                 }
             }
+            calendarLegend
         }
         .padding(16)
         .background(SetupTheme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(SetupTheme.border))
         .accessibilityIdentifier("progress.calendar")
+    }
+
+    /// Peptides with a taken dose on each day, in protocol order, honouring the
+    /// peptide filter. Colour is for recognition only.
+    private func takenPeptides(on days: Set<String>) -> [String: [TrackedPeptide]] {
+        var ids: [String: Set<UUID>] = [:]
+        for log in logs where log.status == .taken && days.contains(log.dayKey) {
+            ids[log.dayKey, default: []].insert(log.peptideID)
+        }
+        let shown = peptides.filter { selectedPeptide == nil || $0.id == selectedPeptide }
+        return ids.mapValues { set in shown.filter { set.contains($0.id) } }
+    }
+
+    @ViewBuilder private var calendarLegend: some View {
+        let active = peptides.filter { !$0.isPaused }
+        if !active.isEmpty {
+            SetupFlowLayout(spacing: 12) {
+                ForEach(active) { peptide in
+                    HStack(spacing: 6) {
+                        PeptideDot(color: peptide.displayColor)
+                        Text(peptide.name).font(.caption.weight(.medium)).foregroundStyle(SetupTheme.ink).lineLimit(1)
+                    }
+                    .opacity(selectedPeptide == nil || selectedPeptide == peptide.id ? 1 : 0.35)
+                }
+            }
+            .padding(.top, 4)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("progress.calendar.legend")
+        }
     }
 
     private var batchSection: some View {
@@ -306,18 +338,37 @@ private struct DayCell: View {
     var today: String
     var fraction: Double?
     var inMonth: Bool
+    /// Peptides with a taken dose this day, in protocol order.
+    var taken: [TrackedPeptide] = []
+    private static let maximumDots = 3
+
     var body: some View {
         let day = DayIdentity.formatted(key: key, rawDate: .now, style: .dateTime.day())
-        VStack(spacing: 4) {
+        let shown = inMonth ? taken : []
+        VStack(spacing: 3) {
             DoseRing(fraction: inMonth ? fraction : nil, lineWidth: 2.5, tint: SetupTheme.ink) {
                 Text(day).font(.system(size: 11, weight: key == today ? .bold : .medium))
                     .foregroundStyle(inMonth ? (key > today ? SetupTheme.muted : SetupTheme.ink) : SetupTheme.disabled)
             }
             .frame(width: 30, height: 30)
+            HStack(spacing: 2) {
+                ForEach(shown.prefix(Self.maximumDots)) { PeptideDot(color: $0.displayColor, size: 5) }
+                if shown.count > Self.maximumDots {
+                    Text("+").font(.system(size: 8, weight: .bold)).foregroundStyle(SetupTheme.muted)
+                }
+            }
+            .frame(height: 7)
         }
-        .frame(maxWidth: .infinity, minHeight: 36)
+        .frame(maxWidth: .infinity, minHeight: 44)
         .opacity(inMonth ? 1 : 0.35)
-        .accessibilityLabel(DayIdentity.formatted(key: key, rawDate: .now, style: .dateTime.weekday(.wide).day().month(.wide)))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label(for: shown))
+    }
+
+    private func label(for shown: [TrackedPeptide]) -> String {
+        let date = DayIdentity.formatted(key: key, rawDate: .now, style: .dateTime.weekday(.wide).day().month(.wide))
+        guard !shown.isEmpty else { return date }
+        return "\(date), \(shown.map(\.name).joined(separator: ", ")) taken"
     }
 }
 

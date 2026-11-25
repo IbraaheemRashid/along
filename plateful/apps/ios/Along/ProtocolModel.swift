@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 enum DoseUnit: String, Codable, CaseIterable, Identifiable {
     case mcg, mg, iu, ml, units
@@ -152,6 +153,47 @@ struct DoseSchedule: Codable, Equatable {
     var timesSummary: String { sortedTimes.map(\.text).joined(separator: " · ") }
 }
 
+/// A colour the person picks for a peptide so they can recognise it at a glance.
+/// Organisation only: no swatch means anything about the peptide or the dose.
+enum PeptideColor: String, Codable, CaseIterable, Identifiable {
+    case blue, green, pink, purple, orange, indigo, teal, red, yellow, graphite
+    var id: String { rawValue }
+
+    var title: String { rawValue.prefix(1).uppercased() + rawValue.dropFirst() }
+
+    /// sRGB components. The first six (and graphite) are the category tints the
+    /// app used before colours were editable, so existing peptides look the same.
+    var rgb: (red: Double, green: Double, blue: Double) {
+        switch self {
+        case .blue: (0.42, 0.62, 0.93)
+        case .green: (0.36, 0.72, 0.56)
+        case .pink: (0.93, 0.55, 0.62)
+        case .purple: (0.66, 0.55, 0.85)
+        case .orange: (0.93, 0.65, 0.36)
+        case .indigo: (0.45, 0.52, 0.85)
+        case .teal: (0.13, 0.64, 0.70)
+        case .red: (0.87, 0.30, 0.29)
+        case .yellow: (0.84, 0.70, 0.10)
+        case .graphite: (0.6, 0.6, 0.65)
+        }
+    }
+
+    var color: Color { Color(red: rgb.red, green: rgb.green, blue: rgb.blue) }
+
+    /// The colour a peptide shows until the person picks one.
+    static func `default`(for category: String) -> PeptideColor {
+        switch category {
+        case let value where value.hasPrefix("GLP-1"): .blue
+        case "Recovery": .green
+        case "Skin": .pink
+        case "GH secretagogue": .purple
+        case "Longevity", "Metabolic": .orange
+        case "Cognitive", "Sleep": .indigo
+        default: .graphite
+        }
+    }
+}
+
 struct TrackedPeptide: Codable, Identifiable, Equatable {
     static let nameLimit = 40
     static let noteLimit = 300
@@ -169,8 +211,12 @@ struct TrackedPeptide: Codable, Identifiable, Equatable {
     var isSample = false
     /// Optional vial / batch expiry as a civil day key. Tracking only.
     var batchExpiryKey: String?
+    /// The person's chosen colour. Nil follows the category default, so data
+    /// saved before colours existed keeps the colour it always showed.
+    var color: PeptideColor?
 
     var category: String { Peptide.category(for: name) }
+    var displayColor: PeptideColor { color ?? .default(for: category) }
     var reference: PeptideReference { Peptide.reference(for: name) }
 
     var amountText: String? {

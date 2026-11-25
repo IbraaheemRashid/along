@@ -44,6 +44,28 @@ import Foundation
         expect(ref.researchAttention >= 90 && Peptide.reference(for: "Unknown blend").practicalUse <= 40, "Reference bands cover known and custom peptides")
         expect(PeptideReference.disclaimer.lowercased().contains("not medical advice"), "Reference copy stays non-clinical")
 
+        // Colours
+        expect((8...10).contains(PeptideColor.allCases.count), "A small, distinct set of swatches")
+        expect(Set(PeptideColor.allCases.map { "\($0.rgb)" }).count == PeptideColor.allCases.count, "Every swatch is a different colour")
+        // The exact tints PeptideBadge.tint(for:) used before colours were editable.
+        let legacyTints: [(String, (Double, Double, Double))] = [
+            ("GLP-1", (0.42, 0.62, 0.93)), ("GLP-1 / GIP", (0.42, 0.62, 0.93)), ("Recovery", (0.36, 0.72, 0.56)),
+            ("Skin", (0.93, 0.55, 0.62)), ("GH secretagogue", (0.66, 0.55, 0.85)), ("Longevity", (0.93, 0.65, 0.36)),
+            ("Metabolic", (0.93, 0.65, 0.36)), ("Cognitive", (0.45, 0.52, 0.85)), ("Sleep", (0.45, 0.52, 0.85)),
+            ("Immune", (0.6, 0.6, 0.65)), ("Custom", (0.6, 0.6, 0.65)),
+        ]
+        for (category, tint) in legacyTints {
+            let rgb = PeptideColor.default(for: category).rgb
+            expect(rgb.red == tint.0 && rgb.green == tint.1 && rgb.blue == tint.2, "\(category) keeps its original tint")
+        }
+        expect(PeptideColor.default(for: "Unknown") == .graphite, "Uncategorised peptides default to graphite")
+        let legacyJSON = #"{"id":"6F9619FF-8B86-D011-B42D-00C04FC964FF","name":"BPC-157","unit":"mcg","schedule":{"kind":"daily","weekdays":[],"intervalDays":2,"times":[{"hour":8,"minute":0}]},"startKey":"2026-11-01","isPaused":false,"note":"","isSample":false}"#
+        let legacyPeptide = try JSONDecoder().decode(TrackedPeptide.self, from: Data(legacyJSON.utf8))
+        expect(legacyPeptide.color == nil && legacyPeptide.displayColor == .green, "Peptides saved before colours keep their category colour")
+        var tealPeptide = TrackedPeptide(name: "BPC-157", startKey: "2026-11-01"); tealPeptide.color = .teal
+        let tealRoundTrip = try JSONDecoder().decode(TrackedPeptide.self, from: JSONEncoder().encode(tealPeptide))
+        expect(tealRoundTrip.color == .teal && tealRoundTrip.displayColor == .teal && tealRoundTrip.isValid, "A chosen colour survives a round trip and wins over the default")
+
         // Slots, adherence and next dose
         let peptides = [daily, weekly, interval, paused]
         var logs = [
@@ -126,6 +148,13 @@ import Foundation
         let data = try archive.encoded(now: now)
         let restored = try JournalBackup.decode(data, now: now).restoring(into: Journal(), now: now)
         expect(restored.peptides == journal.peptides && restored.doseLogs == journal.doseLogs, "Backups preserve peptides and every dose")
+        let archivedPeptides = ((try JSONSerialization.jsonObject(with: data) as! [String: Any])["content"] as! [String: Any])["peptides"] as! [[String: Any]]
+        expect(archivedPeptides.allSatisfy { $0["color"] == nil } && restored.peptides?.allSatisfy { $0.color == nil } == true,
+               "A backup without colours (as made before this change) imports and keeps following defaults")
+        var coloured = journal; coloured.peptides?[1].color = .yellow
+        let colouredRestored = try JournalBackup.decode(try JournalBackup.make(from: coloured, now: now, timeZone: zone).encoded(now: now), now: now)
+            .restoring(into: Journal(), now: now)
+        expect(colouredRestored.peptides?[1].color == .yellow && colouredRestored.peptides?[0].color == nil, "Backups preserve chosen colours")
 
         let raw = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         func rejectContent(_ name: String, _ change: (inout [String: Any]) -> Void) {
@@ -147,6 +176,8 @@ import Foundation
         rejectContent("duplicate weekdays", editPeptide { var s = $0["schedule"] as! [String: Any]; s["weekdays"] = [2, 2]; $0["schedule"] = s })
         rejectContent("unknown dose unit", editPeptide { $0["unit"] = "drops" })
         rejectContent("negative amount", editPeptide { $0["amount"] = -2 })
+        rejectContent("unknown peptide colour", editPeptide { $0["color"] = "chartreuse" })
+        rejectContent("non-string peptide colour", editPeptide { $0["color"] = 3 })
         rejectContent("orphaned dose", editLog { $0["peptideID"] = UUID().uuidString })
         rejectContent("unknown injection site", editLog { $0["site"] = "elbow" })
         rejectContent("unknown injection spot", editLog { $0["spot"] = "abdomen.left.middle.1" })

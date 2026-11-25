@@ -26,23 +26,13 @@ struct AppSectionTitle: View {
     }
 }
 
-/// A round monogram for a peptide, tinted by category so stacks are easy to scan.
+/// A round monogram for a peptide in the colour the person chose for it. The
+/// monogram stays so colour is never the only cue.
 struct PeptideBadge: View {
     var name: String
+    var color: PeptideColor
     var size: CGFloat = 44
     var dimmed = false
-
-    static func tint(for category: String) -> Color {
-        switch category {
-        case let value where value.hasPrefix("GLP-1"): Color(red: 0.42, green: 0.62, blue: 0.93)
-        case "Recovery": Color(red: 0.36, green: 0.72, blue: 0.56)
-        case "Skin": Color(red: 0.93, green: 0.55, blue: 0.62)
-        case "GH secretagogue": Color(red: 0.66, green: 0.55, blue: 0.85)
-        case "Longevity", "Metabolic": Color(red: 0.93, green: 0.65, blue: 0.36)
-        case "Cognitive", "Sleep": Color(red: 0.45, green: 0.52, blue: 0.85)
-        default: Color(red: 0.6, green: 0.6, blue: 0.65)
-        }
-    }
 
     var monogram: String {
         let letters = name.filter { $0.isLetter || $0.isNumber }
@@ -50,13 +40,22 @@ struct PeptideBadge: View {
     }
 
     var body: some View {
-        let tint = Self.tint(for: Peptide.category(for: name))
+        let tint = color.color
         Text(monogram)
             .font(.system(size: size * 0.34, weight: .bold, design: .rounded))
             .foregroundStyle(dimmed ? SetupTheme.muted : tint)
             .frame(width: size, height: size)
             .background((dimmed ? SetupTheme.tile : tint.opacity(0.14)), in: Circle())
             .accessibilityHidden(true)
+    }
+}
+
+/// A small dot in a peptide's colour, for chips, calendars and legends.
+struct PeptideDot: View {
+    var color: PeptideColor
+    var size: CGFloat = 8
+    var body: some View {
+        Circle().fill(color.color).frame(width: size, height: size).accessibilityHidden(true)
     }
 }
 

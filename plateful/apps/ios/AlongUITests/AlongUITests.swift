@@ -850,4 +850,85 @@ final class AlongUITests: XCTestCase {
         XCTAssertTrue(element("protocol.peptide.GHK-Cu").waitForExistence(timeout: 4))
         XCTAssertTrue(element("protocol.peptide.GHK-Cu").label.contains("Paused"), element("protocol.peptide.GHK-Cu").label)
     }
+
+    private func openPeptideList() {
+        navigationTab("Settings").tap()
+        // The row's label includes its detail, e.g. "Your peptides, 2 tracked".
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Your peptides")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 4))
+        reveal(row)
+        row.tap()
+        XCTAssertTrue(element("protocol.peptide.BPC-157").waitForExistence(timeout: 4))
+    }
+
+    func testPeptideColourPersistsAfterEditing() {
+        launchSandbox(arguments: ["--setup-complete"])
+        XCTAssertTrue(element("today.summary").waitForExistence(timeout: 8))
+        openPeptideList()
+
+        element("protocol.peptide.BPC-157").tap()
+        let green = app.buttons["peptide.color.green"], teal = app.buttons["peptide.color.teal"]
+        XCTAssertTrue(green.waitForExistence(timeout: 4))
+        XCTAssertTrue(green.isSelected && !teal.isSelected, "An untouched peptide shows its category colour")
+        XCTAssertEqual(teal.label, "Teal")
+        tap("peptide.color.teal")
+        XCTAssertTrue(teal.isSelected && !green.isSelected)
+        tap("peptide.save")
+        XCTAssertTrue(element("protocol.peptide.BPC-157").waitForExistence(timeout: 4))
+
+        element("protocol.peptide.BPC-157").tap()
+        XCTAssertTrue(teal.waitForExistence(timeout: 4))
+        XCTAssertTrue(teal.isSelected && !green.isSelected, "The chosen colour is kept when editing again")
+        tap("peptide.close")
+
+        app.terminate()
+        launchSandbox(reset: false)
+        XCTAssertTrue(element("today.summary").waitForExistence(timeout: 8))
+        openPeptideList()
+        element("protocol.peptide.BPC-157").tap()
+        XCTAssertTrue(teal.waitForExistence(timeout: 4))
+        XCTAssertTrue(teal.isSelected, "The chosen colour persists across launches")
+    }
+
+    /// Review captures for the colour feature. Tirzepatide is left untouched,
+    /// so it shows exactly the colour it had before colours were editable.
+    func testPeptideColoursReview() {
+        launchSandbox(arguments: ["--setup-complete"])
+        XCTAssertTrue(element("today.summary").waitForExistence(timeout: 8))
+        openPeptideList()
+
+        element("protocol.peptide.BPC-157").tap()
+        tap("peptide.color.teal")
+        tap("peptide.save")
+        XCTAssertTrue(element("protocol.peptide.BPC-157").waitForExistence(timeout: 4))
+
+        tap("protocol.add")
+        tap("peptide.pick.GHK-Cu")
+        XCTAssertTrue(app.buttons["peptide.color.pink"].waitForExistence(timeout: 4))
+        XCTAssertTrue(app.buttons["peptide.color.pink"].isSelected, "A new peptide follows its category until a swatch is tapped")
+        tap("peptide.color.red")
+        capture("colour-editor")
+        tap("peptide.save")
+        XCTAssertTrue(element("protocol.peptide.GHK-Cu").waitForExistence(timeout: 4))
+        capture("colour-protocol-list")
+        app.navigationBars.buttons["Done"].tap()
+
+        navigationTab("Today").tap()
+        XCTAssertTrue(element("today.summary").waitForExistence(timeout: 4))
+        capture("colour-today")
+        for name in ["BPC-157", "Tirzepatide", "GHK-Cu"] { tap("today.dose.\(name).toggle") }
+
+        tap("today.log-extra")
+        XCTAssertTrue(app.buttons["dose.peptide.GHK-Cu"].waitForExistence(timeout: 4))
+        capture("colour-dose-sheet")
+        app.buttons["dose.close"].tap()
+
+        navigationTab("Progress").tap()
+        let legend = element("progress.calendar.legend")
+        XCTAssertTrue(legend.waitForExistence(timeout: 4))
+        reveal(legend)
+        let todayCell = app.descendants(matching: .any).matching(NSPredicate(format: "label ENDSWITH %@", "Tirzepatide, BPC-157, GHK-Cu taken")).firstMatch
+        XCTAssertTrue(todayCell.exists, "The day reads the peptides taken, in protocol order")
+        capture("colour-progress-calendar")
+    }
 }

@@ -340,12 +340,21 @@ struct SetupChip: View {
     var detail: String?
     var selected: Bool
     var leading: String?
+    /// A colour dot shown in place of the leading symbol, e.g. a peptide's colour.
+    var dot: Color? = nil
     var identifier: String
     var action: () -> Void
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                Image(systemName: selected ? "checkmark" : (leading ?? "plus")).font(.system(size: 12, weight: .bold))
+                if let dot {
+                    Circle().fill(dot).frame(width: 10, height: 10)
+                        .overlay(Circle().strokeBorder(selected ? SetupTheme.inverseInk.opacity(0.9) : .clear, lineWidth: 1.5))
+                        .accessibilityHidden(true)
+                    if selected { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)) }
+                } else {
+                    Image(systemName: selected ? "checkmark" : (leading ?? "plus")).font(.system(size: 12, weight: .bold))
+                }
                 Text(title).font(.system(.subheadline, weight: .medium)).lineLimit(1).layoutPriority(1)
                 if let detail { Text(detail).font(.caption).foregroundStyle(selected ? SetupTheme.inverseInk.opacity(0.7) : SetupTheme.muted).lineLimit(1) }
             }

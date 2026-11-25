@@ -31,6 +31,9 @@ struct PeptideEditor: View {
     @State private var batchExpiryDate = Date.now
     @State private var note = ""
     @State private var isPaused = false
+    /// Nil until the person taps a swatch, so the peptide keeps following its
+    /// category default (and a renamed new peptide follows its new name).
+    @State private var pickedColor: PeptideColor?
     @State private var confirmRemove = false
     @FocusState private var focused: Field?
 
@@ -54,6 +57,7 @@ struct PeptideEditor: View {
             && amountIsValid && schedule.isValid && note.count <= TrackedPeptide.noteLimit
     }
     private var matches: [Peptide] { Peptide.matches(search) }
+    private var displayColor: PeptideColor { pickedColor ?? .default(for: Peptide.category(for: name)) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -62,6 +66,7 @@ struct PeptideEditor: View {
                 VStack(alignment: .leading, spacing: 22) {
                     if editing == nil { namePicker } else { nameField }
                     if !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        colorPicker
                         PeptideReferenceChart(name: name)
                     }
                     amountField
@@ -152,7 +157,7 @@ struct PeptideEditor: View {
                 }
             } else {
                 HStack {
-                    PeptideBadge(name: name)
+                    PeptideBadge(name: name, color: displayColor)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(name).font(.system(.body, weight: .semibold)).foregroundStyle(SetupTheme.ink)
                         Text(Peptide.category(for: name)).font(.caption).foregroundStyle(SetupTheme.muted)
@@ -170,10 +175,44 @@ struct PeptideEditor: View {
     private var nameField: some View {
         VStack(alignment: .leading, spacing: 10) {
             label("Name")
-            TextField("Peptide name", text: $name).focused($focused, equals: .name)
-                .padding(.horizontal, 16).frame(minHeight: 50)
-                .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .accessibilityIdentifier("peptide.name")
+            HStack(spacing: 12) {
+                PeptideBadge(name: name, color: displayColor)
+                TextField("Peptide name", text: $name).focused($focused, equals: .name)
+                    .accessibilityIdentifier("peptide.name")
+            }
+            .padding(.leading, 6).padding(.trailing, 16).frame(minHeight: 56)
+            .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+    }
+
+    private var colorPicker: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            label("Colour")
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 5), spacing: 6) {
+                ForEach(PeptideColor.allCases) { swatch in
+                    let selected = swatch == displayColor
+                    Button { pickedColor = swatch } label: {
+                        Circle().fill(swatch.color).frame(width: 36, height: 36)
+                            .overlay {
+                                if selected {
+                                    Image(systemName: "checkmark").font(.system(size: 14, weight: .bold))
+                                        .foregroundStyle(.white).shadow(color: .black.opacity(0.35), radius: 1)
+                                }
+                            }
+                            .padding(4)
+                            .overlay(Circle().strokeBorder(selected ? SetupTheme.ink : .clear, lineWidth: 2.5))
+                            .frame(width: 44, height: 44)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(SetupPressStyle())
+                    .accessibilityLabel(swatch.title)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityIdentifier("peptide.color.\(swatch.rawValue)")
+                }
+            }
+            .sensoryFeedback(.selection, trigger: displayColor)
+            Text("For recognising it at a glance on Today and in your calendar.")
+                .font(.caption).foregroundStyle(SetupTheme.muted)
         }
     }
 
@@ -404,6 +443,7 @@ struct PeptideEditor: View {
         }
         note = peptide.note
         isPaused = peptide.isPaused
+        pickedColor = peptide.color
     }
 
     private func save() {
@@ -417,6 +457,7 @@ struct PeptideEditor: View {
         peptide.batchExpiryKey = tracksBatchExpiry ? DayIdentity.key(for: batchExpiryDate) : nil
         peptide.note = note
         peptide.isPaused = isPaused
+        peptide.color = pickedColor
         if store.savePeptide(peptide) {
             store.showToast(editing == nil ? "\(trimmed) added" : "Saved")
             dismiss()
