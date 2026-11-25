@@ -1,14 +1,39 @@
 import SwiftUI
+#if canImport(FirebaseCore)
+import FirebaseCore
+#endif
+#if canImport(GoogleSignIn)
+import GoogleSignIn
+#endif
 
 @main struct AlongApp: App {
-    @State private var store = JournalStore()
-    @State private var reminders = ReminderStore()
-    @State private var previewReminders = ReminderStore(deliveryEnabled: false)
-    @State private var billing = BillingStore(configuration: BillingConfiguration.forCurrentLaunch())
-    @State private var previewBilling = BillingStore(configuration: .unconfigured(["Local design preview"]))
-    @State private var attribution = AttributionStore()
-    @State private var analytics = AnalyticsClient()
-    @State private var health = HealthKitStore()
+    @State private var store: JournalStore
+    @State private var reminders: ReminderStore
+    @State private var previewReminders: ReminderStore
+    @State private var billing: BillingStore
+    @State private var previewBilling: BillingStore
+    @State private var attribution: AttributionStore
+    @State private var analytics: AnalyticsClient
+    @State private var health: HealthKitStore
+    @State private var auth: AuthStore
+    @State private var cloudSync: CloudSync
+
+    init() {
+        // Firebase must configure before any Auth/Firestore-touching state inits.
+        CrashReporting.start()
+        FirebaseBootstrap.configureIfNeeded()
+        _store = State(initialValue: JournalStore())
+        _reminders = State(initialValue: ReminderStore())
+        _previewReminders = State(initialValue: ReminderStore(deliveryEnabled: false))
+        _billing = State(initialValue: BillingStore(configuration: BillingConfiguration.forCurrentLaunch()))
+        _previewBilling = State(initialValue: BillingStore(configuration: .unconfigured(["Local design preview"])))
+        _attribution = State(initialValue: AttributionStore())
+        _analytics = State(initialValue: AnalyticsClient())
+        _health = State(initialValue: HealthKitStore())
+        _auth = State(initialValue: AuthStore())
+        _cloudSync = State(initialValue: CloudSync())
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView().environment(store)
@@ -17,9 +42,16 @@ import SwiftUI
                 .environment(attribution)
                 .environment(analytics)
                 .environment(health)
+                .environment(auth)
+                .environment(cloudSync)
                 .tint(Theme.accent)
+                .onOpenURL { url in
+                    #if canImport(GoogleSignIn)
+                    _ = GIDSignIn.sharedInstance.handle(url)
+                    #endif
+                }
                 .task {
-                    CrashReporting.start()
+                    auth.start()
                     await attribution.start()
                     analytics.track(.init(name: "app_opened", feature: "settings", surface: "welcome", result: "success"))
                 }
@@ -31,6 +63,8 @@ struct RootView: View {
     @Environment(ReminderStore.self) private var reminders
     @Environment(BillingStore.self) private var billing
     @Environment(AttributionStore.self) private var attribution
+    @Environment(AuthStore.self) private var auth
+    @Environment(CloudSync.self) private var cloudSync
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.alongReducedMotion) private var reduceMotion
     var showsDevTools = true
@@ -78,6 +112,19 @@ struct RootView: View {
             if reminders.preferences.isEnabled {
                 _ = await reminders.sync(sources: store.journal.reminderSources,
                                         batchExpiries: store.journal.batchExpiryReminderSources)
+            }
+        }
+        .task(id: auth.user?.id) {
+            await restoreCloudIfNeeded()
+        }
+        .onChange(of: store.journal) { _, _ in
+            if let id = auth.user?.id {
+                cloudSync.schedulePush(journal: store.journal, setup: store.setup, userID: id)
+            }
+        }
+        .onChange(of: store.setup) { _, _ in
+            if let id = auth.user?.id {
+                cloudSync.schedulePush(journal: store.journal, setup: store.setup, userID: id)
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -130,5 +177,21 @@ struct RootView: View {
                 }
                 Button("Close", role: .cancel) { store.error = nil }
             } message: { Text(store.error ?? "") }
+    }
+
+    /// Returning members (local setup not finished) restore from the cloud.
+    /// Once this device has finished onboarding, local answers win and we upload —
+    /// so pay/preview sign-in never wipes the protocol just created.
+    private func restoreCloudIfNeeded() async {
+        guard let id = auth.user?.id else { return }
+        if store.journal.hasOnboarded {
+            await cloudSync.push(journal: store.journal, setup: store.setup, userID: id)
+            return
+        }
+        if let remote = await cloudSync.pull(userID: id), remote.journal.hasOnboarded {
+            _ = store.updateJournal { $0 = remote.journal }
+            store.setup = remote.setup
+            store.showToast("Restored from your account")
+        }
     }
 }

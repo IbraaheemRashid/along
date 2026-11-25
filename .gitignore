@@ -1,2 +1,10 @@
 __pycache__/
 .DS_Store
+plateful/apps/ios/Along/GoogleService-Info.plist
+plateful/apps/ios/Along/Secrets.xcconfig
+**/xcuserdata/
+*.xcuserstate
+.build/
+
+firebase-debug.log
+plateful/firebase-debug.log

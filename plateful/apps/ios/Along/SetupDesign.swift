@@ -372,14 +372,15 @@ struct SetupCard<Content: View>: View {
     }
 }
 
-/// Account sign-in, presented like Cal AI's. Accounts aren't connected yet, so
-/// each provider explains that instead of pretending to sign in.
+/// Account sign-in sheet. Provider button chrome is unchanged; taps run real auth.
 struct SetupSignInSheet: View {
     var restoreBackup: () -> Void
+    var onSignedIn: (() -> Void)? = nil
+    @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
-    @State private var notice: String?
 
     var body: some View {
+        @Bindable var auth = auth
         VStack(spacing: 0) {
             ZStack {
                 Text("Sign in").font(.headline).foregroundStyle(SetupTheme.ink)
@@ -398,21 +399,63 @@ struct SetupSignInSheet: View {
             VStack(spacing: 12) {
                 provider("Sign in with Apple", identifier: "apple", filled: true) {
                     Image(systemName: "apple.logo").font(.system(size: 19, weight: .medium))
+                } action: {
+                    Task {
+                        await auth.signInWithApple()
+                        if auth.isSignedIn { onSignedIn?(); dismiss() }
+                    }
                 }
                 provider("Sign in with Google", identifier: "google", filled: false) {
                     Text("G").font(.system(size: 19, weight: .bold, design: .rounded))
                         .foregroundStyle(LinearGradient(colors: [Color(red: 0.26, green: 0.52, blue: 0.96), Color(red: 0.92, green: 0.26, blue: 0.21), Color(red: 0.98, green: 0.74, blue: 0.02), Color(red: 0.2, green: 0.66, blue: 0.33)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                } action: {
+                    Task {
+                        await auth.signInWithGoogle()
+                        if auth.isSignedIn { onSignedIn?(); dismiss() }
+                    }
                 }
                 provider("Continue with email", identifier: "email", filled: false) {
                     Image(systemName: "envelope").font(.system(size: 17, weight: .medium))
+                } action: {
+                    auth.beginEmailSignIn()
                 }
-                if let notice {
+                if auth.showsEmailForm {
+                    TextField("Email", text: $auth.emailDraft)
+                        .textContentType(.emailAddress)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .padding(14)
+                        .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .accessibilityIdentifier("setup.sign-in.email.field")
+                    SecureField("Password", text: $auth.passwordDraft)
+                        .textContentType(.password)
+                        .padding(14)
+                        .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .accessibilityIdentifier("setup.sign-in.password.field")
+                    Button {
+                        Task {
+                            await auth.submitEmailSignIn()
+                            if auth.isSignedIn { onSignedIn?(); dismiss() }
+                        }
+                    } label: {
+                        Text(auth.isBusy ? "Please wait…" : "Continue")
+                            .font(.system(.body, weight: .semibold))
+                            .foregroundStyle(SetupTheme.inverseInk)
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .background(SetupTheme.ink, in: Capsule())
+                    }
+                    .disabled(auth.isBusy)
+                    .accessibilityIdentifier("setup.sign-in.email.submit")
+                }
+                if let notice = auth.message {
                     Text(notice).font(.footnote).foregroundStyle(SetupTheme.muted).multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity).transition(.opacity)
                         .accessibilityIdentifier("setup.sign-in.notice")
                 }
             }
             .padding(.horizontal, 24).padding(.top, 22)
+            .disabled(auth.isBusy)
             Spacer(minLength: 12)
             Button(action: restoreBackup) {
                 (Text("Have a backup file? ").foregroundStyle(SetupTheme.muted) + Text("Restore it").fontWeight(.semibold).foregroundStyle(SetupTheme.ink))
@@ -421,16 +464,15 @@ struct SetupSignInSheet: View {
             .padding(.bottom, 6)
         }
         .background(SetupTheme.surface)
-        .presentationDetents([.height(400)])
+        .presentationDetents([.height(auth.showsEmailForm ? 520 : 400)])
         .presentationCornerRadius(32)
         .presentationDragIndicator(.hidden)
-        .animation(.easeOut(duration: 0.2), value: notice)
+        .animation(.easeOut(duration: 0.2), value: auth.message)
+        .animation(.easeOut(duration: 0.2), value: auth.showsEmailForm)
     }
 
-    private func provider<Icon: View>(_ title: String, identifier: String, filled: Bool, @ViewBuilder icon: () -> Icon) -> some View {
-        Button {
-            notice = "Accounts are coming soon. Until then, everything you set up stays on this iPhone."
-        } label: {
+    private func provider<Icon: View>(_ title: String, identifier: String, filled: Bool, @ViewBuilder icon: () -> Icon, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             HStack(spacing: 10) {
                 icon().frame(width: 22)
                 Text(title).font(.system(.body, weight: .semibold))

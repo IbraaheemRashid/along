@@ -19,10 +19,8 @@ enum CrashReporting {
 
     static func start() {
         guard isConfigured else { return }
-        #if canImport(FirebaseCore) && canImport(FirebaseCrashlytics)
-        if FirebaseApp.app() == nil {
-            FirebaseApp.configure()
-        }
+        FirebaseBootstrap.configureIfNeeded()
+        #if canImport(FirebaseCrashlytics)
         Crashlytics.crashlytics().setCrashlyticsCollectionEnabled(true)
         #endif
     }

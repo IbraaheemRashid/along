@@ -158,10 +158,10 @@ struct DevLabView: View {
                 }
                 Section("Connection status") {
                     status("Local persistence", value: "Active in sandbox", symbol: "internaldrive")
-                    status("App Store / Superwall", value: "Not connected · no charges", symbol: "creditcard")
-                    status("Accounts and cloud sync", value: "Not connected", symbol: "icloud")
+                    status("App Store / Superwall", value: "Debug uses local StoreKit · set real key for Release", symbol: "creditcard")
+                    status("Accounts and cloud sync", value: Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") == nil ? "Add GoogleService-Info.plist" : "Firebase plist present", symbol: "icloud")
                     status("Reminders", value: "Disabled in previews", symbol: "bell")
-                    status("Analytics", value: "Not connected", symbol: "chart.xyaxis.line")
+                    status("Analytics", value: "Tinybird / Crashlytics when configured", symbol: "chart.xyaxis.line")
                 }
             }
             .scrollContentBackground(.hidden)
@@ -249,6 +249,7 @@ private struct DevSandboxView: View {
                 .dynamicTypeSize(.large)
             RootView(showsDevTools: false).environment(store).environment(reminders).environment(billing)
                 .environment(AttributionStore()).environment(AnalyticsClient()).environment(HealthKitStore(arguments: ["--ui-testing"]))
+                .environment(AuthStore()).environment(CloudSync())
                 .id(ObjectIdentifier(store))
                 .dynamicTypeSize(textSize.size ?? systemTextSize)
                 .environment(\.alongForcedReducedMotion, reduceMotion)
