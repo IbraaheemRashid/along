@@ -57,16 +57,21 @@ struct BillingConfiguration: Equatable, Sendable {
 
     static func load(values: [String: Any]) -> State {
         var issues: [String] = []
-        func required(_ key: String) -> String {
+        let rawKey = ((values["ALONG_SUPERWALL_PUBLIC_KEY"] as? String) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let localStoreKit = rawKey == localStoreKitKey
+        func required(_ key: String, allowLocalPlaceholders: Bool = false) -> String {
             guard let raw = values[key] as? String else {
                 issues.append("Missing \(key)")
                 return ""
             }
             let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             let lowered = value.lowercased()
-            guard !value.isEmpty, !value.contains("$("), !value.contains("${"),
-                  !lowered.contains("replace_me"), !lowered.contains("your_"),
-                  !lowered.contains("placeholder"), !lowered.contains("example.") else {
+            let looksPlaceholder = value.contains("$(") || value.contains("${")
+                || lowered.contains("replace_me") || lowered.contains("your_")
+                || lowered.contains("placeholder")
+                || (!allowLocalPlaceholders && lowered.contains("example."))
+            guard !value.isEmpty, !looksPlaceholder else {
                 issues.append("Configure \(key) with a real value")
                 return ""
             }
@@ -76,8 +81,9 @@ struct BillingConfiguration: Equatable, Sendable {
         let monthly = required("ALONG_BILLING_MONTHLY_PRODUCT_ID")
         let key = required("ALONG_SUPERWALL_PUBLIC_KEY")
         let entitlement = required("ALONG_BILLING_ENTITLEMENT_ID")
-        let terms = required("ALONG_TERMS_URL")
-        let privacy = required("ALONG_PRIVACY_URL")
+        // Local StoreKit Debug builds may use example.com legal URLs until real pages exist.
+        let terms = required("ALONG_TERMS_URL", allowLocalPlaceholders: localStoreKit)
+        let privacy = required("ALONG_PRIVACY_URL", allowLocalPlaceholders: localStoreKit)
         if !annual.isEmpty && annual == monthly { issues.append("Annual and monthly product IDs must differ") }
         for identifier in [annual, monthly, entitlement, key] where !identifier.isEmpty {
             if identifier.contains(where: { $0.isWhitespace }) {

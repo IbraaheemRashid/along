@@ -82,23 +82,9 @@ struct DoseRing<Center: View>: View {
     }
 }
 
-/// States clearly when the app is showing a preview or fictional data.
+/// Reserved for internal sandboxes only — shipping screens no longer show preview chrome.
 struct PreviewBadge: View {
-    @Environment(JournalStore.self) private var store
-    var body: some View {
-        if let text {
-            Text(text).font(.system(size: 10, weight: .bold)).tracking(0.8)
-                .foregroundStyle(SetupTheme.highlight)
-                .padding(.horizontal, 10).padding(.vertical, 5)
-                .background(SetupTheme.highlight.opacity(0.12), in: Capsule())
-                .accessibilityIdentifier("app.preview-badge")
-        }
-    }
-    private var text: String? {
-        if store.journal.hasSampleData { return "SAMPLE DATA" }
-        if store.journal.isDesignPreview == true { return "DESIGN PREVIEW · NO SUBSCRIPTION" }
-        return nil
-    }
+    var body: some View { EmptyView() }
 }
 
 extension View {
