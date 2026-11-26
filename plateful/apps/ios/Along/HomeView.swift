@@ -6,6 +6,7 @@ struct HomeView: View {
     @State private var selectedDay: String?
     @State private var feedback = 0
     @State private var sheet: DoseSheet.Mode?
+    @State private var showPeptides = false
 
     private var today: String { store.todayKey }
     private var day: String { selectedDay ?? today }
@@ -42,6 +43,7 @@ struct HomeView: View {
             }
         }
         .sheet(item: $sheet) { DoseSheet(mode: $0) }
+        .sheet(isPresented: $showPeptides) { ProtocolPeptidesView() }
         .sensoryFeedback(.success, trigger: feedback)
         .onChange(of: store.todayKey) { _, _ in selectedDay = nil }
     }
@@ -53,7 +55,6 @@ struct HomeView: View {
                 Text("Along").font(.system(size: 26, weight: .bold)).tracking(-0.5)
             }.foregroundStyle(SetupTheme.ink).accessibilityAddTraits(.isHeader)
             Spacer()
-            PreviewBadge()
         }
         .padding(.top, 8)
     }
@@ -155,7 +156,7 @@ struct HomeView: View {
                 Text("Your protocol is empty").font(.headline).foregroundStyle(SetupTheme.ink)
                 Text("Add each peptide with the schedule you’ve chosen. Along keeps track of every dose from there.")
                     .font(.subheadline).foregroundStyle(SetupTheme.muted).fixedSize(horizontal: false, vertical: true)
-                SetupPrimaryButton(title: "Add a peptide", symbol: "plus", identifier: "today.add-peptide") { store.selectedTab = 1 }
+                SetupPrimaryButton(title: "Add a peptide", symbol: "plus", identifier: "today.add-peptide") { showPeptides = true }
             }
         }
     }

@@ -126,10 +126,8 @@ for scope in ["project", "target"]:
                 " INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;"
                 " INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;"
                 ' INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";'
-                ' INFOPLIST_KEY_NSHealthShareUsageDescription = "Along reads Apple Health samples you already track — steps, energy, sleep, heart rate and weight — to show your Health dashboard. Nothing is diagnosed or prescribed.";'
-                ' INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Along does not write health records. This permission is unused.";'
                 " INFOPLIST_KEY_FIREBASE_ANALYTICS_COLLECTION_ENABLED = NO;"
-                " CURRENT_PROJECT_VERSION = 5; MARKETING_VERSION = 0.5.0; CODE_SIGN_STYLE = Automatic;"
+                " CURRENT_PROJECT_VERSION = 6; MARKETING_VERSION = 1.0.0; CODE_SIGN_STYLE = Automatic;"
                 " CODE_SIGN_ENTITLEMENTS = Along/Along.entitlements; SWIFT_EMIT_LOC_STRINGS = YES;"
             )
             settings += url_types

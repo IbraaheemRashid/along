@@ -20,7 +20,10 @@ private struct OnboardingArchive: Codable {
     var setup = SetupDraft() {
         didSet { if !loadingDraft && setup != oldValue { saveSetup() } }
     }
-    var selectedTab = 0
+    /// 0 Today · 1 Progress · 2 Settings
+    var selectedTab = 0 {
+        didSet { if !(0...2).contains(selectedTab) { selectedTab = 0 } }
+    }
     var referenceDate = Date.now
     var toast: String?
     var error: String?

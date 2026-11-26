@@ -145,9 +145,8 @@ struct DevLabView: View {
                 }
                 Section("Jump to a feature · sample data") {
                     feature("Today", symbol: "house.fill", tab: 0)
-                    feature("Protocol", symbol: "list.bullet.rectangle.portrait", tab: 1)
-                    feature("Progress", symbol: "chart.bar.xaxis", tab: 2)
-                    feature("Settings", symbol: "gearshape", tab: 3)
+                    feature("Progress", symbol: "chart.bar.xaxis", tab: 1)
+                    feature("Settings", symbol: "gearshape", tab: 2)
                     feature("Membership offer", symbol: "lock", sheet: .membership)
                     feature("Log weight", symbol: "scalemass", sheet: .weight)
                 }
@@ -248,7 +247,7 @@ private struct DevSandboxView: View {
             }.font(.system(size: 14, weight: .medium)).padding(.horizontal, 16).padding(.vertical, 5).background(SetupTheme.surface)
                 .dynamicTypeSize(.large)
             RootView(showsDevTools: false).environment(store).environment(reminders).environment(billing)
-                .environment(AttributionStore()).environment(AnalyticsClient()).environment(HealthKitStore(arguments: ["--ui-testing"]))
+                .environment(AttributionStore()).environment(AnalyticsClient())
                 .environment(AuthStore()).environment(CloudSync())
                 .id(ObjectIdentifier(store))
                 .dynamicTypeSize(textSize.size ?? systemTextSize)

@@ -53,7 +53,6 @@ private struct OnboardingScreenPreview: View {
                 Button("Done") { dismiss() }.font(.subheadline).accessibilityIdentifier("dev.onboarding.close")
             }.padding(.horizontal, 24).padding(.vertical, 10).background(Theme.paper)
             RootView(showsDevTools: false).environment(previewStore).environment(billing).environment(reminders)
-                .environment(HealthKitStore(arguments: ["--ui-testing"]))
                 .environment(AuthStore()).environment(CloudSync())
         }
     }

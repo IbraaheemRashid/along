@@ -14,7 +14,6 @@ import GoogleSignIn
     @State private var previewBilling: BillingStore
     @State private var attribution: AttributionStore
     @State private var analytics: AnalyticsClient
-    @State private var health: HealthKitStore
     @State private var auth: AuthStore
     @State private var cloudSync: CloudSync
 
@@ -26,10 +25,9 @@ import GoogleSignIn
         _reminders = State(initialValue: ReminderStore())
         _previewReminders = State(initialValue: ReminderStore(deliveryEnabled: false))
         _billing = State(initialValue: BillingStore(configuration: BillingConfiguration.forCurrentLaunch()))
-        _previewBilling = State(initialValue: BillingStore(configuration: .unconfigured(["Local design preview"])))
+        _previewBilling = State(initialValue: BillingStore(configuration: .unconfigured(["Local billing preview"])))
         _attribution = State(initialValue: AttributionStore())
         _analytics = State(initialValue: AnalyticsClient())
-        _health = State(initialValue: HealthKitStore())
         _auth = State(initialValue: AuthStore())
         _cloudSync = State(initialValue: CloudSync())
     }
@@ -41,7 +39,6 @@ import GoogleSignIn
                 .environment(store.journal.isDesignPreview == true || store.journal.hasSampleData ? previewBilling : billing)
                 .environment(attribution)
                 .environment(analytics)
-                .environment(health)
                 .environment(auth)
                 .environment(cloudSync)
                 .tint(Theme.accent)
@@ -53,7 +50,7 @@ import GoogleSignIn
                 .task {
                     auth.start()
                     await attribution.start()
-                    analytics.track(.init(name: "app_opened", feature: "settings", surface: "welcome", result: "success"))
+                    analytics.track(.init(name: "app_opened", feature: "app", surface: "launch", result: "success"))
                 }
         }
     }
@@ -93,9 +90,8 @@ struct RootView: View {
             } else if store.journal.hasOnboarded && (billing.isEntitled || previewAccess) {
                 TabView(selection: $store.selectedTab) {
                     HomeView().tabItem { Label("Today", systemImage: "house.fill") }.tag(0)
-                    HealthDashboardView().tabItem { Label("Health", systemImage: "heart.text.square.fill") }.tag(1)
-                    ProgressScreen().tabItem { Label("Progress", systemImage: "chart.bar.xaxis") }.tag(2)
-                    SettingsView().tabItem { Label("Settings", systemImage: "gearshape") }.tag(3)
+                    ProgressScreen().tabItem { Label("Progress", systemImage: "chart.bar.xaxis") }.tag(1)
+                    SettingsView().tabItem { Label("Settings", systemImage: "gearshape") }.tag(2)
                 }
                 .tint(SetupTheme.ink)
             } else if store.journal.hasOnboarded { MembershipView(canClose: false) }

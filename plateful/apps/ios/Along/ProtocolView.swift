@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Peptide list lives under Settings now that the former Protocol tab is Health.
+/// Peptide list — opened from Today or Settings.
 struct ProtocolPeptidesView: View {
     @Environment(JournalStore.self) private var store
     @Environment(\.dismiss) private var dismiss
