@@ -4,6 +4,10 @@ Along talks to **Firebase Auth + Firestore** from the iPhone (no Cloudflare Work
 
 **Onboarding account flow:** questionnaire → plan → **account** (email/password or Apple/Google) → paywall. Firebase create/sign-in runs automatically after a successful purchase (OAuth may already be signed in). Welcome “Sign in” is for returning members only.
 
+**Main tabs:** Today · Progress · Settings (Health tab removed). Peptides open as a sheet from Today or Settings.
+
+**Cloud doc:** `users/{uid}/app/state` with `journalBase64` + `setupBase64`.
+
 ## 1. Firebase
 
 Project **`peptide-tracker-6d1b1`** is wired (iOS app `dev.along.prototype`, appId `1:701995397873:ios:7d0fb375a68c8ab4026f50`).
