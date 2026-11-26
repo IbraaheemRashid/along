@@ -12,6 +12,7 @@ struct SetupFlowView: View {
     @State private var showSignIn = false
     @State private var requestingReminders = false
     @State private var search = ""
+    @State private var accountEmail = ""
     @State private var accountPassword = ""
     @FocusState private var fieldFocused: Bool
 
@@ -56,6 +57,7 @@ struct SetupFlowView: View {
         }
         .onChange(of: auth.user?.id) { _, id in
             if id != nil, step == .account, let email = auth.user?.email, !email.isEmpty {
+                accountEmail = email
                 store.setup.accountEmail = email
             }
         }
@@ -122,14 +124,23 @@ struct SetupFlowView: View {
 
     private var accountAction: FooterAction {
         if auth.isSignedIn {
-            return FooterAction(title: "Continue", action: advance)
+            return FooterAction(title: "Continue") {
+                commitAccountEmail()
+                advance()
+            }
         }
-        let emailOK = SetupDraft.validEmail(draft.accountEmail)
+        let emailOK = SetupDraft.validEmail(accountEmail)
         let passwordOK = accountPassword.count >= 6
         return FooterAction(title: "Continue", enabled: emailOK && passwordOK) {
-            auth.stageOnboardingCredentials(email: draft.accountEmail, password: accountPassword)
+            commitAccountEmail()
+            auth.stageOnboardingCredentials(email: accountEmail, password: accountPassword)
             advance()
         }
+    }
+
+    private func commitAccountEmail() {
+        let trimmed = accountEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        store.setup.accountEmail = trimmed
     }
 
     @ViewBuilder private var footerAccessory: some View {
@@ -236,8 +247,8 @@ struct SetupFlowView: View {
                 subtitle: "Add your email now. We’ll sign you in automatically when you subscribe so your plan syncs across devices."
             )
             VStack(spacing: 12) {
-                TextField("Email", text: binding(\.accountEmail))
-                    .textContentType(.emailAddress)
+                TextField("Email", text: $accountEmail)
+                    .textContentType(.username)
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -274,10 +285,14 @@ struct SetupFlowView: View {
                 accountProvider("Continue with Apple", identifier: "apple", filled: true) {
                     Image(systemName: "apple.logo").font(.system(size: 19, weight: .medium))
                 } action: {
+                    fieldFocused = false
                     Task {
                         await auth.signInWithApple()
                         if auth.isSignedIn {
-                            if let email = auth.user?.email { store.setup.accountEmail = email }
+                            if let email = auth.user?.email {
+                                accountEmail = email
+                                store.setup.accountEmail = email
+                            }
                             advance()
                         }
                     }
@@ -286,10 +301,14 @@ struct SetupFlowView: View {
                     Text("G").font(.system(size: 19, weight: .bold, design: .rounded))
                         .foregroundStyle(LinearGradient(colors: [Color(red: 0.26, green: 0.52, blue: 0.96), Color(red: 0.92, green: 0.26, blue: 0.21), Color(red: 0.98, green: 0.74, blue: 0.02), Color(red: 0.2, green: 0.66, blue: 0.33)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 } action: {
+                    fieldFocused = false
                     Task {
                         await auth.signInWithGoogle()
                         if auth.isSignedIn {
-                            if let email = auth.user?.email { store.setup.accountEmail = email }
+                            if let email = auth.user?.email {
+                                accountEmail = email
+                                store.setup.accountEmail = email
+                            }
                             advance()
                         }
                     }
@@ -303,6 +322,9 @@ struct SetupFlowView: View {
             }
         }
         .disabled(auth.isBusy)
+        .onAppear {
+            if accountEmail.isEmpty { accountEmail = draft.accountEmail }
+        }
     }
 
     private func accountProvider<Icon: View>(_ title: String, identifier: String, filled: Bool, @ViewBuilder icon: () -> Icon, action: @escaping () -> Void) -> some View {
@@ -740,8 +762,9 @@ struct SetupFlowView: View {
 
     private func signInAfterSetupIfNeeded() async {
         guard !auth.isSignedIn else { return }
-        auth.stageOnboardingCredentials(email: draft.accountEmail, password: accountPassword)
-        _ = await auth.ensureSignedInAfterPurchase(email: draft.accountEmail)
+        let email = draft.accountEmail.isEmpty ? accountEmail : draft.accountEmail
+        auth.stageOnboardingCredentials(email: email, password: accountPassword)
+        _ = await auth.ensureSignedInAfterPurchase(email: email)
     }
 
     private var paywallFinePrint: some View {

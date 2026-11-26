@@ -21,7 +21,7 @@ struct AlongUser: Equatable {
 
 /// Firebase Auth for Apple, Google and email. No-ops until GoogleService-Info.plist
 /// is present and FirebaseAuth is linked. Does not change sign-in chrome.
-@MainActor @Observable final class AuthStore: NSObject {
+@MainActor @Observable final class AuthStore {
     var user: AlongUser?
     var isBusy = false
     var message: String?
@@ -30,7 +30,7 @@ struct AlongUser: Equatable {
     var showsEmailForm = false
 
     private var appleNonce: String?
-    fileprivate var appleSignInDelegate: AppleSignInCoordinator?
+    private var appleSignInDelegate: AppleSignInCoordinator?
 
     var isConfigured: Bool {
         Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil

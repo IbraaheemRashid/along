@@ -387,9 +387,15 @@ struct SetupSignInSheet: View {
     var onSignedIn: (() -> Void)? = nil
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
+    /// Local fields avoid binding keystrokes into `@Observable` during sheet + keyboard layout.
+    @State private var email = ""
+    @State private var password = ""
+    @State private var showEmailForm = false
+    @FocusState private var focusedField: Field?
+
+    private enum Field { case email, password }
 
     var body: some View {
-        @Bindable var auth = auth
         VStack(spacing: 0) {
             ZStack {
                 Text("Sign in").font(.headline).foregroundStyle(SetupTheme.ink)
@@ -405,67 +411,74 @@ struct SetupSignInSheet: View {
             }
             .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
             Divider()
-            VStack(spacing: 12) {
-                provider("Sign in with Apple", identifier: "apple", filled: true) {
-                    Image(systemName: "apple.logo").font(.system(size: 19, weight: .medium))
-                } action: {
-                    Task {
-                        await auth.signInWithApple()
-                        if auth.isSignedIn { onSignedIn?(); dismiss() }
-                    }
-                }
-                provider("Sign in with Google", identifier: "google", filled: false) {
-                    Text("G").font(.system(size: 19, weight: .bold, design: .rounded))
-                        .foregroundStyle(LinearGradient(colors: [Color(red: 0.26, green: 0.52, blue: 0.96), Color(red: 0.92, green: 0.26, blue: 0.21), Color(red: 0.98, green: 0.74, blue: 0.02), Color(red: 0.2, green: 0.66, blue: 0.33)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                } action: {
-                    Task {
-                        await auth.signInWithGoogle()
-                        if auth.isSignedIn { onSignedIn?(); dismiss() }
-                    }
-                }
-                provider("Continue with email", identifier: "email", filled: false) {
-                    Image(systemName: "envelope").font(.system(size: 17, weight: .medium))
-                } action: {
-                    auth.beginEmailSignIn()
-                }
-                if auth.showsEmailForm {
-                    TextField("Email", text: $auth.emailDraft)
-                        .textContentType(.emailAddress)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .padding(14)
-                        .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .accessibilityIdentifier("setup.sign-in.email.field")
-                    SecureField("Password", text: $auth.passwordDraft)
-                        .textContentType(.password)
-                        .padding(14)
-                        .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .accessibilityIdentifier("setup.sign-in.password.field")
-                    Button {
+            ScrollView {
+                VStack(spacing: 12) {
+                    provider("Sign in with Apple", identifier: "apple", filled: true) {
+                        Image(systemName: "apple.logo").font(.system(size: 19, weight: .medium))
+                    } action: {
+                        focusedField = nil
                         Task {
-                            await auth.submitEmailSignIn()
+                            await auth.signInWithApple()
                             if auth.isSignedIn { onSignedIn?(); dismiss() }
                         }
-                    } label: {
-                        Text(auth.isBusy ? "Please wait…" : "Continue")
-                            .font(.system(.body, weight: .semibold))
-                            .foregroundStyle(SetupTheme.inverseInk)
-                            .frame(maxWidth: .infinity, minHeight: 48)
-                            .background(SetupTheme.ink, in: Capsule())
                     }
-                    .disabled(auth.isBusy)
-                    .accessibilityIdentifier("setup.sign-in.email.submit")
+                    provider("Sign in with Google", identifier: "google", filled: false) {
+                        Text("G").font(.system(size: 19, weight: .bold, design: .rounded))
+                            .foregroundStyle(LinearGradient(colors: [Color(red: 0.26, green: 0.52, blue: 0.96), Color(red: 0.92, green: 0.26, blue: 0.21), Color(red: 0.98, green: 0.74, blue: 0.02), Color(red: 0.2, green: 0.66, blue: 0.33)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    } action: {
+                        focusedField = nil
+                        Task {
+                            await auth.signInWithGoogle()
+                            if auth.isSignedIn { onSignedIn?(); dismiss() }
+                        }
+                    }
+                    provider("Continue with email", identifier: "email", filled: false) {
+                        Image(systemName: "envelope").font(.system(size: 17, weight: .medium))
+                    } action: {
+                        showEmailForm = true
+                        auth.beginEmailSignIn()
+                        focusedField = .email
+                    }
+                    if showEmailForm {
+                        TextField("Email", text: $email)
+                            .textContentType(.username)
+                            .keyboardType(.emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .focused($focusedField, equals: .email)
+                            .submitLabel(.next)
+                            .onSubmit { focusedField = .password }
+                            .padding(14)
+                            .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .accessibilityIdentifier("setup.sign-in.email.field")
+                        SecureField("Password", text: $password)
+                            .textContentType(.password)
+                            .focused($focusedField, equals: .password)
+                            .submitLabel(.go)
+                            .onSubmit { submitEmail() }
+                            .padding(14)
+                            .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .accessibilityIdentifier("setup.sign-in.password.field")
+                        Button(action: submitEmail) {
+                            Text(auth.isBusy ? "Please wait…" : "Continue")
+                                .font(.system(.body, weight: .semibold))
+                                .foregroundStyle(SetupTheme.inverseInk)
+                                .frame(maxWidth: .infinity, minHeight: 48)
+                                .background(SetupTheme.ink, in: Capsule())
+                        }
+                        .disabled(auth.isBusy)
+                        .accessibilityIdentifier("setup.sign-in.email.submit")
+                    }
+                    if let notice = auth.message {
+                        Text(notice).font(.footnote).foregroundStyle(SetupTheme.muted).multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity).transition(.opacity)
+                            .accessibilityIdentifier("setup.sign-in.notice")
+                    }
                 }
-                if let notice = auth.message {
-                    Text(notice).font(.footnote).foregroundStyle(SetupTheme.muted).multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity).transition(.opacity)
-                        .accessibilityIdentifier("setup.sign-in.notice")
-                }
+                .padding(.horizontal, 24).padding(.top, 22).padding(.bottom, 8)
+                .disabled(auth.isBusy)
             }
-            .padding(.horizontal, 24).padding(.top, 22)
-            .disabled(auth.isBusy)
-            Spacer(minLength: 12)
+            .scrollDismissesKeyboard(.interactively)
             Button(action: restoreBackup) {
                 (Text("Have a backup file? ").foregroundStyle(SetupTheme.muted) + Text("Restore it").fontWeight(.semibold).foregroundStyle(SetupTheme.ink))
                     .font(.footnote).frame(maxWidth: .infinity, minHeight: 44)
@@ -473,11 +486,22 @@ struct SetupSignInSheet: View {
             .padding(.bottom, 6)
         }
         .background(SetupTheme.surface)
-        .presentationDetents([.height(auth.showsEmailForm ? 520 : 400)])
+        .presentationDetents([.medium, .large])
         .presentationCornerRadius(32)
-        .presentationDragIndicator(.hidden)
-        .animation(.easeOut(duration: 0.2), value: auth.message)
-        .animation(.easeOut(duration: 0.2), value: auth.showsEmailForm)
+        .presentationDragIndicator(.visible)
+        .onAppear {
+            email = auth.emailDraft
+            showEmailForm = auth.showsEmailForm
+        }
+    }
+
+    private func submitEmail() {
+        focusedField = nil
+        auth.stageOnboardingCredentials(email: email, password: password)
+        Task {
+            await auth.submitEmailSignIn()
+            if auth.isSignedIn { onSignedIn?(); dismiss() }
+        }
     }
 
     private func provider<Icon: View>(_ title: String, identifier: String, filled: Bool, @ViewBuilder icon: () -> Icon, action: @escaping () -> Void) -> some View {
