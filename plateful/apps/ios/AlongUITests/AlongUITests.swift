@@ -508,7 +508,7 @@ final class AlongUITests: XCTestCase {
         XCTAssertTrue(app.buttons["setup.restore"].exists)
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label CONTAINS[cd] %@", "trial")).count, 0,
                        "The paywall must not contain a trial CTA")
-        XCTAssertFalse(app.buttons["setup.preview"].exists, "Design-preview escape hatch removed from paywall")
+        XCTAssertTrue(app.buttons["setup.skip-paywall"].waitForExistence(timeout: 3), "Temporary paywall skip while StoreKit isn’t wired")
         capture("setup-completed-paywall")
     }
 

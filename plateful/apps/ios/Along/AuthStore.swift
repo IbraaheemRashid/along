@@ -144,8 +144,9 @@ struct AlongUser: Equatable {
         message = nil
     }
 
-    /// After a successful purchase: keep an existing session, or create/sign-in from
-    /// staged email credentials. Never blocks paid access when Auth isn’t configured.
+    /// After a successful purchase (or temporary paywall skip): keep an existing
+    /// session, or create/sign-in from credentials staged during the account step.
+    /// Never blocks app access when Auth isn’t configured.
     @discardableResult
     func ensureSignedInAfterPurchase(email: String? = nil) async -> Bool {
         if isSignedIn { return true }
@@ -154,11 +155,12 @@ struct AlongUser: Equatable {
             let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty { emailDraft = trimmed }
         }
-        if passwordDraft.count < 6 {
-            passwordDraft = Self.generatedPassword()
+        guard emailDraft.contains("@"), passwordDraft.count >= 6 else {
+            message = "Your email and password from setup are needed to create the account. Go back one step and enter them again."
+            return false
         }
         await submitEmailSignIn(clearPasswordOnSuccess: true)
-        return isSignedIn || !isConfigured
+        return isSignedIn
     }
 
     func submitEmailSignIn(clearPasswordOnSuccess: Bool = true) async {
@@ -203,18 +205,6 @@ struct AlongUser: Equatable {
         #else
         message = "Firebase Auth isn’t linked in this build."
         #endif
-    }
-
-    private static func generatedPassword(length: Int = 24) -> String {
-        let charset = Array("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*")
-        var result = ""
-        result.reserveCapacity(length)
-        for _ in 0..<length {
-            var byte: UInt8 = 0
-            _ = SecRandomCopyBytes(kSecRandomDefault, 1, &byte)
-            result.append(charset[Int(byte) % charset.count])
-        }
-        return result
     }
 
     func signOut() {

@@ -63,6 +63,29 @@ struct SetupFlowView: View {
                 store.setup.accountEmail = email
             }
         }
+        .onChange(of: accountEmail) { _, value in
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if SetupDraft.validEmail(trimmed) {
+                store.setup.accountEmail = trimmed
+                if accountPassword.count >= 6 {
+                    auth.stageOnboardingCredentials(email: trimmed, password: accountPassword)
+                } else if !auth.emailDraft.isEmpty || auth.passwordDraft.count >= 6 {
+                    auth.emailDraft = trimmed
+                }
+            }
+        }
+        .onChange(of: accountPassword) { _, value in
+            let trimmed = accountEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+            if SetupDraft.validEmail(trimmed), value.count >= 6 {
+                auth.stageOnboardingCredentials(email: trimmed, password: value)
+            }
+        }
+        .onAppear {
+            if accountEmail.isEmpty { accountEmail = draft.accountEmail }
+            if accountPassword.isEmpty, auth.passwordDraft.count >= 6 {
+                accountPassword = auth.passwordDraft
+            }
+        }
     }
 
     // MARK: Chrome
@@ -748,14 +771,38 @@ struct SetupFlowView: View {
 
     /// Persist setup answers first, then create/sign-in so cloud restore cannot clobber them.
     private func completePaidSetup() async {
+        persistAccountCredentials()
         guard store.finishSetup() else { return }
         await signInAfterSetupIfNeeded()
     }
 
+    /// Temporary unlock while App Store / Superwall aren’t wired. Still creates the account.
+    private func completeSkippedPaywall() async {
+        persistAccountCredentials()
+        guard store.finishSetupPreview() else { return }
+        await signInAfterSetupIfNeeded()
+    }
+
+    /// Keep AuthStore as the source of truth so a view rebuild can’t lose the password.
+    private func persistAccountCredentials() {
+        commitAccountEmail()
+        let email = store.setup.accountEmail
+        let password = accountPassword.count >= 6 ? accountPassword : auth.passwordDraft
+        if SetupDraft.validEmail(email), password.count >= 6 {
+            auth.stageOnboardingCredentials(email: email, password: password)
+        }
+        _ = store.saveSetup()
+    }
+
     private func signInAfterSetupIfNeeded() async {
         guard !auth.isSignedIn else { return }
-        let email = draft.accountEmail.isEmpty ? accountEmail : draft.accountEmail
-        auth.stageOnboardingCredentials(email: email, password: accountPassword)
+        persistAccountCredentials()
+        let email = store.setup.accountEmail
+        guard SetupDraft.validEmail(email) else { return }
+        // Prefer the staged password; never invent a new one if the member already chose one.
+        if auth.passwordDraft.count < 6, accountPassword.count >= 6 {
+            auth.stageOnboardingCredentials(email: email, password: accountPassword)
+        }
         _ = await auth.ensureSignedInAfterPurchase(email: email)
     }
 
@@ -767,6 +814,14 @@ struct SetupFlowView: View {
                 HStack(spacing: 18) { paywallLinks }
                 VStack(spacing: 0) { paywallLinks }
             }.font(.caption).foregroundStyle(SetupTheme.muted).tint(SetupTheme.muted).frame(minHeight: 32)
+            Button("Continue without paying · temporary") {
+                Task { await completeSkippedPaywall() }
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(SetupTheme.ink)
+            .frame(minHeight: 32)
+            .disabled(auth.isBusy)
+            .accessibilityIdentifier("setup.skip-paywall")
         }
         .frame(maxWidth: .infinity)
     }
