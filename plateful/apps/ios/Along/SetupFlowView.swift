@@ -35,6 +35,8 @@ struct SetupFlowView: View {
         }
         .background(SetupTheme.surface.ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) { footer }
+        // Keyboard must not resize the setup chrome — that layout thrash was crashing email fields.
+        .ignoresSafeArea(.keyboard)
         .tint(SetupTheme.ink)
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         .sheet(isPresented: $showBackup) { JournalBackupView(journal: { store.journal }, replace: store.restoreJournal) }
@@ -247,21 +249,11 @@ struct SetupFlowView: View {
                 subtitle: "Add your email now. We’ll sign you in automatically when you subscribe so your plan syncs across devices."
             )
             VStack(spacing: 12) {
-                TextField("Email", text: $accountEmail)
-                    .textContentType(.username)
-                    .keyboardType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .focused($fieldFocused)
-                    .padding(14)
-                    .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .accessibilityIdentifier("setup.account.email")
+                AlongFormField(text: $accountEmail, kind: .email, placeholder: "Email", identifier: "setup.account.email") {
+                    fieldFocused = false
+                }
                 if !auth.isSignedIn {
-                    SecureField("Password (min 6 characters)", text: $accountPassword)
-                        .textContentType(.newPassword)
-                        .padding(14)
-                        .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .accessibilityIdentifier("setup.account.password")
+                    AlongFormField(text: $accountPassword, kind: .password, placeholder: "Password (min 6 characters)", identifier: "setup.account.password")
                 }
                 if auth.isSignedIn {
                     Label(auth.user?.email ?? "Signed in", systemImage: "checkmark.circle.fill")

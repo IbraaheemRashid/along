@@ -387,13 +387,9 @@ struct SetupSignInSheet: View {
     var onSignedIn: (() -> Void)? = nil
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
-    /// Local fields avoid binding keystrokes into `@Observable` during sheet + keyboard layout.
     @State private var email = ""
     @State private var password = ""
     @State private var showEmailForm = false
-    @FocusState private var focusedField: Field?
-
-    private enum Field { case email, password }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -416,7 +412,6 @@ struct SetupSignInSheet: View {
                     provider("Sign in with Apple", identifier: "apple", filled: true) {
                         Image(systemName: "apple.logo").font(.system(size: 19, weight: .medium))
                     } action: {
-                        focusedField = nil
                         Task {
                             await auth.signInWithApple()
                             if auth.isSignedIn { onSignedIn?(); dismiss() }
@@ -426,7 +421,6 @@ struct SetupSignInSheet: View {
                         Text("G").font(.system(size: 19, weight: .bold, design: .rounded))
                             .foregroundStyle(LinearGradient(colors: [Color(red: 0.26, green: 0.52, blue: 0.96), Color(red: 0.92, green: 0.26, blue: 0.21), Color(red: 0.98, green: 0.74, blue: 0.02), Color(red: 0.2, green: 0.66, blue: 0.33)], startPoint: .topLeading, endPoint: .bottomTrailing))
                     } action: {
-                        focusedField = nil
                         Task {
                             await auth.signInWithGoogle()
                             if auth.isSignedIn { onSignedIn?(); dismiss() }
@@ -437,28 +431,10 @@ struct SetupSignInSheet: View {
                     } action: {
                         showEmailForm = true
                         auth.beginEmailSignIn()
-                        focusedField = .email
                     }
                     if showEmailForm {
-                        TextField("Email", text: $email)
-                            .textContentType(.username)
-                            .keyboardType(.emailAddress)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .focused($focusedField, equals: .email)
-                            .submitLabel(.next)
-                            .onSubmit { focusedField = .password }
-                            .padding(14)
-                            .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .accessibilityIdentifier("setup.sign-in.email.field")
-                        SecureField("Password", text: $password)
-                            .textContentType(.password)
-                            .focused($focusedField, equals: .password)
-                            .submitLabel(.go)
-                            .onSubmit { submitEmail() }
-                            .padding(14)
-                            .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .accessibilityIdentifier("setup.sign-in.password.field")
+                        AlongFormField(text: $email, kind: .email, placeholder: "Email", identifier: "setup.sign-in.email.field")
+                        AlongFormField(text: $password, kind: .password, placeholder: "Password", identifier: "setup.sign-in.password.field", onSubmit: submitEmail)
                         Button(action: submitEmail) {
                             Text(auth.isBusy ? "Please wait…" : "Continue")
                                 .font(.system(.body, weight: .semibold))
@@ -471,14 +447,13 @@ struct SetupSignInSheet: View {
                     }
                     if let notice = auth.message {
                         Text(notice).font(.footnote).foregroundStyle(SetupTheme.muted).multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity).transition(.opacity)
+                            .frame(maxWidth: .infinity)
                             .accessibilityIdentifier("setup.sign-in.notice")
                     }
                 }
                 .padding(.horizontal, 24).padding(.top, 22).padding(.bottom, 8)
                 .disabled(auth.isBusy)
             }
-            .scrollDismissesKeyboard(.interactively)
             Button(action: restoreBackup) {
                 (Text("Have a backup file? ").foregroundStyle(SetupTheme.muted) + Text("Restore it").fontWeight(.semibold).foregroundStyle(SetupTheme.ink))
                     .font(.footnote).frame(maxWidth: .infinity, minHeight: 44)
@@ -486,7 +461,8 @@ struct SetupSignInSheet: View {
             .padding(.bottom, 6)
         }
         .background(SetupTheme.surface)
-        .presentationDetents([.medium, .large])
+        .ignoresSafeArea(.keyboard)
+        .presentationDetents([.large])
         .presentationCornerRadius(32)
         .presentationDragIndicator(.visible)
         .onAppear {
@@ -496,7 +472,7 @@ struct SetupSignInSheet: View {
     }
 
     private func submitEmail() {
-        focusedField = nil
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         auth.stageOnboardingCredentials(email: email, password: password)
         Task {
             await auth.submitEmailSignIn()
