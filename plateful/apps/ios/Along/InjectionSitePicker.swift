@@ -8,6 +8,8 @@ struct InjectionSitePicker: View {
     var heat: SpotHeat
     var lastSpot: InjectionSpot?
     var initial: InjectionSpot?
+    /// Interactive teaching surface in setup — same 3D body, no log/save chrome.
+    var isDemo = false
     /// Called with the chosen spot, or nil when the person skips the site.
     var onFinish: (InjectionSpot?) -> Void
     var onCancel: () -> Void
@@ -50,32 +52,38 @@ struct InjectionSitePicker: View {
 
     private var header: some View {
         VStack(spacing: 10) {
-            ZStack {
-                Text("Injection site").font(.headline).foregroundStyle(SetupTheme.ink)
-                HStack {
-                    Button(action: onCancel) {
-                        Image(systemName: "chevron.left").font(.system(size: 15, weight: .bold)).foregroundStyle(SetupTheme.ink)
-                            .frame(width: 36, height: 36).background(SetupTheme.tile, in: Circle())
+            if isDemo {
+                Text("Try the body map").font(.headline).foregroundStyle(SetupTheme.ink)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityAddTraits(.isHeader)
+            } else {
+                ZStack {
+                    Text("Injection site").font(.headline).foregroundStyle(SetupTheme.ink)
+                    HStack {
+                        Button(action: onCancel) {
+                            Image(systemName: "chevron.left").font(.system(size: 15, weight: .bold)).foregroundStyle(SetupTheme.ink)
+                                .frame(width: 36, height: 36).background(SetupTheme.tile, in: Circle())
+                        }
+                        .frame(width: 44, height: 44)
+                        .accessibilityLabel("Back").accessibilityIdentifier("site.cancel")
+                        Spacer()
+                        Button("Skip") { onFinish(nil) }
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.muted)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .accessibilityHint("Log this dose without a site")
+                            .accessibilityIdentifier("site.skip")
                     }
-                    .frame(width: 44, height: 44)
-                    .accessibilityLabel("Back").accessibilityIdentifier("site.cancel")
-                    Spacer()
-                    Button("Skip") { onFinish(nil) }
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.muted)
-                        .frame(minWidth: 44, minHeight: 44)
-                        .accessibilityHint("Log this dose without a site")
-                        .accessibilityIdentifier("site.skip")
                 }
-            }
-            HStack(spacing: 8) {
-                Text(peptideName)
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.inverseInk)
-                    .padding(.horizontal, 14).frame(minHeight: 34)
-                    .background(SetupTheme.ink, in: Capsule())
-                Spacer()
-                if let lastSpot {
-                    Text("Last: \(lastSpot.shortTitle)").font(.caption.weight(.medium)).foregroundStyle(SetupTheme.muted)
-                        .accessibilityIdentifier("site.last")
+                HStack(spacing: 8) {
+                    Text(peptideName)
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.inverseInk)
+                        .padding(.horizontal, 14).frame(minHeight: 34)
+                        .background(SetupTheme.ink, in: Capsule())
+                    Spacer()
+                    if let lastSpot {
+                        Text("Last: \(lastSpot.shortTitle)").font(.caption.weight(.medium)).foregroundStyle(SetupTheme.muted)
+                            .accessibilityIdentifier("site.last")
+                    }
                 }
             }
         }
@@ -206,7 +214,9 @@ struct InjectionSitePicker: View {
                     Spacer(minLength: 0)
                     Text("Drag to rotate · tap an area").font(.caption).foregroundStyle(SetupTheme.muted)
                 }
-                Text("Optional. Heat shows where you’ve logged recently so you can rotate sites yourself — Along never picks one for you.")
+                Text(isDemo
+                     ? "This is the same map you’ll use when logging a dose. Heat builds from your own history — Along never chooses a site for you."
+                     : "Optional. Heat shows where you’ve logged recently so you can rotate sites yourself — Along never picks one for you.")
                     .font(.caption).foregroundStyle(SetupTheme.muted)
             }
             .padding(.horizontal, 22).padding(.vertical, 16)
@@ -229,9 +239,11 @@ struct InjectionSitePicker: View {
                 Spacer()
                 if area.region.isSided { sideToggle(area.region) }
             }
-            SetupPrimaryButton(title: selected == nil ? "Choose a spot" : "Use this spot", enabled: selected != nil,
-                               identifier: "site.use") {
-                if let selected { onFinish(selected) }
+            if !isDemo {
+                SetupPrimaryButton(title: selected == nil ? "Choose a spot" : "Use this spot", enabled: selected != nil,
+                                   identifier: "site.use") {
+                    if let selected { onFinish(selected) }
+                }
             }
         }
         .padding(.horizontal, 22).padding(.top, 18).padding(.bottom, 12)

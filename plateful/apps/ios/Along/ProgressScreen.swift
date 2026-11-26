@@ -54,13 +54,10 @@ struct ProgressScreen: View {
     }
 
     private var header: some View {
-        HStack {
-            Text("Progress").font(.system(size: 30, weight: .bold)).tracking(-0.6).foregroundStyle(SetupTheme.ink)
-                .accessibilityAddTraits(.isHeader)
-            Spacer()
-            PreviewBadge()
-        }
-        .padding(.top, 8)
+        Text("Progress").font(.system(size: 30, weight: .bold)).tracking(-0.6).foregroundStyle(SetupTheme.ink)
+            .accessibilityAddTraits(.isHeader)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 8)
     }
 
     private var empty: some View {
@@ -193,23 +190,24 @@ struct ProgressScreen: View {
     }
 
     private var siteMapSection: some View {
-        let heat = ProtocolSchedule.siteHeat(
-            logs: logs,
-            peptideID: selectedPeptide
-        )
+        let heat = ProtocolSchedule.spotHeat(logs: logs, peptideID: selectedPeptide)
         return Group {
-            if heat.total > 0 {
+            if !heat.counts.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     AppSectionTitle(title: "Pin sites")
-                    Text("Recent logs by body region. Cooler spots are ones you’ve used less lately — rotate however you prefer.")
+                    Text("The same 3D map you use when logging. Cooler spots are ones you’ve used less lately — rotate however you prefer.")
                         .font(.caption).foregroundStyle(SetupTheme.muted)
-                    BodyMapView(
-                        selection: .constant(nil),
+                    InjectionSitePicker(
+                        peptideName: selectedPeptide.flatMap(store.peptide)?.name ?? "All peptides",
                         heat: heat,
-                        interactive: false,
-                        autoRotate: true,
-                        accessibilityPrefix: "progress.site"
+                        lastSpot: nil,
+                        initial: nil,
+                        isDemo: true,
+                        onFinish: { _ in },
+                        onCancel: {}
                     )
+                    .frame(minHeight: 420)
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 }
                 .accessibilityIdentifier("progress.sites")
             }

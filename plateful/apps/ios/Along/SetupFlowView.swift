@@ -10,7 +10,6 @@ struct SetupFlowView: View {
     @State private var showBackup = false
     @State private var showLocalData = false
     @State private var showSignIn = false
-    @State private var showPreviewConfirmation = false
     @State private var requestingReminders = false
     @State private var search = ""
     @State private var accountPassword = ""
@@ -50,10 +49,6 @@ struct SetupFlowView: View {
                 }
             )
         }
-        .alert("Open the local design preview?", isPresented: $showPreviewConfirmation) {
-            Button("Open design preview") { Task { await completePreviewSetup() } }
-            Button("Stay here", role: .cancel) {}
-        } message: { Text("This developer preview does not purchase or activate a subscription.") }
         .onChange(of: billing.isEntitled) { _, entitled in
             if entitled && step == .paywall {
                 Task { await completePaidSetup() }
@@ -377,9 +372,20 @@ struct SetupFlowView: View {
     private var pinMapScreen: some View {
         SetupQuestionPage(
             title: "Rotate pin sites with a body map",
-            subtitle: "Tap a region when you log a dose. Heat builds from your own history so you can see which spots you’ve used lately — Along never chooses a site for you."
+            subtitle: "When you log a dose you’ll open this 3D map. Tap a region, then a spot. Heat builds from your history — Along never chooses a site for you."
         ) {
-            PinMapOnboardingDemo(reduceMotion: reduceMotion)
+            InjectionSitePicker(
+                peptideName: "Your dose",
+                heat: SpotHeat(),
+                lastSpot: nil,
+                initial: nil,
+                isDemo: true,
+                onFinish: { _ in },
+                onCancel: {}
+            )
+            .frame(minHeight: 460)
+            .padding(.horizontal, -8)
+            .accessibilityIdentifier("setup.pinMap.demo")
         }
     }
 
@@ -567,7 +573,7 @@ struct SetupFlowView: View {
             SetupRingArtwork(symbol: "lock.shield")
             SetupHeading(title: "Thank you for trusting us", subtitle: "Now let’s build your protocol.", centered: true)
             VStack(spacing: 14) {
-                trustRow("iphone", "Private by design", "Your protocol stays on this iPhone. We never sell your data.")
+                trustRow("iphone", "Private by design", "Your protocol stays on this iPhone, with optional cloud backup when you’re signed in. We never sell your data.")
                 Divider()
                 trustRow("stethoscope", "A tracker, not a prescriber", "Along keeps your record straight. Dosing and treatment decisions stay with you and your clinician.")
             }
@@ -732,11 +738,6 @@ struct SetupFlowView: View {
         await signInAfterSetupIfNeeded()
     }
 
-    private func completePreviewSetup() async {
-        guard store.finishSetupPreview() else { return }
-        await signInAfterSetupIfNeeded()
-    }
-
     private func signInAfterSetupIfNeeded() async {
         guard !auth.isSignedIn else { return }
         auth.stageOnboardingCredentials(email: draft.accountEmail, password: accountPassword)
@@ -751,11 +752,6 @@ struct SetupFlowView: View {
                 HStack(spacing: 18) { paywallLinks }
                 VStack(spacing: 0) { paywallLinks }
             }.font(.caption).foregroundStyle(SetupTheme.muted).tint(SetupTheme.muted).frame(minHeight: 32)
-            #if DEBUG
-            Button("Open app preview · no payment") { showPreviewConfirmation = true }
-                .font(.caption.weight(.medium)).foregroundStyle(SetupTheme.ink).frame(minHeight: 32)
-                .accessibilityIdentifier("setup.preview")
-            #endif
         }
         .frame(maxWidth: .infinity)
     }
