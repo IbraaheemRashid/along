@@ -393,7 +393,8 @@ enum FirebaseBootstrap {
             guard FirebaseApp.app() == nil else { return }
             let options = FirebaseOptions(googleAppID: "1:1234567890:ios:0123456789abcdef", gcmSenderID: "1234567890")
             options.projectID = "demo-along-uitest"
-            options.apiKey = "along-emulator-only"
+            // Firebase validates the shape even when Auth and Firestore use loopback.
+            options.apiKey = "A" + String(repeating: "0", count: 38)
             FirebaseApp.configure(options: options)
             Auth.auth().useEmulator(withHost: "127.0.0.1", port: 9099)
             let database = Firestore.firestore()

@@ -182,7 +182,7 @@ struct SetupFlowView: View {
                         .font(.subheadline).frame(maxWidth: .infinity, minHeight: 44)
                 }.accessibilityIdentifier("setup.sign-in")
             }
-            if hasLocalRecords {
+            if store.hasPersonalRecords {
                 SetupTextButton(title: "Your data & reminders", identifier: "setup.local-data") { showLocalData = true }
             }
         case .compounds:
@@ -198,10 +198,6 @@ struct SetupFlowView: View {
         default:
             EmptyView()
         }
-    }
-
-    private var hasLocalRecords: Bool {
-        !store.journal.checkIns.isEmpty || !store.journal.weights.isEmpty || !store.journal.milestones.isEmpty
     }
 
     // MARK: Navigation

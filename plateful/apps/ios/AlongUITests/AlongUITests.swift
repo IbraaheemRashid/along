@@ -52,7 +52,7 @@ final class AlongUITests: XCTestCase {
             let top = max(bounds.minY + 16, app.frame.minY + 100)
             var bottom = min(bounds.maxY - 16, app.frame.maxY - 100)
             if app.keyboards.firstMatch.exists { bottom = min(bottom, app.keyboards.firstMatch.frame.minY - 12) }
-            for identifier in ["setup.continue", "setup.subscribe"] {
+            for identifier in ["setup.continue", "setup.subscribe", "peptide.save"] {
                 let action = app.buttons[identifier]
                 if action.exists && action.isHittable { bottom = min(bottom, action.frame.minY - 16) }
             }
@@ -584,7 +584,8 @@ final class AlongUITests: XCTestCase {
 
     /// Uses only the loopback Firebase emulators and Xcode's local StoreKit session.
     @MainActor func testAccountCheckoutBackupAndDeletion() async throws {
-        let authURL = URL(string: "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=along-emulator-only")!
+        let fixtureKey = "A" + String(repeating: "0", count: 38)
+        let authURL = URL(string: "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=\(fixtureKey)")!
         let documentRoot = "http://127.0.0.1:8080/v1/projects/demo-along-uitest/databases/(default)/documents/users/"
         guard (try? await URLSession.shared.data(from: URL(string: "http://127.0.0.1:9099/")!)) != nil else {
             throw XCTSkip("Start the Along account emulators to exercise cloud backup and deletion.")
@@ -599,6 +600,7 @@ final class AlongUITests: XCTestCase {
         let password = "along-local-fixture"
         launchSandbox(arguments: ["--setup-step", "account", "--local-storekit-test", "--local-account-test"])
         let emailField = app.textFields["setup.account.email"]
+        guard emailField.waitForExistence(timeout: 8) else { return XCTFail("The account form must appear after launch") }
         reveal(emailField)
         emailField.tap()
         emailField.typeText(email)
@@ -1034,7 +1036,7 @@ final class AlongUITests: XCTestCase {
 
         element("protocol.peptide.BPC-157").tap()
         let green = app.buttons["peptide.color.green"], teal = app.buttons["peptide.color.teal"]
-        XCTAssertTrue(green.waitForExistence(timeout: 4))
+        reveal(green, centerInScroll: true)
         XCTAssertTrue(green.isSelected && !teal.isSelected, "An untouched peptide shows its category colour")
         XCTAssertEqual(teal.label, "Teal")
         reveal(teal, centerInScroll: true)
@@ -1044,7 +1046,7 @@ final class AlongUITests: XCTestCase {
         XCTAssertTrue(element("protocol.peptide.BPC-157").waitForExistence(timeout: 4))
 
         element("protocol.peptide.BPC-157").tap()
-        XCTAssertTrue(teal.waitForExistence(timeout: 4))
+        reveal(teal, centerInScroll: true)
         XCTAssertTrue(teal.isSelected && !green.isSelected, "The chosen colour is kept when editing again")
         tap("peptide.close")
 
@@ -1053,7 +1055,7 @@ final class AlongUITests: XCTestCase {
         XCTAssertTrue(element("today.summary").waitForExistence(timeout: 8))
         openPeptideList()
         element("protocol.peptide.BPC-157").tap()
-        XCTAssertTrue(teal.waitForExistence(timeout: 4))
+        reveal(teal, centerInScroll: true)
         XCTAssertTrue(teal.isSelected, "The chosen colour persists across launches")
     }
 
