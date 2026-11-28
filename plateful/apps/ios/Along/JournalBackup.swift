@@ -215,7 +215,7 @@ struct JournalBackup: Codable, Equatable {
                   !draft.showWeight || draft.weightValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.baselineKilograms != nil else { throw Failure.invalidArchive }
         }
         if let profile = content.setupProfile {
-            guard profile.isValid, validDate(profile.birthDate) else { throw Failure.invalidArchive }
+            guard profile.isValid, profile.birthDate.map(validDate) ?? true else { throw Failure.invalidArchive }
         }
         if let discoveries = content.companionDiscoveries {
             guard discoveries.count <= PipStory.all.count else { throw Failure.invalidArchive }

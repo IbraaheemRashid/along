@@ -104,6 +104,7 @@ final class AlongUITests: XCTestCase {
     /// and the date picker keep their valid defaults.
     private func answerAndContinue(_ step: String) {
         switch step {
+        case "welcome": tap("setup.guided"); return
         case "experience": selectIfPresent("setup.experience.planning")
         case "goals": selectIfPresent("setup.goal.weightLoss"); selectIfPresent("setup.goal.recovery")
         case "source": selectIfPresent("setup.source.tiktok")
@@ -121,7 +122,7 @@ final class AlongUITests: XCTestCase {
     private let setupOrder = ["welcome", "experience", "goals", "source", "showcase", "pinMap", "birthday", "weight", "target",
                               "commitment", "compounds", "frequency", "doseTime", "obstacles", "trust", "reminders", "referral", "ready"]
 
-    /// Walks the real flow from welcome through the loader and plan reveal.
+    /// Walks the guided route from welcome through the real schedule preview.
     private func advanceThroughSetup(until last: String = "paywall") {
         for step in setupOrder {
             if step == last { assertSetupStep(step); return }
@@ -130,7 +131,6 @@ final class AlongUITests: XCTestCase {
             answerAndContinue(step)
         }
         guard last != "ready" else { return }
-        XCTAssertTrue(app.descendants(matching: .any)["setup.screen.building"].waitForExistence(timeout: 5))
         assertSetupStep("plan")
         if last == "plan" { return }
         capture("setup-plan")
@@ -529,6 +529,60 @@ final class AlongUITests: XCTestCase {
             else { XCTAssertTrue(cta.isEnabled, "The primary action must remain usable with large text") }
             XCTAssertFalse(navigationTab("Today").exists, "Review fixtures must remain outside the app")
         }
+    }
+
+    func testQuickSetupReviewsAWeeklyScheduleBeforeAccount() {
+        launchSandbox()
+        tap("setup.continue")
+        assertSetupStep("birthday")
+        XCTAssertEqual(app.buttons["setup.continue"].label, "I’m 18 or older")
+        tap("setup.continue")
+        assertSetupStep("compounds")
+        tap("setup.compound.BPC-157")
+        tap("setup.continue")
+        tap("setup.frequency.weekly")
+        tap("setup.continue")
+        XCTAssertFalse(app.buttons["setup.continue"].isEnabled)
+        tap("setup.weekday.2")
+        tap("setup.continue")
+        assertSetupStep("reminders")
+        capture("quick-scheduled-reminders")
+        tap("setup.reminders.skip")
+        assertSetupStep("ready")
+        tap("setup.continue")
+        assertSetupStep("plan")
+        XCTAssertTrue(element("setup.next.BPC-157").waitForExistence(timeout: 5))
+        capture("quick-weekly-plan")
+        tap("setup.edit-schedule")
+        tap("setup.frequency.later")
+        tap("setup.continue")
+        assertSetupStep("plan")
+        XCTAssertFalse(element("setup.next.BPC-157").exists)
+        app.terminate()
+        launchSandbox(reset: false)
+        assertSetupStep("plan")
+        tap("setup.continue")
+        fillAccountAndContinue()
+        assertSetupStep("paywall")
+    }
+
+    func testQuickSetupCanDeferAddingAPeptide() {
+        launchSandbox()
+        tap("setup.continue")
+        assertSetupStep("birthday")
+        tap("setup.continue")
+        assertSetupStep("compounds")
+        XCTAssertEqual(app.buttons["setup.continue"].label, "Add a peptide later")
+        tap("setup.continue")
+        assertSetupStep("plan")
+        tap("setup.back")
+        assertSetupStep("compounds")
+        tap("setup.continue")
+        assertSetupStep("plan")
+        tap("setup.continue")
+        assertSetupStep("account")
+        fillAccountAndContinue()
+        assertSetupStep("paywall")
     }
 
     func testFullSetupStopsAtPaywallAndCanOpenExplicitDesignPreview() {

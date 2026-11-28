@@ -159,6 +159,10 @@ private struct OnboardingArchive: Codable {
                 setup.step = visible
             }
             if let index = setup.steps.firstIndex(of: setup.step),
+               let ageIndex = setup.steps.firstIndex(of: .birthday),
+               index > ageIndex, !setup.isAdult() {
+                setup.step = .birthday
+            } else if let index = setup.steps.firstIndex(of: setup.step),
                let scheduleIndex = setup.steps.firstIndex(of: .doseTime),
                index > scheduleIndex, !setup.canContinue(at: .doseTime) {
                 setup.step = .doseTime

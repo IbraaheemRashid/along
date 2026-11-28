@@ -16,7 +16,6 @@ enum SetupTheme {
     static let disabled = dynamic(UIColor(red: 0.77, green: 0.77, blue: 0.79, alpha: 1), UIColor(red: 0.27, green: 0.27, blue: 0.29, alpha: 1))
     static let highlight = Color(red: 0.88, green: 0.58, blue: 0.40)
     static let success = Color(red: 0.16, green: 0.66, blue: 0.40)
-    static let loader = LinearGradient(colors: [Color(red: 0.93, green: 0.48, blue: 0.53), Color(red: 0.66, green: 0.55, blue: 0.78), Color(red: 0.42, green: 0.62, blue: 0.93)], startPoint: .leading, endPoint: .trailing)
 }
 
 private struct SetupTitleFont: ViewModifier {

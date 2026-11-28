@@ -95,11 +95,11 @@ enum HeardFrom: String, Codable, CaseIterable, Identifiable {
 }
 
 enum DoseFrequency: String, Codable, CaseIterable, Identifiable {
-    case daily, fewPerWeek, weekly, varies
+    case daily, fewPerWeek, weekly, varies, later
     var id: String { rawValue }
-    var title: String { switch self { case .daily: "Every day"; case .fewPerWeek: "A few times a week"; case .weekly: "Once a week"; case .varies: "It varies by peptide" } }
-    var detail: String { switch self { case .daily: "One or more doses daily"; case .fewPerWeek: "Choose the days in your protocol"; case .weekly: "One dose day each week"; case .varies: "Different schedules in one stack" } }
-    var symbol: String { switch self { case .daily: "sun.max"; case .fewPerWeek: "calendar"; case .weekly: "calendar.badge.clock"; case .varies: "square.grid.2x2" } }
+    var title: String { switch self { case .daily: "Every day"; case .fewPerWeek: "A few times a week"; case .weekly: "Once a week"; case .varies: "Different days for each peptide"; case .later: "Set my schedule later" } }
+    var detail: String { switch self { case .daily: "Choose a daily time"; case .fewPerWeek: "Choose the days in your protocol"; case .weekly: "One dose day each week"; case .varies: "Choose days and a time separately"; case .later: "Keep the peptide in your tracker without a due time" } }
+    var symbol: String { switch self { case .daily: "sun.max"; case .fewPerWeek: "calendar"; case .weekly: "calendar.badge.clock"; case .varies: "square.grid.2x2"; case .later: "clock" } }
 }
 
 enum SetupObstacle: String, Codable, CaseIterable, Identifiable {
@@ -293,10 +293,13 @@ struct SetupDraft: Codable, Equatable {
     static let weightRange = 30.0...250.0
 
     var step: SetupStep = .welcome
+    var quickSetup = false
     var experience: PeptideExperience?
     var goals: Set<SetupGoal> = []
     var heardFrom: HeardFrom?
-    var birthDate = SetupDraft.defaultBirthDate
+    /// New setups store only the adult confirmation. Keep dates from earlier journals readable.
+    var birthDate: Date?
+    var confirmedAdult = false
     var usesMetric = Locale.current.measurementSystem == .metric
     var weightKg = 80.0
     var targetKg = 75.0
@@ -320,13 +323,6 @@ struct SetupDraft: Codable, Equatable {
     /// Collected before paywall; Firebase account is created on successful purchase.
     var accountEmail = ""
 
-    static var defaultBirthDate: Date {
-        var components = Calendar.current.dateComponents([.year], from: .now)
-        components.year = (components.year ?? 2026) - 30
-        components.month = 1; components.day = 1
-        return Calendar.current.date(from: components) ?? .now
-    }
-
     init() {}
 
     init(from decoder: Decoder) throws {
@@ -335,6 +331,7 @@ struct SetupDraft: Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let base = SetupDraft()
         step = (try? c.decodeIfPresent(SetupStep.self, forKey: .step)) ?? base.step
+        quickSetup = try c.decodeIfPresent(Bool.self, forKey: .quickSetup) ?? false
         experience = (try? c.decodeIfPresent(PeptideExperience.self, forKey: .experience)) ?? nil
         if let goalValues = try c.decodeIfPresent([String].self, forKey: .goals) {
             goals = Set(goalValues.compactMap(SetupGoal.init(rawValue:)))
@@ -342,7 +339,8 @@ struct SetupDraft: Codable, Equatable {
             goals = try c.decodeIfPresent(Set<SetupGoal>.self, forKey: .goals) ?? []
         }
         heardFrom = try c.decodeIfPresent(HeardFrom.self, forKey: .heardFrom)
-        birthDate = try c.decodeIfPresent(Date.self, forKey: .birthDate) ?? base.birthDate
+        birthDate = try c.decodeIfPresent(Date.self, forKey: .birthDate)
+        confirmedAdult = try c.decodeIfPresent(Bool.self, forKey: .confirmedAdult) ?? false
         usesMetric = try c.decodeIfPresent(Bool.self, forKey: .usesMetric) ?? base.usesMetric
         weightKg = try c.decodeIfPresent(Double.self, forKey: .weightKg) ?? base.weightKg
         targetKg = try c.decodeIfPresent(Double.self, forKey: .targetKg) ?? base.targetKg
@@ -364,10 +362,12 @@ struct SetupDraft: Codable, Equatable {
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(step, forKey: .step)
+        if quickSetup { try c.encode(true, forKey: .quickSetup) }
         try c.encodeIfPresent(experience, forKey: .experience)
         try c.encode(goals.map(\.rawValue).sorted(), forKey: .goals)
         try c.encodeIfPresent(heardFrom, forKey: .heardFrom)
-        try c.encode(birthDate, forKey: .birthDate)
+        try c.encodeIfPresent(birthDate, forKey: .birthDate)
+        if confirmedAdult { try c.encode(true, forKey: .confirmedAdult) }
         try c.encode(usesMetric, forKey: .usesMetric)
         try c.encode(weightKg, forKey: .weightKg)
         try c.encode(targetKg, forKey: .targetKg)
@@ -387,7 +387,7 @@ struct SetupDraft: Codable, Equatable {
     }
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case step, experience, goals, heardFrom, birthDate, usesMetric, weightKg, targetKg, hasChosenTarget
+        case step, quickSetup, experience, goals, heardFrom, birthDate, confirmedAdult, usesMetric, weightKg, targetKg, hasChosenTarget
         case sharedWeekdays, peptideSchedules, lastInjections
         case compounds, frequency, doseHour, doseMinute, obstacles, remindersRequested, referralCode, plan, accountEmail
     }
@@ -396,7 +396,24 @@ struct SetupDraft: Codable, Equatable {
 
     var tracksWeightGoal: Bool { goals.contains(.weightLoss) || goals.contains(.muscle) }
 
-    var steps: [SetupStep] { SetupStep.allCases.filter { ![.weight, .target].contains($0) || tracksWeightGoal } }
+    private var route: [SetupStep] {
+        if quickSetup {
+            return [.welcome, .birthday, .compounds, .frequency, .doseTime, .reminders, .ready, .plan, .account, .paywall]
+        }
+        return SetupStep.allCases.filter { $0 != .building }
+    }
+
+    var steps: [SetupStep] {
+        route.filter { candidate in
+            switch candidate {
+            case .weight, .target: tracksWeightGoal
+            case .frequency, .ready: !compounds.isEmpty
+            case .doseTime: !compounds.isEmpty && frequency != .later
+            case .reminders: hasScheduledPeptides
+            default: true
+            }
+        }
+    }
 
     func step(after current: SetupStep) -> SetupStep? {
         let visible = steps, all = SetupStep.allCases
@@ -414,14 +431,12 @@ struct SetupDraft: Codable, Equatable {
             return visible.last { (all.firstIndex(of: $0) ?? 0) < position }
         }
         guard index > 0 else { return nil }
-        // Going back from the reveal or paywall never re-runs the loader.
-        let previous = visible[index - 1]
-        return previous == .building ? visible[index - 2] : previous
+        return visible[index - 1]
     }
 
     /// 0...1 across the questionnaire steps only.
     var progress: Double {
-        let questions = steps.filter(\.showsProgress)
+        let questions = route.filter(\.showsProgress)
         guard let index = questions.firstIndex(of: step) else { return step == .welcome ? 0 : 1 }
         return Double(index + 1) / Double(questions.count + 1)
     }
@@ -430,7 +445,6 @@ struct SetupDraft: Codable, Equatable {
         switch step {
         case .experience: experience != nil
         case .goals: !goals.isEmpty
-        case .source: heardFrom != nil
         case .birthday: isAdult(now: now)
         case .weight: Self.weightRange.contains(weightKg)
         case .target: Self.weightRange.contains(targetKg)
@@ -440,8 +454,7 @@ struct SetupDraft: Codable, Equatable {
             else if frequency == .weekly { sharedWeekdays.count == 1 }
             else if frequency == .fewPerWeek { sharedWeekdays.count >= 2 }
             else { true }
-        case .obstacles: !obstacles.isEmpty
-        case .referral: referralCode.isEmpty || Self.validReferral(referralCode)
+        case .referral, .plan: referralCode.isEmpty || Self.validReferral(referralCode)
         case .account: Self.validEmail(accountEmail)
         default: true
         }
@@ -450,11 +463,14 @@ struct SetupDraft: Codable, Equatable {
     // MARK: Derived values
 
     func age(now: Date = .now) -> Int? {
-        guard birthDate <= now else { return nil }
+        guard let birthDate, birthDate <= now else { return nil }
         return Calendar.current.dateComponents([.year], from: birthDate, to: now).year
     }
 
-    func isAdult(now: Date = .now) -> Bool { (age(now: now) ?? 0) >= 18 && (age(now: now) ?? 0) <= 110 }
+    func isAdult(now: Date = .now) -> Bool {
+        guard birthDate != nil else { return confirmedAdult }
+        return (18...110).contains(age(now: now) ?? 0)
+    }
 
     var weightUnit: WeightUnit { usesMetric ? .kg : .lb }
 
@@ -484,7 +500,7 @@ struct SetupDraft: Codable, Equatable {
             guard !sharedWeekdays.isEmpty, canContinue(at: .doseTime) else { return .unscheduled }
             return .on(sharedWeekdays, at: time)
         case .varies: return peptideSchedules[name] ?? .unscheduled
-        case nil: return .unscheduled
+        case .later, nil: return .unscheduled
         }
     }
 
@@ -545,6 +561,7 @@ struct SetupDraft: Codable, Equatable {
     static func example(at step: SetupStep) -> SetupDraft {
         var draft = SetupDraft()
         draft.step = step
+        draft.confirmedAdult = true
         draft.experience = .starting; draft.goals = [.weightLoss, .recovery]; draft.heardFrom = .tiktok
         draft.usesMetric = true; draft.weightKg = 88.4; draft.targetKg = 80; draft.hasChosenTarget = true
         draft.compounds = ["Tirzepatide", "BPC-157"]; draft.frequency = .fewPerWeek; draft.obstacles = [.forgetting, .schedules]
@@ -554,7 +571,7 @@ struct SetupDraft: Codable, Equatable {
     #endif
 
     var isValid: Bool {
-        birthDate.timeIntervalSinceReferenceDate.isFinite
+        (birthDate?.timeIntervalSinceReferenceDate.isFinite ?? true)
             && Self.weightRange.contains(weightKg) && Self.weightRange.contains(targetKg)
             && compounds.count <= Self.compoundLimit && compounds.allSatisfy(Self.validCompound)
             && Set(compounds.map { $0.lowercased() }).count == compounds.count

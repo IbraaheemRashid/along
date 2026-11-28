@@ -191,120 +191,11 @@ struct SetupRingArtwork: View {
     }
 }
 
-/// A stand-in for the system prompt so people know what to expect before iOS asks.
-struct SetupNotificationMock: View {
-    var allow: () -> Void
-    var disabled: Bool
-    @State private var bob = false
-    var body: some View {
-        VStack(spacing: 0) {
-            Text("“Along” Would Like to Send You Notifications").font(.system(.headline)).multilineTextAlignment(.center)
-                .foregroundStyle(SetupTheme.ink).padding(.horizontal, 20).padding(.top, 20)
-            Text("Dose reminders, at the times you choose.").font(.footnote).foregroundStyle(SetupTheme.muted)
-                .multilineTextAlignment(.center).padding(.horizontal, 20).padding(.top, 6).padding(.bottom, 18)
-            HStack(spacing: 10) {
-                Text("Don’t Allow").font(.body).foregroundStyle(SetupTheme.muted).frame(maxWidth: .infinity, minHeight: 46)
-                    .background(SetupTheme.surface.opacity(0.6), in: Capsule())
-                    .accessibilityHidden(true)
-                Button(action: allow) {
-                    Text("Allow").font(.body.weight(.semibold)).foregroundStyle(SetupTheme.inverseInk).frame(maxWidth: .infinity, minHeight: 46)
-                        .background(SetupTheme.ink, in: Capsule())
-                }.buttonStyle(SetupPressStyle()).disabled(disabled).accessibilityIdentifier("setup.reminders.allow")
-            }.padding(.horizontal, 14).padding(.bottom, 14)
-        }
-        .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .frame(maxWidth: 320)
-        .overlay(alignment: .bottomTrailing) {
-            Text("👆").font(.system(size: 40)).offset(x: -52, y: bob ? 52 : 44).accessibilityHidden(true)
-        }
-        .onAppear { withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { bob = true } }
-    }
-}
-
-/// Short build step that plays back the person's own answers before the reveal.
-struct SetupBuildingView: View {
-    var draft: SetupDraft
-    var reduceMotion: Bool
-    var finished: () -> Void
-    @State private var progress = 0.0
-    @State private var didFinish = false
-
-    private var items: [(String, String)] {
-        [("Your goals", draft.goals.isEmpty ? "Ready" : SetupGoal.allCases.filter(draft.goals.contains).map(\.title).joined(separator: ", ")),
-         ("Your peptides", draft.compounds.isEmpty ? "Add any time" : draft.compounds.joined(separator: ", ")),
-         ("Weekly schedule", draft.frequency?.title ?? "Flexible"),
-         ("Reminders", draft.reminderSummary),
-         ("Progress tracking", draft.tracksWeightGoal ? "Goal \(draft.formattedWeight(draft.targetKg))" : "Every dose, from day one")]
-    }
-    private var status: String {
-        switch progress {
-        case ..<0.2: "Applying your goals…"
-        case ..<0.4: "Adding your peptides…"
-        case ..<0.6: "Setting your schedule…"
-        case ..<0.8: "Saving reminder preferences…"
-        default: "Finalising your protocol…"
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 18) {
-            Spacer()
-            Text("\(Int(progress * 100))%").font(.system(size: 64, weight: .bold)).monospacedDigit().foregroundStyle(SetupTheme.ink)
-                .contentTransition(.numericText())
-            Text("We’re setting everything up for you").setupTitleFont().multilineTextAlignment(.center).foregroundStyle(SetupTheme.ink)
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(SetupTheme.tile)
-                    Capsule().fill(SetupTheme.loader).frame(width: max(8, proxy.size.width * progress))
-                }
-            }.frame(height: 8).padding(.top, 6)
-            Text(status).font(.subheadline).foregroundStyle(SetupTheme.ink)
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Your protocol includes").font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
-                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                    let done = progress >= Double(index + 1) / Double(items.count) - 0.001
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text("•").foregroundStyle(SetupTheme.muted)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(item.0).font(.subheadline).foregroundStyle(SetupTheme.ink)
-                            if done { Text(item.1).font(.caption).foregroundStyle(SetupTheme.muted).lineLimit(1).transition(.opacity) }
-                        }
-                        Spacer()
-                        Image(systemName: "checkmark.circle.fill").font(.system(size: 18)).foregroundStyle(SetupTheme.ink)
-                            .opacity(done ? 1 : 0).scaleEffect(done ? 1 : 0.5)
-                    }
-                }
-            }
-            .padding(18).frame(maxWidth: .infinity, alignment: .leading)
-            .background(SetupTheme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(SetupTheme.border))
-            .padding(.top, 10)
-            Spacer()
-        }
-        .padding(.horizontal, 24)
-        .frame(maxWidth: 560).frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("setup.building")
-        .task {
-            let steps = reduceMotion ? 10 : 50
-            let pause = reduceMotion ? 0.12 : 0.075
-            for index in 1...steps {
-                try? await Task.sleep(for: .seconds(pause))
-                guard !Task.isCancelled else { return }
-                withAnimation(.easeOut(duration: pause)) { progress = Double(index) / Double(steps) }
-            }
-            try? await Task.sleep(for: .seconds(0.5))
-            guard !Task.isCancelled, !didFinish else { return }
-            didFinish = true
-            finished()
-        }
-    }
-}
-
 /// The payoff: the person's own answers arranged as a protocol.
-struct SetupPlanView: View {
+struct SetupPlanView<Referral: View>: View {
     var draft: SetupDraft
     var editSchedule: () -> Void
+    @ViewBuilder var referral: Referral
 
     var body: some View {
         SetupScrollPage {
@@ -393,7 +284,9 @@ struct SetupPlanView: View {
                 }.padding(.top, 12)
             }
 
-            Text("You can edit any of this later.").font(.footnote).foregroundStyle(SetupTheme.muted)
+            referral
+
+            Text("You can edit your schedule in Settings → Your peptides.").font(.footnote).foregroundStyle(SetupTheme.muted)
                 .frame(maxWidth: .infinity).padding(.top, 16)
         }
         .accessibilityIdentifier("setup.plan")

@@ -323,14 +323,54 @@ import Foundation
         var setup = SetupDraft()
         expect(setup.step == .welcome && setup.progress == 0, "Peptide setup starts on the welcome screen")
         expect(SetupStep.allCases.first == .welcome && SetupStep.allCases.last == .paywall, "Peptide setup ends on the paywall")
-        expect(!setup.canContinue(at: .experience) && !setup.canContinue(at: .goals) && !setup.canContinue(at: .source)
-               && !setup.canContinue(at: .frequency) && !setup.canContinue(at: .obstacles), "Required setup answers cannot be skipped")
+        expect(!setup.canContinue(at: .experience) && !setup.canContinue(at: .goals) && !setup.canContinue(at: .birthday)
+               && !setup.canContinue(at: .frequency), "Required setup choices need an explicit answer")
+        expect(setup.canContinue(at: .source) && setup.canContinue(at: .obstacles), "Guided personalisation and attribution questions are optional")
         setup.goals = [.recovery]
         expect(!setup.steps.contains(.weight) && !setup.steps.contains(.target) && setup.step(after: .birthday) == .commitment, "Weight is only asked for weight goals")
         expect(setup.step(after: .weight) == .commitment, "Leaving a retired or hidden screen moves forward")
         setup.goals.insert(.weightLoss)
         expect(setup.step(after: .weight) == .target && setup.step(before: .commitment) == .target, "Weight goals add the goal-weight screen")
-        expect(setup.step(before: .plan) == .ready && setup.step(before: .account) == .plan && setup.step(before: .paywall) == .account, "Going back never replays the loader")
+        expect(setup.step(before: .plan) == .referral && setup.step(before: .account) == .plan && setup.step(before: .paywall) == .account, "Going back never replays the loader")
+        do {
+            var quick = SetupDraft()
+            quick.quickSetup = true
+            expect(quick.steps == [.welcome, .birthday, .compounds, .plan, .account, .paywall], "A new journal with no peptides has no schedule, reminder or history questions")
+            expect(!quick.isAdult() && quick.birthDate == nil, "An untouched draft never invents a birthday or adult consent")
+            quick.confirmedAdult = true
+            quick.step = .compounds
+            let progressBeforeSelection = quick.progress
+            quick.toggleCompound("My peptide")
+            expect(quick.progress == progressBeforeSelection, "Selecting a peptide cannot send the progress bar backwards")
+            quick.frequency = .weekly
+            quick.sharedWeekdays = [2]
+            expect(quick.steps == [.welcome, .birthday, .compounds, .frequency, .doseTime, .reminders, .ready, .plan, .account, .paywall], "A weekly quick setup visits only relevant steps")
+            expect(quick.step(after: .ready) == .plan && quick.step(before: .plan) == .ready, "Preview opens immediately and Back returns to the past entry")
+            quick.frequency = .later
+            expect(!quick.steps.contains(.doseTime) && !quick.steps.contains(.reminders) && quick.steps.contains(.ready), "A tracked peptide can record history without a dose time or reminder")
+            expect(quick.initialPeptides(startKey: "2026-11-01").allSatisfy { $0.schedule == .unscheduled }, "Deferring clears a previously selected weekly schedule from the resulting protocol")
+            quick.step = .ready
+            let data = try JSONEncoder().encode(quick)
+            let restored = try JSONDecoder().decode(SetupDraft.self, from: data)
+            expect(restored == quick && restored.isAdult() && restored.birthDate == nil, "A quick setup resumes with age confirmation and no date of birth")
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            expect(json?["birthDate"] == nil, "New adult confirmations do not write a birthday")
+            var legacy = setup
+            legacy.step = .building
+            let legacyStore = JournalStore(directory: testRoot.appendingPathComponent("retired-setup-step"), arguments: [], clearCredentials: {})
+            legacy.birthDate = calendar.date(byAdding: .year, value: -30, to: now)!
+            legacyStore.setup = legacy
+            _ = legacyStore.saveSetup()
+            let reopened = JournalStore(directory: legacyStore.storageDirectory, arguments: [], clearCredentials: {})
+            expect(!reopened.setup.quickSetup && reopened.setup.step == .plan && reopened.setup.birthDate == legacy.birthDate, "Older guided drafts resume from the retired loader with their existing birthday")
+            let mayNotFinish = JournalStore(directory: testRoot.appendingPathComponent("pending-age"), arguments: [], clearCredentials: {})
+            mayNotFinish.setup.quickSetup = true
+            expect(!mayNotFinish.finishSetup(now: now), "Checkout cannot finish without explicit adult confirmation")
+            mayNotFinish.setup = restored
+            expect(mayNotFinish.finishSetup(now: now) && mayNotFinish.journal.weights.isEmpty, "Quick setup creates a journal without an invented weight")
+            let archive = try JournalBackup.decode(JournalBackup.make(from: mayNotFinish.journal).encoded()).restoring(into: Journal())
+            expect(archive.setupProfile?.confirmedAdult == true && archive.setupProfile?.birthDate == nil, "Backup restores a confirmed adult without requiring a birthday")
+        }
         setup.goals = [.recovery]
         expect(setup.step(before: .target) == .birthday, "Back from a hidden step lands on the nearest visible screen")
         setup.goals = [.weightLoss]; setup.weightKg = 90

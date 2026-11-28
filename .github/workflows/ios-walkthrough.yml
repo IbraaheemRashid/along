@@ -73,6 +73,8 @@ jobs:
         run: |
           xcodebuild -project Along.xcodeproj -scheme Along -destination "id=$DEVICE" \
             -parallel-testing-enabled NO -derivedDataPath "$RUNNER_TEMP/Along-build" -resultBundlePath "$RUNNER_TEMP/Tracker.xcresult" \
+            -only-testing:AlongUITests/AlongUITests/testQuickSetupReviewsAWeeklyScheduleBeforeAccount \
+            -only-testing:AlongUITests/AlongUITests/testQuickSetupCanDeferAddingAPeptide \
             -only-testing:AlongUITests/AlongUITests/testFullSetupStopsAtPaywallAndCanOpenExplicitDesignPreview \
             -only-testing:AlongUITests/AlongUITests/testNextDoseOpensItsPlannedDay \
             -only-testing:AlongUITests/AlongUITests/testOneTapDoseShowsActualTimeAndAppearsInCalendarWithoutANote \

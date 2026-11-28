@@ -12,6 +12,7 @@ struct SetupFlowView: View {
     @State private var showLocalData = false
     @State private var showSignIn = false
     @State private var requestingReminders = false
+    @State private var reminderError: String?
     @State private var completingPurchase = false
     @State private var previousPlan: SetupDraft?
     @State private var search = ""
@@ -95,7 +96,7 @@ struct SetupFlowView: View {
     @ViewBuilder private var header: some View {
         if step.showsBack || step.showsProgress {
             HStack(spacing: 16) {
-                if step.showsBack { SetupBackButton(action: back) } else { Color.clear.frame(width: 44, height: 44) }
+                if step.showsBack { SetupBackButton(action: back).disabled(requestingReminders) } else { Color.clear.frame(width: 44, height: 44) }
                 if step.showsProgress { SetupProgressBar(progress: draft.progress) } else { Spacer() }
             }
             .padding(.horizontal, 24).padding(.top, 6).padding(.bottom, 4)
@@ -132,17 +133,24 @@ struct SetupFlowView: View {
 
     private var primaryAction: FooterAction {
         switch step {
-        case .welcome: return FooterAction(title: "Get started", action: advance)
-        case .commitment: return FooterAction(title: "Continue", action: advance)
-        case .compounds: return FooterAction(title: draft.compounds.isEmpty ? "Choose at least one" : "Continue", enabled: !draft.compounds.isEmpty, action: advance)
-        case .reminders: return FooterAction(title: requestingReminders ? "Please wait…" : "Turn on reminders", symbol: "bell.fill", enabled: !requestingReminders, action: requestReminders)
-        case .referral:
-            return FooterAction(title: draft.referralCode.isEmpty ? "Skip" : "Continue", enabled: draft.canContinue(at: .referral)) {
-                if draft.referralCode.isEmpty { store.setup.referralCode = "" }
+        case .welcome:
+            return FooterAction(title: "Set up my tracker") { startSetup(quick: true) }
+        case .birthday:
+            if draft.birthDate != nil { return FooterAction(title: "Confirm date of birth", enabled: draft.isAdult(), action: advance) }
+            return FooterAction(title: "I’m 18 or older") {
+                store.setup.confirmedAdult = true
                 advance()
             }
+        case .source: return FooterAction(title: draft.heardFrom == nil ? "Skip" : "Continue", action: advance)
+        case .obstacles: return FooterAction(title: draft.obstacles.isEmpty ? "Skip" : "Continue", action: advance)
+        case .commitment: return FooterAction(title: "Continue", action: advance)
+        case .compounds: return FooterAction(title: draft.compounds.isEmpty ? "Add a peptide later" : "Continue", action: advance)
+        case .reminders: return FooterAction(title: requestingReminders ? "Please wait…" : "Turn on reminders", symbol: "bell.fill", enabled: !requestingReminders, action: { saveReminderChoice(enabled: true) })
+        case .referral:
+            return FooterAction(title: draft.referralCode.isEmpty ? "Skip" : "Continue", enabled: draft.canContinue(at: .referral), action: advance)
         case .ready: return FooterAction(title: "See my schedule", action: advance)
-        case .plan: return FooterAction(title: "Continue to account", action: advance)
+        case .plan:
+            return FooterAction(title: auth.isConfigured ? "Continue to account" : "Continue", enabled: draft.canContinue(at: .plan), action: advance)
         case .account: return accountAction
         case .paywall: return paywallAction
         default: return FooterAction(title: "Continue", enabled: draft.canContinue(at: step), action: advance)
@@ -174,6 +182,7 @@ struct SetupFlowView: View {
     @ViewBuilder private var footerAccessory: some View {
         switch step {
         case .welcome:
+            SetupTextButton(title: "Walk me through Along", identifier: "setup.guided") { startSetup(quick: false) }
             if auth.isSignedIn {
                 SignedInSetupActions()
             } else {
@@ -185,14 +194,10 @@ struct SetupFlowView: View {
             if store.hasPersonalRecords {
                 SetupTextButton(title: "Your data & reminders", identifier: "setup.local-data") { showLocalData = true }
             }
-        case .compounds:
-            SetupTextButton(title: draft.experience == .planning ? "I haven’t decided yet" : "Skip for now", identifier: "setup.compounds.none") {
-                store.setup.compounds = []; advance()
-            }
         case .reminders:
             SetupTextButton(title: "Not now", identifier: "setup.reminders.skip") {
-                store.setup.remindersRequested = false; advance()
-            }
+                saveReminderChoice(enabled: false)
+            }.disabled(requestingReminders)
         case .paywall:
             Text("No free trial · Cancel anytime").font(.caption).foregroundStyle(SetupTheme.muted)
                 .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
@@ -203,6 +208,11 @@ struct SetupFlowView: View {
 
     // MARK: Navigation
 
+    private func startSetup(quick: Bool) {
+        store.setup.quickSetup = quick
+        advance()
+    }
+
     private func advance() {
         guard draft.canContinue(at: step) || (step == .account && (!auth.isConfigured || auth.isSignedIn)) else { return }
         fieldFocused = false
@@ -210,14 +220,17 @@ struct SetupFlowView: View {
         if step == .weight { next.prepareTarget() }
         if step == .target { next.hasChosenTarget = true }
         guard let destination = next.step(after: step) else { return }
-        next.step = previousPlan != nil && step == .doseTime ? .plan : destination
-        if step == .doseTime { previousPlan = nil }
+        let finishedEditing = previousPlan != nil && (step == .doseTime || (step == .frequency && next.frequency == .later))
+        next.step = finishedEditing ? .plan : destination
+        if finishedEditing { previousPlan = nil }
         forward = true
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.28)) { store.setup = next }
+        reminderError = nil
         _ = store.saveSetup()
     }
 
     private func back() {
+        guard !requestingReminders else { return }
         fieldFocused = false
         guard let previous = draft.step(before: step) else { return }
         forward = false
@@ -231,16 +244,28 @@ struct SetupFlowView: View {
         }
     }
 
-    private func requestReminders() {
+    private func saveReminderChoice(enabled: Bool) {
+        guard !requestingReminders, step == .reminders else { return }
+        if !enabled && draft.remindersRequested != true {
+            store.setup.remindersRequested = false
+            advance()
+            return
+        }
+        reminderError = nil
         requestingReminders = true
         Task {
             var preferences = reminders.preferences
-            preferences.enabled = true
+            preferences.enabled = enabled
             // Sources are empty until setup finishes; sync runs after the protocol is created.
             let saved = await reminders.save(preferences, sources: [])
-            store.setup.remindersRequested = saved
             requestingReminders = false
-            advance()
+            guard step == .reminders else { return }
+            if saved {
+                store.setup.remindersRequested = enabled
+                advance()
+            } else {
+                reminderError = reminders.message ?? "Your reminder choice couldn’t be saved. Try again or continue without reminders."
+            }
         }
     }
 
@@ -270,12 +295,18 @@ struct SetupFlowView: View {
         case .reminders: remindersScreen
         case .referral: referralScreen
         case .ready: readyScreen
-        case .building: SetupBuildingView(draft: draft, reduceMotion: reduceMotion) { advance() }
+        case .building: Color.clear.task { advance() }
         case .plan:
-            SetupPlanView(draft: draft) {
+            SetupPlanView(draft: draft, editSchedule: {
                 previousPlan = draft
                 forward = false
                 store.setup.step = .frequency
+            }) {
+                if draft.quickSetup {
+                    DisclosureGroup("Have a referral code?") {
+                        referralField.padding(.top, 8)
+                    }.padding(.top, 16)
+                }
             }
         case .account:
             if auth.isConfigured { accountScreen }
@@ -387,7 +418,7 @@ struct SetupFlowView: View {
                 .frame(height: typeSize.isAccessibilitySize ? 180 : nil)
                 .frame(maxHeight: .infinity)
                 .padding(.top, 12)
-            Text("Start your peptides\nwith a clear plan").setupTitleFont().multilineTextAlignment(.center).foregroundStyle(SetupTheme.ink)
+            Text("Track your peptides\nin one place").setupTitleFont().multilineTextAlignment(.center).foregroundStyle(SetupTheme.ink)
                 .accessibilityAddTraits(.isHeader)
         }
         .padding(.horizontal, 24).padding(.bottom, 26)
@@ -414,7 +445,7 @@ struct SetupFlowView: View {
     }
 
     private var sourceScreen: some View {
-        SetupQuestionPage(title: "Where did you hear about us?") {
+        SetupQuestionPage(title: "Where did you hear about us?", subtitle: "Optional. You can skip this question.") {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 10) {
                 ForEach(HeardFrom.allCases) { source in
                     SetupGridOption(title: source.title, symbol: source.symbol, selected: draft.heardFrom == source,
@@ -450,9 +481,19 @@ struct SetupFlowView: View {
         }
     }
 
-    private var birthdayScreen: some View {
+    @ViewBuilder private var birthdayScreen: some View {
+        if let savedBirthday = draft.birthDate {
+            legacyBirthdayPicker(savedBirthday)
+        } else {
+            SetupQuestionPage(title: "Are you 18 or older?", subtitle: "Along is for adults. Confirm your age to set up your tracker.") {
+                SetupIconTile(icon: .symbol("person.crop.circle"), size: 64)
+            }
+        }
+    }
+
+    private func legacyBirthdayPicker(_ savedBirthday: Date) -> some View {
         SetupQuestionPage(title: "When were you born?", subtitle: "Along is for adults aged 18 and over.") {
-            DatePicker("Date of birth", selection: binding(\.birthDate), in: Self.birthRange, displayedComponents: .date)
+            DatePicker("Date of birth", selection: Binding(get: { draft.birthDate ?? savedBirthday }, set: { store.setup.birthDate = $0 }), in: Self.birthRange, displayedComponents: .date)
                 .datePickerStyle(.wheel).labelsHidden().frame(maxWidth: .infinity)
                 .accessibilityIdentifier("setup.birthday")
             Group {
@@ -534,12 +575,12 @@ struct SetupFlowView: View {
 
     private var compoundsScreen: some View {
         SetupScrollPage {
-            SetupHeading(title: draft.experience == .planning ? "Which peptides are you starting?" : "Which peptides are you taking?", subtitle: "Tap to add. Search for anything not listed.")
+            SetupHeading(title: "Which peptides do you want to track?", subtitle: "Tap to add. Search for anything not listed.")
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass").foregroundStyle(SetupTheme.muted)
                 TextField("Search peptides", text: $search).focused($fieldFocused)
                     .textInputAutocapitalization(.never).autocorrectionDisabled().submitLabel(.done)
-                    .onSubmit(addSearchedCompound)
+                    .onSubmit { fieldFocused = false }
                     .accessibilityIdentifier("setup.compounds.search")
                 if !search.isEmpty {
                     Button { search = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(SetupTheme.muted) }.accessibilityLabel("Clear search")
@@ -565,7 +606,7 @@ struct SetupFlowView: View {
                 chipSection(matches.isEmpty ? "No matches" : "Results") {
                     ForEach(matches) { compoundChip($0.name, clearingSearch: true) }
                     if !matches.contains(where: { $0.name.caseInsensitiveCompare(query) == .orderedSame }) && SetupDraft.validCompound(query) {
-                        SetupChip(title: "Add “\(query)”", selected: false, identifier: "setup.compounds.add") { addSearchedCompound() }
+                        SetupChip(title: "Add “\(query)” as custom", selected: false, identifier: "setup.compounds.add") { addSearchedCompound() }
                     }
                 }
             }
@@ -578,7 +619,7 @@ struct SetupFlowView: View {
     private func compoundChip(_ name: String, clearingSearch: Bool = false) -> some View {
         SetupChip(title: name, selected: draft.contains(name), identifier: "setup.compound.\(name)") {
             store.setup.toggleCompound(name)
-            if clearingSearch { search = "" }
+            if clearingSearch { search = ""; fieldFocused = false }
         }
     }
 
@@ -587,6 +628,7 @@ struct SetupFlowView: View {
         guard SetupDraft.validCompound(query) else { return }
         let canonical = Peptide.library.first { $0.name.caseInsensitiveCompare(query) == .orderedSame }?.name ?? query
         if !draft.contains(canonical) { store.setup.toggleCompound(canonical) }
+        fieldFocused = false
         search = ""
     }
 
@@ -598,7 +640,7 @@ struct SetupFlowView: View {
     }
 
     private var frequencyScreen: some View {
-        SetupQuestionPage(title: draft.experience == .planning ? "How often will you dose?" : "How often do you dose?", subtitle: "Choose the frequency in your own protocol. You’ll review the days and times next.") {
+        SetupQuestionPage(title: "What’s your schedule?", subtitle: draft.compounds.joined(separator: " · ")) {
             ForEach(DoseFrequency.allCases) { option in
                 SetupOptionRow(title: option.title, detail: option.detail, icon: .symbol(option.symbol), selected: draft.frequency == option,
                                identifier: "setup.frequency.\(option.rawValue)") {
@@ -636,7 +678,7 @@ struct SetupFlowView: View {
         } else {
             SetupQuestionPage(title: "When are your doses scheduled?", subtitle: draft.compounds.joined(separator: " · ")) {
                 if draft.frequency == .weekly || draft.frequency == .fewPerWeek {
-                    Text(draft.frequency == .weekly ? "Choose your dose day" : "Choose your dose days")
+                    Text(draft.frequency == .weekly ? "Choose one day" : "Choose at least two days")
                         .font(.headline).frame(maxWidth: .infinity, alignment: .leading)
                     WeekdayPicker(selection: binding(\.sharedWeekdays), single: draft.frequency == .weekly, identifier: "setup.weekday")
                 }
@@ -663,7 +705,7 @@ struct SetupFlowView: View {
     }
 
     private var obstaclesScreen: some View {
-        SetupQuestionPage(title: draft.experience == .experienced ? "What’s getting in the way?" : "What feels hardest about it?", subtitle: "Choose all that apply. Your plan will cover each one.") {
+        SetupQuestionPage(title: draft.experience == .experienced ? "What’s getting in the way?" : "What feels hardest about it?", subtitle: "Optional. Choose anything you’d like help tracking.") {
             ForEach(SetupObstacle.allCases) { obstacle in
                 SetupOptionRow(title: obstacle.title, icon: .symbol(obstacle.symbol), selected: draft.obstacles.contains(obstacle), multiple: true,
                                identifier: "setup.obstacle.\(obstacle.rawValue)") {
@@ -700,20 +742,38 @@ struct SetupFlowView: View {
     }
 
     private var remindersScreen: some View {
-        VStack(spacing: 30) {
-            Spacer()
-            SetupHeading(title: "Never miss a dose", subtitle: "Along can notify you at the times you set for each peptide.", centered: true)
-            SetupNotificationMock(allow: requestReminders, disabled: requestingReminders)
-            Spacer(); Spacer()
-        }.padding(.horizontal, 24)
+        SetupQuestionPage(title: "Remind you when a dose is due?", subtitle: "Use the schedule you entered. You can change reminders in Settings.") {
+            ForEach(draft.compounds, id: \.self) { name in
+                let schedule = draft.schedule(for: name)
+                if schedule.kind != .unscheduled {
+                    SetupCard {
+                        Text(name).font(.headline)
+                        Text("\(schedule.summary) · \(schedule.timesSummary)").font(.subheadline).foregroundStyle(SetupTheme.muted)
+                    }
+                }
+            }
+            if let reminderError {
+                Text(reminderError).font(.footnote).foregroundStyle(SetupTheme.muted)
+                    .accessibilityIdentifier("setup.reminders.notice")
+            }
+        }
     }
 
     private var referralScreen: some View {
         SetupQuestionPage(title: "Have a referral code?", subtitle: "Optional. Enter a code from a creator or friend.", centered: false) {
+            referralField
+        }
+    }
+
+    private var referralField: some View {
+        VStack(alignment: .leading, spacing: 8) {
             TextField("Referral code", text: Binding(get: { draft.referralCode }, set: { store.setup.referralCode = String($0.uppercased().prefix(SetupDraft.referralLimit)) }))
                 .font(.system(.title3, weight: .semibold)).multilineTextAlignment(.center)
                 .textInputAutocapitalization(.characters).autocorrectionDisabled().focused($fieldFocused)
-                .submitLabel(.done).onSubmit { if draft.canContinue(at: .referral) { advance() } }
+                .submitLabel(.done).onSubmit {
+                    fieldFocused = false
+                    if step == .referral && draft.canContinue(at: .referral) { advance() }
+                }
                 .padding(.horizontal, 16).frame(minHeight: 60)
                 .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .accessibilityIdentifier("setup.referral")
