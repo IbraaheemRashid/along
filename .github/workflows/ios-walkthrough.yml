@@ -73,6 +73,8 @@ jobs:
         run: |
           xcodebuild -project Along.xcodeproj -scheme Along -destination "id=$DEVICE" \
             -parallel-testing-enabled NO -derivedDataPath "$RUNNER_TEMP/Along-build" -resultBundlePath "$RUNNER_TEMP/Tracker.xcresult" \
+            -only-testing:AlongUITests/AlongUITests/testSetupHeadingGrowsBeyondFirstAccessibilitySize \
+            -only-testing:AlongUITests/AlongUITests/testSetupSupportsDarkModeAndLargestAccessibilityText \
             -only-testing:AlongUITests/AlongUITests/testQuickSetupReviewsAWeeklyScheduleBeforeAccount \
             -only-testing:AlongUITests/AlongUITests/testQuickSetupCanDeferAddingAPeptide \
             -only-testing:AlongUITests/AlongUITests/testFullSetupStopsAtPaywallAndCanOpenExplicitDesignPreview \
@@ -97,7 +99,7 @@ jobs:
       - name: Check that the walkthrough ran without skips
         run: |
           xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/Along.xcresult" > "$RUNNER_TEMP/walkthrough-summary.json"
-          jq -e '.failedTests == 0 and .skippedTests == 0 and .passedTests == 11' "$RUNNER_TEMP/walkthrough-summary.json"
+          jq -e '.failedTests == 0 and .skippedTests == 0 and .passedTests == 15' "$RUNNER_TEMP/walkthrough-summary.json"
       - name: Compile the Release app with linked services
         working-directory: plateful/apps/ios
         run: |

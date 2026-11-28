@@ -533,9 +533,12 @@ final class AlongUITests: XCTestCase {
 
     func testQuickSetupReviewsAWeeklyScheduleBeforeAccount() {
         launchSandbox()
+        assertSetupStep("welcome")
+        capture("setup-quick-welcome")
         tap("setup.continue")
         assertSetupStep("birthday")
         XCTAssertEqual(app.buttons["setup.continue"].label, "I’m 18 or older")
+        capture("setup-quick-age")
         tap("setup.continue")
         assertSetupStep("compounds")
         tap("setup.compound.BPC-157")
@@ -546,13 +549,13 @@ final class AlongUITests: XCTestCase {
         tap("setup.weekday.2")
         tap("setup.continue")
         assertSetupStep("reminders")
-        capture("quick-scheduled-reminders")
+        capture("setup-quick-reminders")
         tap("setup.reminders.skip")
         assertSetupStep("ready")
         tap("setup.continue")
         assertSetupStep("plan")
         XCTAssertTrue(element("setup.next.BPC-157").waitForExistence(timeout: 5))
-        capture("quick-weekly-plan")
+        capture("setup-quick-plan")
         tap("setup.edit-schedule")
         tap("setup.frequency.later")
         tap("setup.continue")
@@ -567,7 +570,7 @@ final class AlongUITests: XCTestCase {
     }
 
     func testQuickSetupCanDeferAddingAPeptide() {
-        launchSandbox()
+        launchSandbox(arguments: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL", "--dark-review"])
         tap("setup.continue")
         assertSetupStep("birthday")
         tap("setup.continue")
