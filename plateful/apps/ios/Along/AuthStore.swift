@@ -5,6 +5,9 @@ import SwiftUI
 #if canImport(FirebaseAuth)
 import FirebaseAuth
 #endif
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 #if canImport(FirebaseCore)
 import FirebaseCore
 #endif
@@ -46,7 +49,8 @@ struct AlongUser: Equatable {
 
     var isConfigured: Bool {
         #if DEBUG
-        guard journals != nil, !ProcessInfo.processInfo.arguments.contains("--ui-testing") else { return false }
+        guard journals != nil else { return false }
+        if ProcessInfo.processInfo.arguments.contains("--ui-testing") { return FirebaseBootstrap.usesAccountEmulators }
         #endif
         return Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil
     }
@@ -374,7 +378,33 @@ struct AlongUser: Equatable {
 }
 
 enum FirebaseBootstrap {
+    static var usesAccountEmulators: Bool {
+        #if DEBUG && targetEnvironment(simulator) && canImport(FirebaseAuth) && canImport(FirebaseFirestore)
+        let arguments = ProcessInfo.processInfo.arguments
+        return arguments.contains("--ui-testing") && arguments.contains("--local-account-test")
+        #else
+        return false
+        #endif
+    }
+
     static func configureIfNeeded() {
+        #if DEBUG && targetEnvironment(simulator) && canImport(FirebaseAuth) && canImport(FirebaseFirestore) && canImport(FirebaseCore)
+        if usesAccountEmulators {
+            guard FirebaseApp.app() == nil else { return }
+            let options = FirebaseOptions(googleAppID: "1:1234567890:ios:0123456789abcdef", gcmSenderID: "1234567890")
+            options.projectID = "demo-along-uitest"
+            options.apiKey = "along-emulator-only"
+            FirebaseApp.configure(options: options)
+            Auth.auth().useEmulator(withHost: "127.0.0.1", port: 9099)
+            let database = Firestore.firestore()
+            let settings = database.settings
+            settings.host = "127.0.0.1:8080"
+            settings.isSSLEnabled = false
+            settings.cacheSettings = MemoryCacheSettings()
+            database.settings = settings
+            return
+        }
+        #endif
         guard Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil else { return }
         #if canImport(FirebaseCore)
         if FirebaseApp.app() == nil {

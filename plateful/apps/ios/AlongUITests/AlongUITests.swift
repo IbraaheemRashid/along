@@ -582,6 +582,81 @@ final class AlongUITests: XCTestCase {
         XCTAssertFalse(app.buttons["setup.subscribe"].exists)
     }
 
+    /// Uses only the loopback Firebase emulators and Xcode's local StoreKit session.
+    @MainActor func testAccountCheckoutBackupAndDeletion() async throws {
+        let authURL = URL(string: "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=along-emulator-only")!
+        let documentRoot = "http://127.0.0.1:8080/v1/projects/demo-along-uitest/databases/(default)/documents/users/"
+        guard (try? await URLSession.shared.data(from: URL(string: "http://127.0.0.1:9099/")!)) != nil else {
+            throw XCTSkip("Start the Along account emulators to exercise cloud backup and deletion.")
+        }
+        let file = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Along", withExtension: "storekit"))
+        let session = try SKTestSession(contentsOf: file)
+        session.resetToDefaultState()
+        session.clearTransactions()
+        session.disableDialogs = true
+        defer { session.clearTransactions() }
+        let email = "walkthrough-\(UUID().uuidString.lowercased())@example.invalid"
+        let password = "along-local-fixture"
+        launchSandbox(arguments: ["--setup-step", "account", "--local-storekit-test", "--local-account-test"])
+        let emailField = app.textFields["setup.account.email"]
+        reveal(emailField)
+        emailField.tap()
+        emailField.typeText(email)
+        let passwordField = app.secureTextFields["setup.account.password"]
+        reveal(passwordField)
+        passwordField.tap()
+        passwordField.typeText(password)
+        if app.keyboards.buttons["Go"].exists { app.keyboards.buttons["Go"].tap() } else { tap("setup.continue") }
+        let action = app.buttons["setup.subscribe"]
+        let loaded = expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: action)
+        await fulfillment(of: [loaded], timeout: 30)
+        tap("setup.subscribe")
+        XCTAssertTrue(navigationTab("Today").waitForExistence(timeout: 40))
+        tap("today.log-extra")
+        tap("dose.save")
+
+        var signIn = URLRequest(url: authURL)
+        signIn.httpMethod = "POST"
+        signIn.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        signIn.httpBody = try JSONSerialization.data(withJSONObject: ["email": email, "password": password, "returnSecureToken": true] as [String: Any])
+        let (identityData, identityResponse) = try await URLSession.shared.data(for: signIn)
+        XCTAssertEqual((identityResponse as? HTTPURLResponse)?.statusCode, 200)
+        let identity = try XCTUnwrap(JSONSerialization.jsonObject(with: identityData) as? [String: Any])
+        let uid = try XCTUnwrap(identity["localId"] as? String)
+        var document = URLRequest(url: URL(string: documentRoot + uid + "/app/state")!)
+        document.setValue("Bearer " + (try XCTUnwrap(identity["idToken"] as? String)), forHTTPHeaderField: "Authorization")
+        var savedLogs = 0
+        for _ in 0..<30 {
+            let (data, _) = try await URLSession.shared.data(for: document)
+            let response = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let fields = response?["fields"] as? [String: [String: Any]]
+            if let base64 = fields?["journalBase64"]?["stringValue"] as? String, let bytes = Data(base64Encoded: base64),
+               let journal = try JSONSerialization.jsonObject(with: bytes) as? [String: Any] {
+                savedLogs = (journal["doseLogs"] as? [[String: Any]])?.count ?? 0
+            }
+            if savedLogs == 1 { break }
+            try await Task.sleep(for: .seconds(1))
+        }
+        XCTAssertEqual(savedLogs, 1, "The authenticated backup contains the dose recorded in Today")
+
+        navigationTab("Settings").tap()
+        let delete = app.buttons["Delete account"]
+        reveal(delete)
+        delete.tap()
+        let confirmation = app.secureTextFields["account.delete.password"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+        confirmation.tap()
+        confirmation.typeText(password)
+        tap("account.delete.confirm")
+        XCTAssertTrue(element("setup.screen.welcome").waitForExistence(timeout: 25))
+        let (_, deletedIdentity) = try await URLSession.shared.data(for: signIn)
+        XCTAssertEqual((deletedIdentity as? HTTPURLResponse)?.statusCode, 400)
+        // The emulator's owner token lets the test inspect the document after the UID is gone.
+        document.setValue("Bearer owner", forHTTPHeaderField: "Authorization")
+        let (_, removedBackup) = try await URLSession.shared.data(for: document)
+        XCTAssertEqual((removedBackup as? HTTPURLResponse)?.statusCode, 404)
+    }
+
     func testUnconnectedPurchaseAndRestoreNeverUnlockApp() {
         launchSandbox(arguments: ["--setup-step", "paywall"])
         assertSetupStep("paywall")
@@ -950,7 +1025,8 @@ final class AlongUITests: XCTestCase {
         XCTAssertTrue(green.waitForExistence(timeout: 4))
         XCTAssertTrue(green.isSelected && !teal.isSelected, "An untouched peptide shows its category colour")
         XCTAssertEqual(teal.label, "Teal")
-        tap("peptide.color.teal")
+        reveal(teal, centerInScroll: true)
+        teal.tap()
         XCTAssertTrue(teal.isSelected && !green.isSelected)
         tap("peptide.save")
         XCTAssertTrue(element("protocol.peptide.BPC-157").waitForExistence(timeout: 4))

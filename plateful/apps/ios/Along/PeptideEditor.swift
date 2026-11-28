@@ -31,6 +31,7 @@ struct PeptideEditor: View {
     @State private var batchExpiryDate = Date.now
     @State private var note = ""
     @State private var isPaused = false
+    @State private var allowsReminders = true
     /// Nil until the person taps a swatch, so the peptide keeps following its
     /// category default (and a renamed new peptide follows its new name).
     @State private var pickedColor: PeptideColor?
@@ -80,6 +81,13 @@ struct PeptideEditor: View {
                     if kind != .unscheduled {
                         timesPicker
                         startPicker
+                        Toggle(isOn: $allowsReminders) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Remind me about this peptide")
+                                Text("Uses your dose reminder settings.").font(.caption).foregroundStyle(SetupTheme.muted)
+                            }
+                        }
+                        .accessibilityIdentifier("peptide.reminders")
                     }
                     if !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { colorPicker }
                     if let editing, editing.schedule != schedule || editing.isPaused != isPaused || editing.startKey != startKey {
@@ -438,6 +446,7 @@ struct PeptideEditor: View {
         }
         note = peptide.note
         isPaused = peptide.isPaused
+        allowsReminders = peptide.doseRemindersEnabled != false
         pickedColor = peptide.color
     }
 
@@ -452,6 +461,7 @@ struct PeptideEditor: View {
         peptide.batchExpiryKey = tracksBatchExpiry ? DayIdentity.key(for: batchExpiryDate) : nil
         peptide.note = note
         peptide.isPaused = isPaused
+        peptide.doseRemindersEnabled = allowsReminders ? nil : false
         peptide.color = pickedColor
         if store.savePeptide(peptide, effectiveFrom: DayIdentity.key(for: effectiveDate)) {
             store.showToast(editing == nil ? "\(trimmed) added" : "Saved")

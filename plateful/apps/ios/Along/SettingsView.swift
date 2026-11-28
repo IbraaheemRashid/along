@@ -395,6 +395,7 @@ struct AccountDeletionView: View {
                     if let email = auth.user?.email { Text(email).font(.headline) }
                     if auth.user?.provider == "password" {
                         SecureField("Account password", text: $password).textContentType(.password)
+                            .accessibilityIdentifier("account.delete.password")
                     }
                     if auth.isBusy { ProgressView("Deleting account…") }
                     else {
@@ -404,6 +405,7 @@ struct AccountDeletionView: View {
                             Task { await auth.deleteAccount(password: entered, reminders: reminders) }
                         }
                         .disabled(auth.user?.provider == "password" && password.isEmpty)
+                        .accessibilityIdentifier("account.delete.confirm")
                     }
                     if let message = auth.message { Text(message).font(.footnote) }
                 }

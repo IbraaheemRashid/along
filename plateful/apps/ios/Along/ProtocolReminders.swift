@@ -2,7 +2,7 @@ import Foundation
 
 extension TrackedPeptide {
     var reminderSource: DoseReminderSource? {
-        guard !isPaused, schedule.isValid else { return nil }
+        guard doseRemindersEnabled != false, !isPaused, schedule.isValid else { return nil }
         let cadence: DoseReminderSource.Cadence
         switch schedule.kind {
         case .unscheduled: return nil

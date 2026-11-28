@@ -303,7 +303,10 @@ struct SetupFlowView: View {
                     fieldFocused = false
                 }
                 if !auth.isSignedIn {
-                    AlongFormField(text: $accountPassword, kind: .password, placeholder: "Password (min 6 characters)", identifier: "setup.account.password")
+                    AlongFormField(text: $accountPassword, kind: .password, placeholder: "Password (min 6 characters)", identifier: "setup.account.password") {
+                        let action = accountAction
+                        if action.enabled { action.action() }
+                    }
                 }
                 if auth.isSignedIn {
                     Label(auth.user?.email ?? "Signed in", systemImage: "checkmark.circle.fill")
@@ -702,7 +705,6 @@ struct SetupFlowView: View {
                 .padding(.horizontal, 16).frame(minHeight: 60)
                 .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .accessibilityIdentifier("setup.referral")
-                .task { if draft.referralCode.isEmpty { fieldFocused = true } }
             if !draft.canContinue(at: .referral) {
                 Text("Use letters, numbers, - or _ only.").font(.footnote).foregroundStyle(SetupTheme.highlight).frame(maxWidth: .infinity)
             }

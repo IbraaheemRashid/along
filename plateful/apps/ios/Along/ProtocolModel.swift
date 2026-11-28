@@ -226,6 +226,8 @@ struct TrackedPeptide: Codable, Identifiable, Equatable {
     var color: PeptideColor?
 
     var previousSchedules: [PreviousSchedule]?
+    /// Older journals follow the device reminder preference for every scheduled peptide.
+    var doseRemindersEnabled: Bool?
 
     func scheduleOn(_ day: String) -> PreviousSchedule {
         previousSchedules?.first { day < $0.until }

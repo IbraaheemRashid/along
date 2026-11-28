@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'plateful/apps/ios/**'
+      - 'plateful/firebase.walkthrough.json'
+      - 'plateful/firestore.rules'
       - '.github/workflows/ios-walkthrough.yml'
   workflow_dispatch:
 permissions:
@@ -15,13 +17,43 @@ jobs:
       - uses: actions/checkout@v4
       - name: Select Xcode and boot an iPhone
         run: |
-          xcode=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
-          sudo xcode-select -s "$xcode/Contents/Developer"
+          sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
           xcodebuild -version
           device=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(v["udid"] for k in sorted(d,reverse=True) if "SimRuntime.iOS-" in k for v in d[k] if "iPhone" in v["name"]))')
           echo "DEVICE=$device" >> "$GITHUB_ENV"
           xcrun simctl boot "$device"
           xcrun simctl bootstatus "$device" -b
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Start isolated account services
+        working-directory: plateful
+        run: |
+          npx --yes firebase-tools@14.22.0 emulators:start --only auth,firestore --project demo-along-uitest --config firebase.walkthrough.json > "$RUNNER_TEMP/emulators.log" 2>&1 &
+          for attempt in {1..120}; do
+            if nc -z 127.0.0.1 9099 && nc -z 127.0.0.1 8080; then exit 0; fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/emulators.log"
+          exit 1
+      - uses: actions/cache/restore@v4
+        id: build-cache
+        with:
+          path: ${{ runner.temp }}/Along-build
+          key: along-iphone-26.3-v1-${{ runner.arch }}-${{ hashFiles('plateful/apps/ios/**/Package.resolved') }}
+      - name: Build the shipping project for testing
+        working-directory: plateful/apps/ios
+        run: |
+          xcodebuild -quiet -project Along.xcodeproj -scheme Along -destination "id=$DEVICE" -derivedDataPath "$RUNNER_TEMP/Along-build" CODE_SIGNING_ALLOWED=NO build-for-testing
+      - uses: actions/cache/save@v4
+        if: steps.build-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ runner.temp }}/Along-build
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
       - name: Walk through setup, logging, history and persistence
         working-directory: plateful/apps/ios
         run: |
@@ -29,13 +61,14 @@ jobs:
             -parallel-testing-enabled NO -derivedDataPath "$RUNNER_TEMP/Along-build" -resultBundlePath "$RUNNER_TEMP/Along.xcresult" \
             -only-testing:AlongUITests/AlongUITests/testFullSetupStopsAtPaywallAndCanOpenExplicitDesignPreview \
             -only-testing:AlongUITests/AlongUITests/testOneTapDoseShowsActualTimeAndAppearsInCalendarWithoutANote \
+            -only-testing:AlongUITests/AlongUITests/testAccountCheckoutBackupAndDeletion \
             -only-testing:AlongUITests/AlongUITests/testLocalStoreKitCheckoutAndRelaunch \
             -only-testing:AlongUITests/AlongUITests/testUnconnectedPurchaseAndRestoreNeverUnlockApp \
             -only-testing:AlongUITests/AlongUITests/testWelcomeSignInSheetExplainsAccountsAndOffersRestore \
             -only-testing:AlongUITests/AlongUITests/testIncompleteSetupResumesAtSavedStep \
             -only-testing:AlongUITests/AlongUITests/testTodayLogsDosesAndDoseSheetSavesDetails \
             -only-testing:AlongUITests/AlongUITests/testPeptideColourPersistsAfterEditing \
-            CODE_SIGNING_ALLOWED=NO test
+            CODE_SIGNING_ALLOWED=NO test-without-building
       - name: Collect walkthrough screenshots and results
         if: always()
         run: |

@@ -181,7 +181,7 @@ struct FirebaseAccountBackup: AccountBackupClient {
     nonisolated init() {}
     #if canImport(FirebaseFirestore) && canImport(FirebaseAuth)
     @MainActor private func reference(_ uid: String) throws -> DocumentReference {
-        guard Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil,
+        guard FirebaseBootstrap.usesAccountEmulators || Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil,
               Auth.auth().currentUser?.uid == uid else { throw BackupError.unavailable }
         return Firestore.firestore().collection("users").document(uid).collection("app").document("state")
     }
