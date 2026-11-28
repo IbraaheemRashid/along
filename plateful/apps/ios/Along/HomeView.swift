@@ -43,8 +43,10 @@ struct HomeView: View {
         .overlay(alignment: .bottomTrailing) {
             if !store.journal.protocolPeptides.isEmpty && !isFuture {
                 Button { sheet = .extra(dayKey: day) } label: {
-                    Image(systemName: "plus").font(.system(size: 22, weight: .semibold)).foregroundStyle(SetupTheme.inverseInk)
-                        .frame(width: 58, height: 58).background(SetupTheme.ink, in: Circle())
+                    Label("Extra dose", systemImage: "plus")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.inverseInk)
+                        .padding(.horizontal, 18).padding(.vertical, 8).frame(minHeight: 48)
+                        .background(SetupTheme.ink, in: Capsule())
                         .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
                 }
                 .buttonStyle(SetupPressStyle())
@@ -253,11 +255,11 @@ struct DoseRow: View {
     private var checkButton: some View {
         Button(action: toggle) {
             ZStack {
-                Circle().strokeBorder(slot.isTaken ? Color.clear : SetupTheme.border, lineWidth: 1.5)
+                Circle().strokeBorder(slot.isTaken ? Color.clear : SetupTheme.muted, lineWidth: 1.5)
                     .background(Circle().fill(slot.isTaken ? SetupTheme.ink : Color.clear))
                 Image(systemName: slot.isSkipped ? "forward.fill" : "checkmark")
                     .font(.system(size: slot.isSkipped ? 11 : 15, weight: .bold))
-                    .foregroundStyle(slot.isTaken ? SetupTheme.inverseInk : slot.isSkipped ? SetupTheme.muted : SetupTheme.disabled)
+                    .foregroundStyle(slot.isTaken ? SetupTheme.inverseInk : SetupTheme.muted)
             }
             .frame(width: 40, height: 40)
             .frame(width: 48, height: 48)

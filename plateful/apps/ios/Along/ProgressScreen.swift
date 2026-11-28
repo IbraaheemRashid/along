@@ -3,6 +3,7 @@ import SwiftUI
 
 /// Adherence, dose calendar, notes and optional weight trend.
 struct ProgressScreen: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(JournalStore.self) private var store
     @State private var monthOffset = 0
     @State private var selectedPeptide: UUID?
@@ -109,18 +110,20 @@ struct ProgressScreen: View {
             $0.status == .skipped && (selectedPeptide == nil || $0.peptideID == selectedPeptide)
         }.map(\.dayKey))
         return VStack(alignment: .leading, spacing: 14) {
-            HStack {
+            let headerLayout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout())
+            headerLayout {
                 AppSectionTitle(title: monthStart.formatted(.dateTime.month(.wide).year()))
-                Spacer()
-                Button { monthOffset -= 1 } label: {
-                    Image(systemName: "chevron.left").frame(width: 36, height: 36)
-                }.accessibilityLabel("Previous month").accessibilityIdentifier("progress.month.prev")
-                Button { monthOffset = 0 } label: {
-                    Text("Today").font(.caption.weight(.semibold))
-                }.accessibilityIdentifier("progress.month.today")
-                Button { monthOffset += 1 } label: {
-                    Image(systemName: "chevron.right").frame(width: 36, height: 36)
-                }.disabled(monthOffset >= 0).accessibilityLabel("Next month").accessibilityIdentifier("progress.month.next")
+                HStack(spacing: 4) {
+                    Button { monthOffset -= 1 } label: {
+                        Image(systemName: "chevron.left").frame(width: 44, height: 44).contentShape(Rectangle())
+                    }.accessibilityLabel("Previous month").accessibilityIdentifier("progress.month.prev")
+                    Button { monthOffset = 0 } label: {
+                        Text("Today").font(.caption.weight(.semibold)).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+                    }.accessibilityIdentifier("progress.month.today")
+                    Button { monthOffset += 1 } label: {
+                        Image(systemName: "chevron.right").frame(width: 44, height: 44).contentShape(Rectangle())
+                    }.disabled(monthOffset >= 0).accessibilityLabel("Next month").accessibilityIdentifier("progress.month.next")
+                }
             }
             .foregroundStyle(SetupTheme.ink)
 

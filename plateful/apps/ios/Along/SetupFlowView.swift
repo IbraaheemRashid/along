@@ -6,6 +6,7 @@ struct SetupFlowView: View {
     @Environment(ReminderStore.self) private var reminders
     @Environment(AuthStore.self) private var auth
     @Environment(\.alongReducedMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var forward = true
     @State private var showBackup = false
     @State private var showLocalData = false
@@ -40,7 +41,6 @@ struct SetupFlowView: View {
         // Keyboard must not resize the setup chrome — that layout thrash was crashing email fields.
         .ignoresSafeArea(.keyboard)
         .tint(SetupTheme.ink)
-        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         .sheet(isPresented: $showBackup) { JournalBackupView(journal: { store.journal }, replace: store.restoreJournal) }
         .sheet(isPresented: $showLocalData) { LocalDataView() }
         .sheet(isPresented: $showSignIn) {
@@ -116,7 +116,7 @@ struct SetupFlowView: View {
             VStack(spacing: 6) {
                 SetupPrimaryButton(title: primary.title, symbol: primary.symbol, enabled: primary.enabled,
                                    identifier: step == .paywall ? "setup.subscribe" : "setup.continue", action: primary.action)
-                footerAccessory
+                if step != .welcome || !typeSize.isAccessibilitySize { footerAccessory }
             }
             .padding(.horizontal, 24).padding(.top, 14).padding(.bottom, 8)
             .frame(maxWidth: 560).frame(maxWidth: .infinity)
@@ -194,7 +194,8 @@ struct SetupFlowView: View {
                 store.setup.remindersRequested = false; advance()
             }
         case .paywall:
-            Text("No free trial · Cancel anytime").font(.caption).foregroundStyle(SetupTheme.muted).lineLimit(1).minimumScaleFactor(0.8)
+            Text("No free trial · Cancel anytime").font(.caption).foregroundStyle(SetupTheme.muted)
+                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
         default:
             EmptyView()
         }
@@ -366,9 +367,24 @@ struct SetupFlowView: View {
         .accessibilityIdentifier("setup.account.\(identifier)")
     }
 
-    private var welcome: some View {
+    @ViewBuilder private var welcome: some View {
+        if typeSize.isAccessibilitySize {
+            ScrollView {
+                VStack(spacing: 16) {
+                    welcomeContent
+                    footerAccessory
+                }
+                .padding(.bottom, 12)
+            }
+        } else {
+            welcomeContent
+        }
+    }
+
+    private var welcomeContent: some View {
         VStack(spacing: 22) {
             SetupPhoneDemo(reduceMotion: reduceMotion)
+                .frame(height: typeSize.isAccessibilitySize ? 180 : nil)
                 .frame(maxHeight: .infinity)
                 .padding(.top, 12)
             Text("Start your peptides\nwith a clear plan").setupTitleFont().multilineTextAlignment(.center).foregroundStyle(SetupTheme.ink)
@@ -399,7 +415,7 @@ struct SetupFlowView: View {
 
     private var sourceScreen: some View {
         SetupQuestionPage(title: "Where did you hear about us?") {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 10) {
                 ForEach(HeardFrom.allCases) { source in
                     SetupGridOption(title: source.title, symbol: source.symbol, selected: draft.heardFrom == source,
                                     identifier: "setup.source.\(source.rawValue)") { store.setup.heardFrom = source }
@@ -777,6 +793,7 @@ struct SetupFlowView: View {
 
     private func planOption(_ plan: OnboardingPlan, title: String, period: String, badge: String?) -> some View {
         let selected = draft.plan == plan
+        let detailsLayout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))
         let price = billing.product(for: plan.billingPlan)?.displayPrice ?? examplePrice(plan)
         return Button { store.setup.plan = plan } label: {
             VStack(spacing: 0) {
@@ -789,13 +806,15 @@ struct SetupFlowView: View {
                         Circle().strokeBorder(selected ? SetupTheme.ink : SetupTheme.border, lineWidth: 1.5)
                         if selected { Circle().fill(SetupTheme.ink); Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(SetupTheme.inverseInk) }
                     }.frame(width: 24, height: 24)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(title).font(.system(.body, weight: .semibold)).foregroundStyle(SetupTheme.ink)
-                        Text(plan == .annual ? "Billed once a year" : "Billed every month").font(.footnote).foregroundStyle(SetupTheme.muted)
+                    detailsLayout {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(title).font(.system(.body, weight: .semibold)).foregroundStyle(SetupTheme.ink)
+                            Text(plan == .annual ? "Billed once a year" : "Billed every month").font(.footnote).foregroundStyle(SetupTheme.muted)
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                        Text(price.map { "\($0)/\(period)" } ?? "—").font(.system(.body, weight: .semibold)).foregroundStyle(SetupTheme.ink)
                     }
-                    Spacer()
-                    Text(price.map { "\($0)/\(period)" } ?? "—").font(.system(.body, weight: .semibold)).foregroundStyle(SetupTheme.ink)
-                }.padding(.horizontal, 16).frame(minHeight: 68)
+                    .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                }.padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 68)
             }
             .background(SetupTheme.surface)
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))

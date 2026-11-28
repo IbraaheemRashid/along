@@ -131,7 +131,7 @@ struct SetupGridOption: View {
             HStack(spacing: 10) {
                 SetupIconTile(icon: .symbol(symbol), size: 36)
                 Text(title).font(.system(.subheadline, weight: .medium)).foregroundStyle(SetupTheme.ink)
-                    .lineLimit(2).minimumScaleFactor(0.85).multilineTextAlignment(.leading)
+                    .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 62, alignment: .leading)
@@ -165,7 +165,9 @@ struct SetupPrimaryButton: View {
             HStack(spacing: 8) {
                 if let symbol { Image(systemName: symbol).font(.system(size: 16, weight: .semibold)) }
                 Text(title).font(.system(.body, weight: .semibold))
+                    .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
             }
+            .padding(.horizontal, 16).padding(.vertical, 8)
             .foregroundStyle(enabled ? SetupTheme.inverseInk : Color.white)
             .frame(maxWidth: .infinity, minHeight: 60)
             .background(enabled ? SetupTheme.ink : SetupTheme.disabled, in: Capsule())
@@ -336,6 +338,7 @@ struct SetupFlowLayout: Layout {
 }
 
 struct SetupChip: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     var title: String
     var detail: String?
     var selected: Bool
@@ -355,8 +358,8 @@ struct SetupChip: View {
                 } else {
                     Image(systemName: selected ? "checkmark" : (leading ?? "plus")).font(.system(size: 12, weight: .bold))
                 }
-                Text(title).font(.system(.subheadline, weight: .medium)).lineLimit(1).layoutPriority(1)
-                if let detail { Text(detail).font(.caption).foregroundStyle(selected ? SetupTheme.inverseInk.opacity(0.7) : SetupTheme.muted).lineLimit(1) }
+                Text(title).font(.system(.subheadline, weight: .medium)).lineLimit(typeSize.isAccessibilitySize ? nil : 1).layoutPriority(1)
+                if let detail { Text(detail).font(.caption).foregroundStyle(selected ? SetupTheme.inverseInk.opacity(0.7) : SetupTheme.muted).lineLimit(typeSize.isAccessibilitySize ? nil : 1) }
             }
             .foregroundStyle(selected ? SetupTheme.inverseInk : SetupTheme.ink)
             .padding(.horizontal, 14).frame(minHeight: 40)

@@ -2,6 +2,18 @@
 
 Updated 28 November 2026. Working name: Along. Along is a peptide protocol tracker (supporting tool, not medical advice). The GLP-1 journal and Pip companion are retired. **Market Gate A is not passed.**
 
+## Native design polish and component guide, 28 November 2026
+
+The [native component guide](native-components.html) documents 23 components across the three-tab app. The guide includes dated iPhone captures, full-screen context, before-and-after control examples and a shortlist of interactions to test. The updated examples are HTML illustrations of the SwiftUI values.
+
+- **Today.** The scheduled check uses the enabled secondary ink for its symbol and ring. The floating action reads “Extra dose.” Future days still open as plans.
+- **Setup and membership.** Setup respects the full Dynamic Type range. At accessibility sizes, welcome content scrolls, the source grid uses one column and the plan price moves below the description. Buttons, chips and the subscription disclosure can wrap. A regression test compares the same heading at the first and last accessibility sizes.
+- **Touch targets.** The previous month, Today, next month and both body-side selectors have at least 44 × 44 pt of tappable area. At accessibility sizes the month controls move below the title.
+
+The repository checks passed, including 30 API and web tests, both project configurations, the account, domain, protocol, billing, reminder, backup and civil-date checks, and the Vite production build. The host Swift compiler required an explicit path to its bundled Observation macro to run the checks. Swift sources compiled and linked for arm64 iOS Simulator in Debug and Release using the optional-service fallback paths. The XCTest source type-checked against the simulator SDK. The component guide's status filter, before/after control and full-screen capture viewer were exercised in the browser.
+
+A new native UI test run could not start on this host. CoreSimulator was unavailable and Xcode could not write SwiftPM’s manifest cache. Check first-dose logging, the smallest supported iPhone at maximum text size, the hit targets and VoiceOver focus order on a running build. Production account and billing setup still have the requirements documented in the walkthrough below.
+
 ## iPhone walkthrough verification, 28 November 2026
 
 Along keeps Today, Progress and Settings. A scheduled entry can be recorded from Today, edited from its calendar day and reopened after relaunch. A schedule change has an effective date. Taking or skipping an entry early removes its pending occurrence, and undo restores it. One peptide can be muted independently of its schedule and batch-expiry reminders.

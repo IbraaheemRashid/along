@@ -489,6 +489,19 @@ final class AlongUITests: XCTestCase {
         }
     }
 
+    func testSetupHeadingGrowsBeyondFirstAccessibilitySize() {
+        func headingHeight(at category: String) -> CGFloat {
+            launchSandbox(arguments: ["--setup-step", "goals", "-UIPreferredContentSizeCategoryName", category])
+            let heading = app.staticTexts["What are your peptides for?"].firstMatch
+            XCTAssertTrue(heading.waitForExistence(timeout: 5))
+            return heading.frame.height
+        }
+        let first = headingHeight(at: "UICTContentSizeCategoryAccessibilityM")
+        app.terminate()
+        let largest = headingHeight(at: "UICTContentSizeCategoryAccessibilityXXXL")
+        XCTAssertGreaterThan(largest, first, "Setup headings must keep growing past the first accessibility size")
+    }
+
     func testSetupSupportsDarkModeAndLargestAccessibilityText() {
         for (index, step) in ["goals", "compounds", "paywall"].enumerated() {
             if index > 0 { app.terminate() }

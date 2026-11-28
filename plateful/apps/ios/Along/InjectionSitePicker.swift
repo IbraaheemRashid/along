@@ -264,13 +264,14 @@ struct InjectionSitePicker: View {
                         .foregroundStyle(side == value ? SetupTheme.inverseInk : SetupTheme.ink)
                         .padding(.horizontal, 14).frame(minHeight: 34)
                         .background(side == value ? SetupTheme.ink : Color.clear, in: Capsule())
+                        .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
                 }
                 .accessibilityAddTraits(side == value ? .isSelected : [])
                 .accessibilityIdentifier("site.side.\(value.rawValue)")
             }
         }
-        .padding(3)
-        .background(SetupTheme.tile, in: Capsule())
+        .padding(.horizontal, 3)
+        .background { Capsule().fill(SetupTheme.tile).padding(.vertical, 2) }
     }
 
     private func legend(_ color: Color, _ title: String) -> some View {
