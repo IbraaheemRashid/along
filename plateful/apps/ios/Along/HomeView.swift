@@ -20,9 +20,19 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 20) {
                 header
                 DayStrip(selected: day, today: today, fraction: fraction(on:)) { selectedDay = $0 }
-                summary
+                if !scheduled.isEmpty {
+                    summary
+                } else if !store.journal.protocolPeptides.isEmpty {
+                    Text(isToday ? "No doses scheduled today." : "No doses scheduled for this day.")
+                        .font(.subheadline).foregroundStyle(SetupTheme.muted)
+                        .accessibilityIdentifier("today.day-off")
+                }
                 if isToday, let next = ProtocolSchedule.nextDose(after: store.referenceDate, peptides: store.journal.protocolPeptides, logs: store.journal.protocolLogs) {
                     nextDose(next.slot, at: next.at)
+                }
+                if isToday && store.journal.protocolPeptides.contains(where: { !$0.isPaused && $0.schedule.kind == .unscheduled }) {
+                    Button("Set a peptide schedule") { showPeptides = true }
+                        .accessibilityIdentifier("today.set-schedule")
                 }
                 doses
             }
@@ -62,7 +72,7 @@ struct HomeView: View {
     private func fraction(on key: String) -> Double? {
         let due = store.slots(on: key).filter { !$0.isExtra }
         guard !due.isEmpty else { return nil }
-        return Double(due.filter(\.isTaken).count) / Double(due.count)
+        return Double(due.filter { $0.log != nil }.count) / Double(due.count)
     }
 
     private var dayTitle: String {
@@ -74,30 +84,29 @@ struct HomeView: View {
 
     private var summary: some View {
         let taken = scheduled.filter(\.isTaken).count
+        let skipped = scheduled.filter(\.isSkipped).count
+        let recorded = taken + skipped
+        let complete = recorded == scheduled.count
         return AppCard(padding: 22) {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(dayTitle).font(.subheadline.weight(.medium)).foregroundStyle(SetupTheme.muted)
-                    if scheduled.isEmpty {
-                        Text("No doses").font(.system(size: 34, weight: .bold)).tracking(-0.8)
-                        Text(store.journal.protocolPeptides.isEmpty ? "Add a peptide to build your schedule" : "Nothing scheduled")
-                            .font(.subheadline).foregroundStyle(SetupTheme.muted)
-                    } else {
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text("\(taken)").font(.system(size: 44, weight: .bold)).contentTransition(.numericText())
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text("\(isFuture ? scheduled.count : recorded)").font(.system(size: 44, weight: .bold)).contentTransition(.numericText())
+                        if !isFuture {
                             Text("/ \(scheduled.count)").font(.system(size: 22, weight: .semibold)).foregroundStyle(SetupTheme.muted)
-                        }.tracking(-1)
-                        Text(isFuture ? "doses planned" : taken == scheduled.count ? "All doses logged" : "doses logged")
-                            .font(.subheadline).foregroundStyle(SetupTheme.muted)
-                    }
+                        }
+                    }.tracking(-1)
+                    Text(isFuture ? "planned" : "\(taken) taken · \(skipped) skipped")
+                        .font(.subheadline).foregroundStyle(SetupTheme.muted)
                 }
                 .foregroundStyle(SetupTheme.ink)
                 Spacer()
-                DoseRing(fraction: scheduled.isEmpty ? nil : Double(taken) / Double(scheduled.count), lineWidth: 9,
-                         tint: taken == scheduled.count && !scheduled.isEmpty ? SetupTheme.success : SetupTheme.ink) {
-                    Image(systemName: taken == scheduled.count && !scheduled.isEmpty ? "checkmark" : "syringe")
+                DoseRing(fraction: Double(recorded) / Double(scheduled.count), lineWidth: 9,
+                         tint: complete ? SetupTheme.success : SetupTheme.ink) {
+                    Image(systemName: complete ? "checkmark" : "syringe")
                         .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(taken == scheduled.count && !scheduled.isEmpty ? SetupTheme.success : SetupTheme.ink)
+                        .foregroundStyle(complete ? SetupTheme.success : SetupTheme.ink)
                         .contentTransition(.symbolEffect(.replace))
                 }
                 .frame(width: 96, height: 96)
@@ -133,15 +142,11 @@ struct HomeView: View {
 
     @ViewBuilder private var doses: some View {
         VStack(alignment: .leading, spacing: 12) {
-            AppSectionTitle(title: isToday ? "Today’s doses" : "Doses", trailing: slots.isEmpty ? nil : "\(slots.count)")
             if store.journal.protocolPeptides.isEmpty {
                 emptyProtocol
-            } else if slots.isEmpty {
-                AppCard {
-                    Text(isFuture ? "Nothing is scheduled for this day." : "Nothing was scheduled for this day.")
-                        .font(.subheadline).foregroundStyle(SetupTheme.muted)
-                }
-            } else {
+            } else if !slots.isEmpty {
+                let title = isToday ? "Today’s doses" : "Doses"
+                AppSectionTitle(title: scheduled.isEmpty ? "Extra doses" : title, trailing: "\(slots.count)")
                 ForEach(slots) { slot in
                     DoseRow(slot: slot, canLog: !isFuture, toggle: { toggle(slot) }, setStatus: { set(slot, $0) })
                         .onTapGesture { if !isFuture { sheet = .slot(slot) } }
@@ -169,7 +174,9 @@ struct HomeView: View {
     private func toggle(_ slot: DoseSlot) {
         if let log = slot.log, log.status == .taken {
             store.removeDose(log.id)
-        } else if store.logDose(slot, status: .taken, at: moment(for: slot)) {
+        } else if !isToday {
+            sheet = .slot(slot)
+        } else if store.logDose(slot, status: .taken, at: .now) {
             feedback += 1
             store.showToast("\(slot.peptide.name) logged")
         }
@@ -177,7 +184,11 @@ struct HomeView: View {
 
     private func set(_ slot: DoseSlot, _ status: DoseLog.Status?) {
         guard let status else { if let log = slot.log { store.removeDose(log.id) }; return }
-        if store.logDose(slot, status: status, at: moment(for: slot)), status == .taken { feedback += 1 }
+        if status == .taken && !isToday {
+            sheet = .slot(slot)
+        } else if store.logDose(slot, status: status, at: moment(for: slot)), status == .taken {
+            feedback += 1
+        }
     }
 }
 
@@ -189,9 +200,14 @@ struct DoseRow: View {
 
     private var detail: String {
         var parts: [String] = []
-        if let amount = slot.log?.amountText ?? slot.peptide.amountText { parts.append(amount) }
-        if slot.isExtra, let log = slot.log { parts.append("Extra · \(log.takenAt.formatted(date: .omitted, time: .shortened))") }
-        else if let time = slot.time { parts.append(time.text) }
+        let recordedAmount = slot.log == nil ? slot.peptide.amountText : slot.log?.amountText
+        if let recordedAmount { parts.append(recordedAmount) }
+        if let log = slot.log, log.status == .taken {
+            if slot.isExtra { parts.append("Extra") }
+            parts.append("Taken at \(log.takenAt.formatted(date: .omitted, time: .shortened))")
+        } else if let time = slot.time {
+            parts.append(time.text)
+        }
         if let label = slot.log?.spot?.shortTitle ?? slot.log?.site?.shortTitle { parts.append(label) }
         return parts.joined(separator: " · ")
     }

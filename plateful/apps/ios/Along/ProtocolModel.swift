@@ -105,9 +105,9 @@ struct DoseTime: Codable, Hashable, Comparable, Identifiable {
 /// Along never proposes them.
 struct DoseSchedule: Codable, Equatable {
     enum Kind: String, Codable, CaseIterable, Identifiable {
-        case daily, weekdays, interval
+        case daily, weekdays, interval, unscheduled
         var id: String { rawValue }
-        var title: String { switch self { case .daily: "Every day"; case .weekdays: "Specific days"; case .interval: "Every few days" } }
+        var title: String { switch self { case .daily: "Every day"; case .weekdays: "Specific days"; case .interval: "Every few days"; case .unscheduled: "Schedule not set" } }
     }
 
     static let maximumTimes = 4
@@ -119,15 +119,17 @@ struct DoseSchedule: Codable, Equatable {
     var intervalDays = 2
     var times: [DoseTime] = [DoseTime(hour: 8, minute: 0)]
 
+    static let unscheduled = DoseSchedule(kind: .unscheduled, times: [])
     static func daily(at time: DoseTime) -> DoseSchedule { DoseSchedule(kind: .daily, times: [time]) }
     static func on(_ weekdays: Set<Int>, at time: DoseTime) -> DoseSchedule { DoseSchedule(kind: .weekdays, weekdays: weekdays, times: [time]) }
     static func every(_ days: Int, at time: DoseTime) -> DoseSchedule { DoseSchedule(kind: .interval, intervalDays: days, times: [time]) }
 
     var isValid: Bool {
+        if kind == .unscheduled { return times.isEmpty && weekdays.isEmpty }
         guard !times.isEmpty, times.count <= Self.maximumTimes, times.allSatisfy(\.isValid),
               Set(times).count == times.count else { return false }
         switch kind {
-        case .daily: return true
+        case .daily, .unscheduled: return true
         case .weekdays: return !weekdays.isEmpty && weekdays.allSatisfy { (1...7).contains($0) }
         case .interval: return Self.intervalRange.contains(intervalDays)
         }
@@ -138,6 +140,7 @@ struct DoseSchedule: Codable, Equatable {
     /// "Every day", "Mon, Wed, Fri", "Every 3 days", "Weekly on Mon".
     var summary: String {
         switch kind {
+        case .unscheduled: return kind.title
         case .daily: return "Every day"
         case .interval: return "Every \(intervalDays) days"
         case .weekdays:
@@ -326,6 +329,7 @@ enum ProtocolSchedule {
     static func isDue(_ peptide: TrackedPeptide, on dayKey: String) -> Bool {
         guard !peptide.isPaused, dayKey >= peptide.startKey, peptide.schedule.isValid else { return false }
         switch peptide.schedule.kind {
+        case .unscheduled: return false
         case .daily: return true
         case .weekdays: return weekday(of: dayKey).map(peptide.schedule.weekdays.contains) ?? false
         case .interval:
@@ -419,19 +423,29 @@ enum ProtocolSchedule {
     }
 }
 
+/// Keeps the reported day stable when setup resumes in another time zone.
+struct SetupInjection: Codable, Equatable {
+    var id = UUID()
+    var takenAt: Date
+    var dayKey: String
+    var site: InjectionSite?
+
+    func log(for peptide: TrackedPeptide) -> DoseLog {
+        // A single, scheduled occurrence on this day can be answered even when
+        // the person logged a different actual time. Never guess between slots.
+        let times = peptide.schedule.sortedTimes
+        let slot = times.count == 1 && ProtocolSchedule.isDue(peptide, on: dayKey) ? times.first : nil
+        return DoseLog(id: id, peptideID: peptide.id, dayKey: dayKey, scheduledTime: slot,
+                       takenAt: takenAt, site: site)
+    }
+}
+
 extension SetupDraft {
     /// The person's own setup answers as a starting protocol. Amounts stay
     /// empty: only the person can enter a dose.
     func initialPeptides(startKey: String) -> [TrackedPeptide] {
-        let time = DoseTime(hour: doseHour, minute: doseMinute)
-        let schedule: DoseSchedule
-        switch frequency {
-        case .fewPerWeek: schedule = .on([2, 4, 6], at: time)
-        case .weekly: schedule = .on([ProtocolSchedule.weekday(of: startKey) ?? 2], at: time)
-        case .daily, .varies, nil: schedule = .daily(at: time)
-        }
-        return compounds.prefix(TrackedPeptide.limit).map {
-            TrackedPeptide(name: $0, schedule: schedule, startKey: startKey)
+        compounds.prefix(TrackedPeptide.limit).map { name in
+            TrackedPeptide(name: name, schedule: schedule(for: name), startKey: startKey)
         }
     }
 }
@@ -440,6 +454,25 @@ extension Journal {
     var protocolPeptides: [TrackedPeptide] { peptides ?? [] }
     var activePeptides: [TrackedPeptide] { protocolPeptides.filter { !$0.isPaused } }
     var protocolLogs: [DoseLog] { doseLogs ?? [] }
+
+    /// Keep an existing record for a slot, including richer records restored
+    /// from backup. Returning false aborts the entire setup transaction.
+    mutating func adoptSetupInjections(_ entries: [String: SetupInjection], now: Date) -> Bool {
+        var logs = protocolLogs
+        for (name, entry) in entries {
+            guard let peptide = protocolPeptides.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }),
+                  entry.takenAt <= now else { return false }
+            let log = entry.log(for: peptide)
+            let recorded = logs.contains { other in
+                other.id == log.id || (other.peptideID == log.peptideID && other.dayKey == log.dayKey
+                    && (other.takenAt == log.takenAt || (log.scheduledTime != nil && other.scheduledTime == log.scheduledTime)))
+            }
+            if !recorded { logs.append(log) }
+        }
+        guard logs.count <= DoseLog.limit else { return false }
+        doseLogs = logs
+        return true
+    }
 
     /// Adds setup peptides not already tracked, matching names case-insensitively,
     /// so finishing setup twice never duplicates a protocol.

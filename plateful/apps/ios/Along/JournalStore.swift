@@ -125,6 +125,16 @@ private struct OnboardingArchive: Codable {
         } else if let profile = journal.setupProfile, profile.isValid {
             setup = profile
         }
+        if !journal.hasOnboarded {
+            if !setup.steps.contains(setup.step), let visible = setup.step(after: setup.step) {
+                setup.step = visible
+            }
+            if let index = setup.steps.firstIndex(of: setup.step),
+               let scheduleIndex = setup.steps.firstIndex(of: .doseTime),
+               index > scheduleIndex, !setup.canContinue(at: .doseTime) {
+                setup.step = .doseTime
+            }
+        }
         loadingDraft = false
         #if DEBUG
         if arguments.contains("--reset-demo") { clearJournal(); error = nil }
@@ -133,7 +143,11 @@ private struct OnboardingArchive: Codable {
             setup = step == .welcome ? SetupDraft() : SetupDraft.example(at: step)
         }
         if arguments.contains("--setup-complete") {
-            clearJournal(); setup = SetupDraft.example(at: .paywall); finishSetupPreview(); error = nil
+            clearJournal()
+            setup = SetupDraft.example(at: .paywall)
+            setup.frequency = .daily
+            finishSetupPreview()
+            error = nil
         }
         if arguments.contains("--sample-journey") {
             journal = Journal.sample(); journal.name = "Alex"; journal.hasOnboarded = true; journal.isDesignPreview = true; canSave = true; error = nil; persist()
@@ -341,9 +355,14 @@ private struct OnboardingArchive: Codable {
         _ = saveSetup()
         var candidate = journal
         candidate.setupProfile = setup
+        candidate.setupProfile?.lastInjections = [:]
         candidate.weightUnit = setup.weightUnit
         if let today = DayIdentity.key(for: now, timeZone: calendar.timeZone) {
             candidate.adoptSetupPeptides(setup.initialPeptides(startKey: today))
+            if !journal.hasOnboarded, !candidate.adoptSetupInjections(setup.lastInjections, now: now) {
+                error = "Your last injection couldn’t be saved. Check its date and available history space."
+                return nil
+            }
         }
         guard setup.tracksWeightGoal else { return candidate }
         candidate.showWeight = true
@@ -359,6 +378,7 @@ private struct OnboardingArchive: Codable {
         candidate.reconcileProgress(now: now)
         guard persist(candidate) else { return false }
         journal = candidate
+        setup.lastInjections.removeAll()
         _ = saveSetup()
         return true
     }
@@ -369,6 +389,7 @@ private struct OnboardingArchive: Codable {
         candidate.reconcileProgress(now: now)
         guard persist(candidate) else { return false }
         journal = candidate
+        setup.lastInjections.removeAll()
         _ = saveSetup()
         return true
         #else

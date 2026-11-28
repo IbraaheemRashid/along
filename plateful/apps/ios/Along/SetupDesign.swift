@@ -496,3 +496,33 @@ struct SetupSignInSheet: View {
         .accessibilityIdentifier("setup.sign-in.\(identifier)")
     }
 }
+
+struct WeekdayPicker: View {
+    @Binding var selection: Set<Int>
+    var single = false
+    var identifier: String
+
+    var body: some View {
+        let calendar = Calendar.current
+        HStack(spacing: 4) {
+            ForEach(DayIdentity.weekdays(in: calendar), id: \.self) { day in
+                let selected = selection.contains(day)
+                Button {
+                    if selected { selection.remove(day) }
+                    else if single { selection = [day] }
+                    else { selection.insert(day) }
+                } label: {
+                    Text(calendar.veryShortWeekdaySymbols[day - 1])
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(selected ? SetupTheme.inverseInk : SetupTheme.ink)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(selected ? SetupTheme.ink : SetupTheme.tile, in: Capsule())
+                }
+                .buttonStyle(SetupPressStyle())
+                .accessibilityLabel(calendar.weekdaySymbols[day - 1])
+                .accessibilityAddTraits(selected ? .isSelected : [])
+                .accessibilityIdentifier("\(identifier).\(day)")
+            }
+        }
+    }
+}

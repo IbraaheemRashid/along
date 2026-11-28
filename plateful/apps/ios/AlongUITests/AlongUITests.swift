@@ -100,6 +100,9 @@ final class AlongUITests: XCTestCase {
         case "source": selectIfPresent("setup.source.tiktok")
         case "compounds": selectIfPresent("setup.compound.BPC-157")
         case "frequency": selectIfPresent("setup.frequency.fewPerWeek")
+        case "doseTime":
+            selectIfPresent("setup.weekday.2")
+            selectIfPresent("setup.weekday.4")
         case "obstacles": selectIfPresent("setup.obstacle.forgetting")
         default: break
         }
@@ -771,6 +774,23 @@ final class AlongUITests: XCTestCase {
         }
     }
 
+    func testOneTapDoseShowsActualTimeAndAppearsInCalendarWithoutANote() {
+        launchSandbox(arguments: ["--setup-complete"])
+        let before = Date.now
+        tap("today.dose.BPC-157.toggle")
+        let after = Date.now
+        let row = element("today.dose.BPC-157")
+        XCTAssertTrue([before, after].contains { row.label.contains("Taken at \($0.formatted(date: .omitted, time: .shortened))") }, row.label)
+        navigationTab("Progress").tap()
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        tap("progress.day.\(formatter.string(from: after))")
+        let entry = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "progress.entry.", "BPC-157")).firstMatch
+        XCTAssertTrue(entry.waitForExistence(timeout: 5))
+        XCTAssertTrue(entry.label.contains("Taken"))
+    }
+
     func testTodayLogsDosesAndDoseSheetSavesDetails() {
         launchSandbox(arguments: ["--setup-complete"])
         let summary = element("today.summary")
@@ -841,6 +861,7 @@ final class AlongUITests: XCTestCase {
         amount.tap(); amount.typeText("1")
         app.buttons["Done"].firstMatch.tap()
         tap("peptide.schedule.weekdays")
+        tap("peptide.weekday.2")
         capture("peptide-editor")
         tap("peptide.save")
         XCTAssertTrue(element("protocol.peptide.GHK-Cu").waitForExistence(timeout: 4))
@@ -909,6 +930,7 @@ final class AlongUITests: XCTestCase {
         XCTAssertTrue(app.buttons["peptide.color.pink"].waitForExistence(timeout: 4))
         XCTAssertTrue(app.buttons["peptide.color.pink"].isSelected, "A new peptide follows its category until a swatch is tapped")
         tap("peptide.color.red")
+        tap("peptide.schedule.daily")
         capture("colour-editor")
         tap("peptide.save")
         XCTAssertTrue(element("protocol.peptide.GHK-Cu").waitForExistence(timeout: 4))

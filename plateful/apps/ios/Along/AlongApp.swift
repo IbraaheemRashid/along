@@ -104,7 +104,7 @@ struct RootView: View {
                 _ = await attribution.capture(from: store.journal.setupProfile ?? store.setup)
             }
         }
-        .task(id: store.journal.protocolPeptides.map { "\($0.id.uuidString)|\($0.batchExpiryKey ?? "")|\($0.isPaused)" }) {
+        .task(id: store.journal.protocolPeptides) {
             if reminders.preferences.isEnabled {
                 _ = await reminders.sync(sources: store.journal.reminderSources,
                                         batchExpiries: store.journal.batchExpiryReminderSources)

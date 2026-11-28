@@ -7,6 +7,13 @@ import Foundation
         let now = ISO8601DateFormatter().date(from: "2026-11-01T12:00:00Z")!
         var checks = 0
         func expect(_ condition: Bool, _ name: String) { precondition(condition, name); checks += 1 }
+        for (firstWeekday, firstKey) in [(1, "2026-11-01"), (2, "2026-10-26")] {
+            var gridCalendar = calendar
+            gridCalendar.firstWeekday = firstWeekday
+            let grid = DayIdentity.monthGrid(containing: now, calendar: gridCalendar)
+            expect(grid.first == firstKey && grid.last == "2026-11-30", "Calendar cells start under the locale’s first weekday")
+            expect(DayIdentity.weekdays(in: gridCalendar).first == firstWeekday, "Week headings and dates agree")
+        }
         var journal = Journal()
         let first = CheckIn(day: now, mood: .steady, appetite: .comfortable, routines: [.nutrition], note: "Original")
         journal.save(first, calendar: calendar)
@@ -323,7 +330,7 @@ import Foundation
         expect(setup.step(after: .weight) == .commitment, "Leaving a retired or hidden screen moves forward")
         setup.goals.insert(.weightLoss)
         expect(setup.step(after: .weight) == .target && setup.step(before: .commitment) == .target, "Weight goals add the goal-weight screen")
-        expect(setup.step(before: .plan) == .ready && setup.step(before: .paywall) == .plan, "Going back never replays the loader")
+        expect(setup.step(before: .plan) == .ready && setup.step(before: .account) == .plan && setup.step(before: .paywall) == .account, "Going back never replays the loader")
         setup.goals = [.recovery]
         expect(setup.step(before: .target) == .birthday, "Back from a hidden step lands on the nearest visible screen")
         setup.goals = [.weightLoss]; setup.weightKg = 90
@@ -358,6 +365,7 @@ import Foundation
 
         let setupRoot = testRoot.appendingPathComponent("peptide-setup")
         let setupStore = JournalStore(directory: setupRoot, arguments: [], clearCredentials: {})
+        setup.frequency = .daily
         setup.step = .frequency
         setupStore.setup = setup
         let resumedSetup = JournalStore(directory: setupRoot, arguments: [], clearCredentials: {})
@@ -383,9 +391,72 @@ import Foundation
         expect(handover.allSatisfy { $0.schedule.times == [DoseTime(hour: setup.doseHour, minute: setup.doseMinute)] }, "The chosen dose time carries into every schedule")
         expect(resumedSetup.finishSetup(now: now, calendar: calendar) && resumedSetup.journal.protocolPeptides.count == handover.count, "Finishing twice never duplicates peptides")
         var weeklySetup = setup; weeklySetup.frequency = .weekly
-        expect(weeklySetup.initialPeptides(startKey: "2026-11-04").first?.schedule == .on([4], at: DoseTime(hour: setup.doseHour, minute: setup.doseMinute)), "Weekly setups start on the setup weekday")
+        let morning = DoseTime(hour: setup.doseHour, minute: setup.doseMinute)
+        expect(weeklySetup.initialPeptides(startKey: "2026-11-04").allSatisfy { $0.schedule == .unscheduled }, "Old weekly drafts never infer a weekday from completion")
+        weeklySetup.sharedWeekdays = [6]
+        expect(weeklySetup.initialPeptides(startKey: "2026-11-04").first?.schedule == .on([6], at: morning), "Weekly setup uses the selected weekday")
         var fewSetup = setup; fewSetup.frequency = .fewPerWeek
-        expect(fewSetup.initialPeptides(startKey: "2026-11-04").first?.schedule.weekdays == [2, 4, 6], "A few times a week starts as Monday, Wednesday and Friday")
+        expect(!fewSetup.canContinue(at: .doseTime), "Several dose days must be selected explicitly")
+        fewSetup.sharedWeekdays = [3, 7]
+        expect(fewSetup.canContinue(at: .doseTime) && fewSetup.initialPeptides(startKey: "2026-11-04").allSatisfy { $0.schedule == .on([3, 7], at: morning) }, "Shared weekdays match the user's choices")
+        var varied = setup; varied.frequency = .varies
+        let evening = DoseTime(hour: 20, minute: 45)
+        varied.peptideSchedules[setup.compounds[0]] = .on([3], at: evening)
+        varied.peptideSchedules[setup.compounds[1]] = .on([2, 6], at: morning)
+        let mixed = varied.initialPeptides(startKey: "2026-11-01")
+        expect(mixed.map(\.schedule) == [.on([3], at: evening), .on([2, 6], at: morning), .unscheduled], "Mixed protocols retain each chosen time and leave undecided peptides unscheduled")
+        expect(mixed[2].isValid && !ProtocolSchedule.isDue(mixed[2], on: "2026-11-03"), "An unscheduled peptide is valid and never due")
+        expect(ProtocolSchedule.nextDose(after: now, peptides: [mixed[2]], logs: []) == nil, "Unscheduled peptides cannot be the next dose")
+        var mixedJournal = Journal()
+        mixedJournal.setupProfile = varied
+        mixedJournal.adoptSetupPeptides(mixed)
+        let archive = try JournalBackup.make(from: mixedJournal).encoded()
+        let restoredMixed = try JournalBackup.decode(archive).restoring(into: Journal())
+        expect(restoredMixed.setupProfile == varied && restoredMixed.protocolPeptides == mixed, "Backup preserves specific and deferred schedules")
+        varied.toggleCompound(setup.compounds[0])
+        expect(varied.peptideSchedules[setup.compounds[0]] == nil, "Removing a peptide clears its draft schedule")
+        do {
+            var weeklySetup = setup
+            weeklySetup.frequency = .weekly
+            expect(!weeklySetup.canContinue(at: .doseTime) && weeklySetup.schedule(for: setup.compounds[0]) == .unscheduled, "Weekly setup waits for the person to choose a day")
+            weeklySetup.sharedWeekdays = [2]
+            let friday = ISO8601DateFormatter().date(from: "2026-11-06T12:00:00Z")!
+            let confirmed = weeklySetup.initialPeptides(startKey: "2026-11-06")
+            let nextMonday = ProtocolSchedule.nextDose(after: friday, peptides: confirmed, logs: [], timeZone: calendar.timeZone)
+            expect(nextMonday?.slot.dayKey == "2026-11-09", "Finishing on Friday preserves the selected Monday")
+            var mixed = setup
+            mixed.frequency = .varies
+            mixed.peptideSchedules[mixed.compounds[0]] = .on([2], at: DoseTime(hour: 8, minute: 0))
+            let different = mixed.initialPeptides(startKey: "2026-11-06")
+            expect(different[0].schedule.weekdays == [2] && different[1].schedule == .unscheduled, "Each peptide keeps its own confirmed schedule")
+            expect(ProtocolSchedule.nextDose(after: friday, peptides: [different[1]], logs: [], timeZone: calendar.timeZone) == nil, "Deferred schedules have no next dose")
+            let earlyMonday = ISO8601DateFormatter().date(from: "2026-11-09T06:00:00Z")!
+            let earlyLog = SetupInjection(takenAt: earlyMonday, dayKey: "2026-11-09").log(for: different[0])
+            let following = ProtocolSchedule.nextDose(after: earlyMonday, peptides: [different[0]], logs: [earlyLog], timeZone: calendar.timeZone)
+            expect(following?.slot.dayKey == "2026-11-16", "An injection logged early answers its single slot that day")
+            let oldDraft = try JSONDecoder().decode(SetupDraft.self, from: Data("{\"frequency\":\"varies\",\"compounds\":[\"Example\"]}".utf8))
+            expect(oldDraft.lastInjections.isEmpty && oldDraft.schedule(for: "Example") == .unscheduled, "Old drafts keep unconfirmed times unset")
+
+            let injectionStore = JournalStore(directory: testRoot.appendingPathComponent("last-injection"), arguments: [], clearCredentials: {})
+            var intake = weeklySetup
+            let monday = ISO8601DateFormatter().date(from: "2026-11-02T12:00:00Z")!
+            let dayKey = DayIdentity.key(for: monday, timeZone: calendar.timeZone)!
+            let name = intake.compounds[0]
+            intake.sharedWeekdays = [ProtocolSchedule.weekday(of: dayKey)!]
+            let entry = SetupInjection(takenAt: monday, dayKey: dayKey, site: .armLeft)
+            intake.lastInjections[name] = entry
+            injectionStore.setup = intake
+            expect(injectionStore.journal.protocolLogs.isEmpty && !injectionStore.journal.hasOnboarded, "Pre-purchase entries only exist in the draft")
+            let persisted = JournalStore(directory: testRoot.appendingPathComponent("last-injection"), arguments: [], clearCredentials: {})
+            expect(persisted.setup.lastInjections[name] == entry, "Last injection and civil day survive relaunch")
+            expect(persisted.finishSetup(now: monday, calendar: calendar), "A confirmed last injection can become a dose record")
+            let archived = try JournalBackup.decode(JournalBackup.make(from: persisted.journal).encoded()).restoring(into: Journal())
+            expect(archived.protocolLogs.count == 1 && archived.protocolLogs.first?.id == entry.id && archived.protocolLogs.first?.site == .armLeft, "A note-free setup entry survives backup")
+            expect(persisted.finishSetup(now: monday, calendar: calendar) && persisted.journal.protocolLogs.count == 1, "Finishing twice preserves a single injection")
+            expect(persisted.setup.lastInjections.isEmpty, "Completed setup keeps a single copy in the journal")
+            intake.toggleCompound(name)
+            expect(intake.lastInjections[name] == nil, "Removing a peptide clears only its draft injection")
+        }
 
         let protocolStore = resumedSetup
         protocolStore.referenceDate = now

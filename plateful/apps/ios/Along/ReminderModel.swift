@@ -72,6 +72,7 @@ struct DoseReminderSource: Equatable {
     var amountText: String?
     var cadence: Cadence
     var times: [Time]
+    var startKey: String? = nil
 }
 
 /// One tracked batch expiry. Fires a few one-shot reminders before the day —
@@ -142,6 +143,12 @@ enum ReminderPlanner {
         var result: [ReminderSchedule] = []
         for source in sources {
             let copy = Self.copy(for: source)
+            if let key = source.startKey, let start = date(for: key, calendar: calendar),
+               start > calendar.startOfDay(for: now) {
+                result += datedSchedules(for: source, from: start, now: now, calendar: calendar)
+                if result.count >= maximumSchedules { break }
+                continue
+            }
             switch source.cadence {
             case .daily:
                 for time in source.times where (0...23).contains(time.hour) && (0...59).contains(time.minute) {
@@ -158,7 +165,8 @@ enum ReminderPlanner {
                     }
                 }
             case .interval(let days, let startKey):
-                result.append(contentsOf: intervalSchedules(source: source, copy: copy, days: days, startKey: startKey, now: now, calendar: calendar))
+                guard (2...30).contains(days), let start = date(for: startKey, calendar: calendar) else { continue }
+                result += datedSchedules(for: source, from: start, now: now, calendar: calendar)
             }
             if result.count >= maximumSchedules { break }
         }
@@ -190,30 +198,39 @@ enum ReminderPlanner {
         return result
     }
 
-    private static func intervalSchedules(source: DoseReminderSource, copy: (title: String, body: String),
-                                          days: Int, startKey: String, now: Date, calendar: Calendar) -> [ReminderSchedule] {
-        guard days >= 2, days <= 30, let start = date(for: startKey, calendar: calendar) else { return [] }
+    /// A repeating calendar trigger has no start boundary. Queue dated occurrences
+    /// until the app next opens, when an active daily or weekly rule can repeat.
+    private static func datedSchedules(for source: DoseReminderSource, from start: Date,
+                                       now: Date, calendar: Calendar) -> [ReminderSchedule] {
+        let times = source.times.filter { (0...23).contains($0.hour) && (0...59).contains($0.minute) }
+            .sorted { $0.minutes < $1.minutes }
+        guard !times.isEmpty else { return [] }
+        let today = calendar.startOfDay(for: now)
+        let firstDay = max(start, today)
+        let offset = calendar.dateComponents([.day], from: start, to: firstDay).day ?? 0
+        let copy = Self.copy(for: source)
         var result: [ReminderSchedule] = []
-        // Walk forward from the start key in UTC civil days, then fire local wall-clock times.
-        var cursor = start
-        var safety = 0
-        while result.count < intervalHorizon && safety < 400 {
-            safety += 1
-            let offset = calendar.dateComponents([.day], from: calendar.startOfDay(for: start), to: calendar.startOfDay(for: cursor)).day ?? 0
-            if offset >= 0 && offset % days == 0 {
-                for time in source.times {
-                    guard let moment = calendar.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: cursor),
-                          moment > now else { continue }
-                    let parts = calendar.dateComponents([.year, .month, .day], from: moment)
-                    result.append(ReminderSchedule(id: "\(idPrefix)\(source.id).i\(parts.year!)-\(parts.month!)-\(parts.day!).\(time.minutes)",
-                                                   title: copy.title, body: copy.body,
-                                                   year: parts.year, month: parts.month, day: parts.day,
-                                                   hour: time.hour, minute: time.minute, repeats: false))
-                    if result.count >= intervalHorizon { break }
-                }
+        // Even the longest supported interval yields the full horizon here.
+        for delta in 0...(30 * intervalHorizon) {
+            guard let day = calendar.date(byAdding: .day, value: delta, to: firstDay) else { break }
+            switch source.cadence {
+            case .daily: break
+            case .weekdays(let days):
+                guard days.contains(calendar.component(.weekday, from: day)) else { continue }
+            case .interval(let days, _):
+                guard (2...30).contains(days), (offset + delta).isMultiple(of: days) else { continue }
             }
-            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
-            cursor = next
+            for time in times {
+                guard let moment = calendar.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: day),
+                      moment > now, calendar.isDate(moment, inSameDayAs: day) else { continue }
+                let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: moment)
+                guard let year = parts.year, let month = parts.month, let date = parts.day,
+                      let hour = parts.hour, let minute = parts.minute else { continue }
+                result.append(ReminderSchedule(id: "\(idPrefix)\(source.id).i\(year)-\(month)-\(date).\(time.minutes)",
+                                               title: copy.title, body: copy.body, year: year, month: month,
+                                               day: date, hour: hour, minute: minute, repeats: false))
+                if result.count == intervalHorizon { return result }
+            }
         }
         return result
     }

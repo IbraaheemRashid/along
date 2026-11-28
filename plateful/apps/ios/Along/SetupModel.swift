@@ -8,7 +8,7 @@ enum SetupStep: String, Codable, CaseIterable, Identifiable {
     /// Steps that count towards the progress bar. The welcome, loader, reveal,
     /// account gate and paywall sit outside the questionnaire.
     var showsProgress: Bool { ![.welcome, .building, .plan, .account, .paywall].contains(self) }
-    var showsBack: Bool { ![.welcome, .building, .plan].contains(self) }
+    var showsBack: Bool { ![.welcome, .building].contains(self) }
 }
 
 enum PeptideExperience: String, Codable, CaseIterable, Identifiable {
@@ -98,17 +98,8 @@ enum DoseFrequency: String, Codable, CaseIterable, Identifiable {
     case daily, fewPerWeek, weekly, varies
     var id: String { rawValue }
     var title: String { switch self { case .daily: "Every day"; case .fewPerWeek: "A few times a week"; case .weekly: "Once a week"; case .varies: "It varies by peptide" } }
-    var detail: String { switch self { case .daily: "One or more doses daily"; case .fewPerWeek: "Two to five days a week"; case .weekly: "One dose day each week"; case .varies: "Different schedules in one stack" } }
+    var detail: String { switch self { case .daily: "One or more doses daily"; case .fewPerWeek: "Choose the days in your protocol"; case .weekly: "One dose day each week"; case .varies: "Different schedules in one stack" } }
     var symbol: String { switch self { case .daily: "sun.max"; case .fewPerWeek: "calendar"; case .weekly: "calendar.badge.clock"; case .varies: "square.grid.2x2" } }
-    /// Days of the week (0 = Monday) that show a dose in the illustrative week strip.
-    var weekPattern: [Bool] {
-        switch self {
-        case .daily: [true, true, true, true, true, true, true]
-        case .fewPerWeek: [true, false, true, false, true, false, false]
-        case .weekly: [true, false, false, false, false, false, false]
-        case .varies: [true, true, false, true, true, false, true]
-        }
-    }
 }
 
 enum SetupObstacle: String, Codable, CaseIterable, Identifiable {
@@ -310,7 +301,15 @@ struct SetupDraft: Codable, Equatable {
     var weightKg = 80.0
     var targetKg = 75.0
     var hasChosenTarget = false
-    var compounds: [String] = []
+    var compounds: [String] = [] {
+        didSet {
+            peptideSchedules = peptideSchedules.filter { compounds.contains($0.key) }
+            lastInjections = lastInjections.filter { compounds.contains($0.key) }
+        }
+    }
+    var sharedWeekdays: Set<Int> = []
+    var peptideSchedules: [String: DoseSchedule] = [:]
+    var lastInjections: [String: SetupInjection] = [:]
     var frequency: DoseFrequency?
     var doseHour = 8
     var doseMinute = 0
@@ -349,6 +348,9 @@ struct SetupDraft: Codable, Equatable {
         targetKg = try c.decodeIfPresent(Double.self, forKey: .targetKg) ?? base.targetKg
         hasChosenTarget = try c.decodeIfPresent(Bool.self, forKey: .hasChosenTarget) ?? false
         compounds = try c.decodeIfPresent([String].self, forKey: .compounds) ?? []
+        sharedWeekdays = try c.decodeIfPresent(Set<Int>.self, forKey: .sharedWeekdays) ?? []
+        peptideSchedules = try c.decodeIfPresent([String: DoseSchedule].self, forKey: .peptideSchedules) ?? [:]
+        lastInjections = try c.decodeIfPresent([String: SetupInjection].self, forKey: .lastInjections) ?? [:]
         frequency = try c.decodeIfPresent(DoseFrequency.self, forKey: .frequency)
         doseHour = try c.decodeIfPresent(Int.self, forKey: .doseHour) ?? base.doseHour
         doseMinute = try c.decodeIfPresent(Int.self, forKey: .doseMinute) ?? base.doseMinute
@@ -371,6 +373,9 @@ struct SetupDraft: Codable, Equatable {
         try c.encode(targetKg, forKey: .targetKg)
         try c.encode(hasChosenTarget, forKey: .hasChosenTarget)
         try c.encode(compounds, forKey: .compounds)
+        if !sharedWeekdays.isEmpty { try c.encode(sharedWeekdays, forKey: .sharedWeekdays) }
+        if !peptideSchedules.isEmpty { try c.encode(peptideSchedules, forKey: .peptideSchedules) }
+        if !lastInjections.isEmpty { try c.encode(lastInjections, forKey: .lastInjections) }
         try c.encodeIfPresent(frequency, forKey: .frequency)
         try c.encode(doseHour, forKey: .doseHour)
         try c.encode(doseMinute, forKey: .doseMinute)
@@ -383,6 +388,7 @@ struct SetupDraft: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case step, experience, goals, heardFrom, birthDate, usesMetric, weightKg, targetKg, hasChosenTarget
+        case sharedWeekdays, peptideSchedules, lastInjections
         case compounds, frequency, doseHour, doseMinute, obstacles, remindersRequested, referralCode, plan, accountEmail
     }
 
@@ -429,6 +435,11 @@ struct SetupDraft: Codable, Equatable {
         case .weight: Self.weightRange.contains(weightKg)
         case .target: Self.weightRange.contains(targetKg)
         case .frequency: frequency != nil
+        case .doseTime:
+            if compounds.isEmpty { true }
+            else if frequency == .weekly { sharedWeekdays.count == 1 }
+            else if frequency == .fewPerWeek { sharedWeekdays.count >= 2 }
+            else { true }
         case .obstacles: !obstacles.isEmpty
         case .referral: referralCode.isEmpty || Self.validReferral(referralCode)
         case .account: Self.validEmail(accountEmail)
@@ -465,13 +476,30 @@ struct SetupDraft: Codable, Equatable {
         return "\(value.formatted(.number.precision(.fractionLength(0...1)))) \(weightUnit.rawValue)"
     }
 
+    func schedule(for name: String) -> DoseSchedule {
+        let time = DoseTime(hour: doseHour, minute: doseMinute)
+        switch frequency {
+        case .daily: return .daily(at: time)
+        case .weekly, .fewPerWeek:
+            guard !sharedWeekdays.isEmpty, canContinue(at: .doseTime) else { return .unscheduled }
+            return .on(sharedWeekdays, at: time)
+        case .varies: return peptideSchedules[name] ?? .unscheduled
+        case nil: return .unscheduled
+        }
+    }
+
+    var hasScheduledPeptides: Bool { compounds.contains { schedule(for: $0).kind != .unscheduled } }
+
+    var reminderSummary: String {
+        guard remindersRequested == true else { return "Reminders off" }
+        return hasScheduledPeptides ? "Reminders at your scheduled times" : "Reminders start when you add a schedule"
+    }
+
     var primaryGoal: SetupGoal? { SetupGoal.allCases.first { goals.contains($0) } }
 
     var doseTime: Date {
         Calendar.current.date(bySettingHour: doseHour, minute: doseMinute, second: 0, of: .now) ?? .now
     }
-
-    var doseTimeText: String { doseTime.formatted(date: .omitted, time: .shortened) }
 
     /// Seeds a sensible starting target the first time the ruler appears.
     mutating func prepareTarget() {
@@ -520,6 +548,7 @@ struct SetupDraft: Codable, Equatable {
         draft.experience = .starting; draft.goals = [.weightLoss, .recovery]; draft.heardFrom = .tiktok
         draft.usesMetric = true; draft.weightKg = 88.4; draft.targetKg = 80; draft.hasChosenTarget = true
         draft.compounds = ["Tirzepatide", "BPC-157"]; draft.frequency = .fewPerWeek; draft.obstacles = [.forgetting, .schedules]
+        draft.sharedWeekdays = [2, 4, 6]
         return draft
     }
     #endif
@@ -529,6 +558,10 @@ struct SetupDraft: Codable, Equatable {
             && Self.weightRange.contains(weightKg) && Self.weightRange.contains(targetKg)
             && compounds.count <= Self.compoundLimit && compounds.allSatisfy(Self.validCompound)
             && Set(compounds.map { $0.lowercased() }).count == compounds.count
+            && sharedWeekdays.isSubset(of: Set(1...7))
+            && peptideSchedules.allSatisfy { compounds.contains($0.key) && $0.value.kind == .weekdays && $0.value.isValid }
+            && lastInjections.allSatisfy { compounds.contains($0.key) && DayIdentity.isPlausible($0.value.dayKey, for: $0.value.takenAt) }
+            && Set(lastInjections.values.map(\.id)).count == lastInjections.count
             && (0...23).contains(doseHour) && (0...59).contains(doseMinute)
             && (referralCode.isEmpty || Self.validReferral(referralCode))
     }

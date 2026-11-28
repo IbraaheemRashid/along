@@ -12,6 +12,20 @@ enum DayIdentity {
         return calendar
     }
 
+    static func weekdays(in calendar: Calendar) -> [Int] {
+        (0..<7).map { (calendar.firstWeekday - 1 + $0) % 7 + 1 }
+    }
+
+    static func monthGrid(containing date: Date, calendar: Calendar) -> [String] {
+        guard let month = calendar.dateInterval(of: .month, for: date),
+              let days = calendar.range(of: .day, in: .month, for: date),
+              let leading = weekdays(in: calendar).firstIndex(of: calendar.component(.weekday, from: month.start))
+        else { return [] }
+        return (-leading..<days.count).compactMap { offset in
+            calendar.date(byAdding: .day, value: offset, to: month.start).flatMap { key(for: $0, timeZone: calendar.timeZone) }
+        }
+    }
+
     static func key(for date: Date, timeZone: TimeZone = .current) -> String? {
         guard date.timeIntervalSinceReferenceDate.isFinite,
               date >= Date(timeIntervalSince1970: -2_209_075_200),

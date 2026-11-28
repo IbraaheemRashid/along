@@ -39,6 +39,7 @@ struct AlongUser: Equatable {
     var isSignedIn: Bool { user != nil }
 
     func start() {
+        guard isConfigured else { return }
         FirebaseBootstrap.configureIfNeeded()
         #if canImport(FirebaseAuth)
         if let current = Auth.auth().currentUser {

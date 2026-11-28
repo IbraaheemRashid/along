@@ -67,6 +67,24 @@ import Foundation
         expect(oneshots.count == ReminderPlanner.intervalHorizon && oneshots.allSatisfy { !$0.repeats }, "Interval peptides pre-schedule upcoming one-shot reminders")
         expect(oneshots.first?.dateComponents.hour == 9 && oneshots.first?.dateComponents.minute == 30, "Interval reminders keep the chosen clock time")
 
+        var futureDaily = daily
+        futureDaily.startKey = "2026-01-08"
+        var futureWeekly = weekly
+        futureWeekly.startKey = "2026-01-08"
+        for (source, firstDay) in [(futureDaily, 8), (futureWeekly, 9)] {
+            let upcoming = ReminderPlanner.schedules(for: preferences, sources: [source], now: now, calendar: calendar)
+            expect(upcoming.count == ReminderPlanner.intervalHorizon && upcoming.allSatisfy { !$0.repeats },
+                   "Future starts use dated notifications until the schedule becomes active")
+            expect(upcoming.first?.dateComponents.day == firstDay, "The first reminder respects the start date and weekday")
+        }
+        let later = calendar.date(byAdding: .day, value: 900, to: now)!
+        let laterPlans = ReminderPlanner.schedules(for: preferences, sources: [interval], now: later, calendar: calendar)
+        expect(laterPlans.count == ReminderPlanner.intervalHorizon, "A long-running interval continues after 900 days")
+        let firstLater = calendar.date(from: laterPlans[0].dateComponents)!
+        let startDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+        expect(firstLater > later && calendar.dateComponents([.day], from: startDate, to: firstLater).day!.isMultiple(of: 3),
+               "The original interval anchor survives rolling the reminder window forward")
+
         let batch = BatchExpiryReminderSource(id: "batch-a", name: "BPC-157", expiryKey: "2026-01-10")
         let batchPlans = ReminderPlanner.schedules(for: preferences, batchExpiries: [batch], now: now, calendar: calendar)
         expect(batchPlans.count == 3 && batchPlans.allSatisfy { !$0.repeats }, "Batch expiry schedules lead days before the marked date")

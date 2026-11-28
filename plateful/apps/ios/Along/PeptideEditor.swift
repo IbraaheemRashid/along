@@ -22,8 +22,8 @@ struct PeptideEditor: View {
     @State private var search = ""
     @State private var amountText = ""
     @State private var unit: DoseUnit = .mg
-    @State private var kind: DoseSchedule.Kind = .daily
-    @State private var weekdays: Set<Int> = [2, 4, 6]
+    @State private var kind: DoseSchedule.Kind = .unscheduled
+    @State private var weekdays: Set<Int> = []
     @State private var intervalDays = 2
     @State private var times: [DoseTime] = [DoseTime(hour: 8, minute: 0)]
     @State private var startDate = Date.now
@@ -49,7 +49,7 @@ struct PeptideEditor: View {
             || (amount.map { $0.isFinite && $0 > 0 && $0 <= TrackedPeptide.maximumAmount } ?? false)
     }
     private var schedule: DoseSchedule {
-        DoseSchedule(kind: kind, weekdays: kind == .weekdays ? weekdays : [], intervalDays: intervalDays, times: times)
+        kind == .unscheduled ? .unscheduled : DoseSchedule(kind: kind, weekdays: kind == .weekdays ? weekdays : [], intervalDays: intervalDays, times: times)
     }
     private var startKey: String { DayIdentity.key(for: startDate) ?? store.todayKey }
     private var canSave: Bool {
@@ -65,18 +65,20 @@ struct PeptideEditor: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     if editing == nil { namePicker } else { nameField }
-                    if !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        colorPicker
-                        PeptideReferenceChart(name: name)
-                    }
                     amountField
                     scheduleKind
                     if kind == .weekdays { weekdayPicker }
                     if kind == .interval { intervalPicker }
-                    timesPicker
-                    startPicker
+                    if kind != .unscheduled {
+                        timesPicker
+                        startPicker
+                    }
+                    if !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { colorPicker }
                     batchExpiryField
                     noteField
+                    if Peptide.library.contains(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+                        DisclosureGroup("Peptide reference") { PeptideReferenceChart(name: name) }
+                    }
                     if editing != nil {
                         pauseToggle
                         Button(role: .destructive) { confirmRemove = true } label: {
@@ -250,7 +252,7 @@ struct PeptideEditor: View {
             HStack(spacing: 0) {
                 ForEach(DoseSchedule.Kind.allCases) { value in
                     Button { kind = value } label: {
-                        Text(value.title).font(.system(.caption, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                        Text(value == .unscheduled ? "Set later" : value.title).font(.system(.caption, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
                             .foregroundStyle(kind == value ? SetupTheme.inverseInk : SetupTheme.ink)
                             .frame(maxWidth: .infinity, minHeight: 40)
                             .background(kind == value ? SetupTheme.ink : .clear, in: Capsule())
@@ -270,26 +272,7 @@ struct PeptideEditor: View {
     private var weekdayPicker: some View {
         VStack(alignment: .leading, spacing: 10) {
             label("Days")
-            let symbols = Calendar.current.veryShortWeekdaySymbols
-            // Monday-first: indices 2...7 then 1.
-            let order = [2, 3, 4, 5, 6, 7, 1]
-            HStack(spacing: 6) {
-                ForEach(order, id: \.self) { day in
-                    Button {
-                        if weekdays.contains(day) { if weekdays.count > 1 { weekdays.remove(day) } }
-                        else { weekdays.insert(day) }
-                    } label: {
-                        Text(symbols[day - 1]).font(.system(.subheadline, weight: .semibold))
-                            .foregroundStyle(weekdays.contains(day) ? SetupTheme.inverseInk : SetupTheme.ink)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .background(weekdays.contains(day) ? SetupTheme.ink : SetupTheme.tile, in: Circle())
-                    }
-                    .buttonStyle(SetupPressStyle())
-                    .accessibilityLabel(Calendar.current.weekdaySymbols[day - 1])
-                    .accessibilityAddTraits(weekdays.contains(day) ? .isSelected : [])
-                    .accessibilityIdentifier("peptide.weekday.\(day)")
-                }
-            }
+            WeekdayPicker(selection: $weekdays, identifier: "peptide.weekday")
         }
     }
 
@@ -430,9 +413,9 @@ struct PeptideEditor: View {
         amountText = peptide.amount.map { $0.formatted(.number.precision(.fractionLength(0...3)).grouping(.never)) } ?? ""
         unit = peptide.unit
         kind = peptide.schedule.kind
-        weekdays = peptide.schedule.weekdays.isEmpty ? [2, 4, 6] : peptide.schedule.weekdays
+        weekdays = peptide.schedule.weekdays
         intervalDays = peptide.schedule.intervalDays
-        times = peptide.schedule.sortedTimes
+        times = peptide.schedule.sortedTimes.isEmpty ? [DoseTime(hour: 8, minute: 0)] : peptide.schedule.sortedTimes
         startDate = DayIdentity.date(for: peptide.startKey) ?? .now
         if let key = peptide.batchExpiryKey, let date = DayIdentity.date(for: key) {
             tracksBatchExpiry = true
