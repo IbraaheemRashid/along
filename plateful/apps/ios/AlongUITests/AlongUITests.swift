@@ -134,6 +134,11 @@ final class AlongUITests: XCTestCase {
 
     private func fillAccountAndContinue() {
         let email = app.textFields["setup.account.email"]
+        if !email.exists {
+            XCTAssertTrue(app.buttons["setup.continue"].label.contains("this iPhone"))
+            tap("setup.continue")
+            return
+        }
         reveal(email)
         email.tap()
         email.typeText("uitest@along.dev")
@@ -571,8 +576,11 @@ final class AlongUITests: XCTestCase {
         launchSandbox(reset: false)
         assertSetupStep("paywall")
         tap("setup.back")
+        assertSetupStep("account")
+        tap("setup.back")
         assertSetupStep("plan")
-        XCTAssertFalse(app.buttons["setup.back"].exists, "The plan reveal never steps back into the loader")
+        tap("setup.continue")
+        assertSetupStep("account")
         tap("setup.continue")
         assertSetupStep("paywall")
     }
@@ -581,21 +589,10 @@ final class AlongUITests: XCTestCase {
         launchSandbox()
         assertSetupStep("welcome")
         tap("setup.sign-in")
-        XCTAssertTrue(app.buttons["setup.sign-in.apple"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["setup.sign-in.google"].exists && app.buttons["setup.sign-in.email"].exists)
-        capture("setup-sign-in")
-        tap("setup.sign-in.apple")
-        // Without GoogleService-Info.plist, auth explains configuration is required.
-        // With Firebase linked, the system sheet may appear instead — either is fine for this smoke.
-        let notice = app.staticTexts["setup.sign-in.notice"]
-        let systemAuth = app.otherElements["Sign In with Apple"].firstMatch
-        XCTAssertTrue(notice.waitForExistence(timeout: 5) || systemAuth.waitForExistence(timeout: 5),
-                      "Sign-in either shows a config notice or the Apple sheet")
+        XCTAssertTrue(element("setup.sign-in.unavailable").waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["setup.sign-in.apple"].exists)
         XCTAssertFalse(navigationTab("Today").exists)
-        capture("setup-sign-in-notice")
-        if notice.exists {
-            // Stay on the sheet and restore from backup when auth is not configured.
-        }
+        capture("setup-sign-in")
         tap("setup.restore-backup")
         XCTAssertTrue(app.navigationBars["Backup & restore"].waitForExistence(timeout: 5))
         app.navigationBars["Backup & restore"].buttons["Done"].tap()

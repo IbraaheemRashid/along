@@ -199,7 +199,14 @@ struct FirebaseAccountBackup: AccountBackupClient {
     func remove(userID: String) async throws {
         #if canImport(FirebaseFirestore) && canImport(FirebaseAuth)
         let ref = try reference(userID)
-        try await ref.delete()
+        // Transactions fail offline instead of queuing a delete for a later login.
+        _ = try await Firestore.firestore().runTransaction { transaction, errorPointer in
+            do {
+                _ = try transaction.getDocument(ref)
+                transaction.deleteDocument(ref)
+            } catch { errorPointer?.pointee = error as NSError }
+            return nil
+        }
         #else
         throw BackupError.unavailable
         #endif

@@ -409,39 +409,45 @@ struct SetupSignInSheet: View {
             Divider()
             ScrollView {
                 VStack(spacing: 12) {
-                    provider("Sign in with Apple", identifier: "apple", filled: true) {
-                        Image(systemName: "apple.logo").font(.system(size: 19, weight: .medium))
-                    } action: {
-                        Task {
-                            if let id = await auth.signInWithApple(), auth.user?.id == id { onSignedIn?(); dismiss() }
+                    if !auth.isConfigured {
+                        Text(restoreBackup == nil ? "Account sign-in is unavailable in this build." : "This build keeps journals on this iPhone. You can restore an exported Along backup here.")
+                            .multilineTextAlignment(.center)
+                            .accessibilityIdentifier("setup.sign-in.unavailable")
+                    } else {
+                        provider("Sign in with Apple", identifier: "apple", filled: true) {
+                            Image(systemName: "apple.logo").font(.system(size: 19, weight: .medium))
+                        } action: {
+                            Task {
+                                if let id = await auth.signInWithApple(), auth.user?.id == id { onSignedIn?(); dismiss() }
+                            }
                         }
-                    }
-                    provider("Sign in with Google", identifier: "google", filled: false) {
-                        Text("G").font(.system(size: 19, weight: .bold, design: .rounded))
-                            .foregroundStyle(LinearGradient(colors: [Color(red: 0.26, green: 0.52, blue: 0.96), Color(red: 0.92, green: 0.26, blue: 0.21), Color(red: 0.98, green: 0.74, blue: 0.02), Color(red: 0.2, green: 0.66, blue: 0.33)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    } action: {
-                        Task {
-                            if let id = await auth.signInWithGoogle(), auth.user?.id == id { onSignedIn?(); dismiss() }
+                        provider("Sign in with Google", identifier: "google", filled: false) {
+                            Text("G").font(.system(size: 19, weight: .bold, design: .rounded))
+                                .foregroundStyle(LinearGradient(colors: [Color(red: 0.26, green: 0.52, blue: 0.96), Color(red: 0.92, green: 0.26, blue: 0.21), Color(red: 0.98, green: 0.74, blue: 0.02), Color(red: 0.2, green: 0.66, blue: 0.33)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        } action: {
+                            Task {
+                                if let id = await auth.signInWithGoogle(), auth.user?.id == id { onSignedIn?(); dismiss() }
+                            }
                         }
-                    }
-                    provider("Continue with email", identifier: "email", filled: false) {
-                        Image(systemName: "envelope").font(.system(size: 17, weight: .medium))
-                    } action: {
-                        showEmailForm = true
-                        auth.beginEmailSignIn()
-                    }
-                    if showEmailForm {
-                        AlongFormField(text: $email, kind: .email, placeholder: "Email", identifier: "setup.sign-in.email.field")
-                        AlongFormField(text: $password, kind: .password, placeholder: "Password", identifier: "setup.sign-in.password.field", onSubmit: submitEmail)
-                        Button(action: submitEmail) {
-                            Text(auth.isBusy ? "Please wait…" : "Continue")
-                                .font(.system(.body, weight: .semibold))
-                                .foregroundStyle(SetupTheme.inverseInk)
-                                .frame(maxWidth: .infinity, minHeight: 48)
-                                .background(SetupTheme.ink, in: Capsule())
+                        provider("Continue with email", identifier: "email", filled: false) {
+                            Image(systemName: "envelope").font(.system(size: 17, weight: .medium))
+                        } action: {
+                            showEmailForm = true
+                            auth.beginEmailSignIn()
                         }
-                        .disabled(auth.isBusy)
-                        .accessibilityIdentifier("setup.sign-in.email.submit")
+                        if showEmailForm {
+                            AlongFormField(text: $email, kind: .email, placeholder: "Email", identifier: "setup.sign-in.email.field")
+                            AlongFormField(text: $password, kind: .password, placeholder: "Password", identifier: "setup.sign-in.password.field", onSubmit: submitEmail)
+                            Button(action: submitEmail) {
+                                Text(auth.isBusy ? "Please wait…" : "Continue")
+                                    .font(.system(.body, weight: .semibold))
+                                    .foregroundStyle(SetupTheme.inverseInk)
+                                    .frame(maxWidth: .infinity, minHeight: 48)
+                                    .background(SetupTheme.ink, in: Capsule())
+                            }
+                            .disabled(auth.isBusy)
+                            .accessibilityIdentifier("setup.sign-in.email.submit")
+                        }
                     }
                     if let notice = auth.message {
                         Text(notice).font(.footnote).foregroundStyle(SetupTheme.muted).multilineTextAlignment(.center)

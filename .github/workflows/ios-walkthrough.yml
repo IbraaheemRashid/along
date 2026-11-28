@@ -29,6 +29,9 @@ jobs:
             -parallel-testing-enabled NO -resultBundlePath "$RUNNER_TEMP/Along.xcresult" \
             -only-testing:AlongUITests/AlongUITests/testFullSetupStopsAtPaywallAndCanOpenExplicitDesignPreview \
             -only-testing:AlongUITests/AlongUITests/testOneTapDoseShowsActualTimeAndAppearsInCalendarWithoutANote \
+            -only-testing:AlongUITests/AlongUITests/testUnconnectedPurchaseAndRestoreNeverUnlockApp \
+            -only-testing:AlongUITests/AlongUITests/testWelcomeSignInSheetExplainsAccountsAndOffersRestore \
+            -only-testing:AlongUITests/AlongUITests/testIncompleteSetupResumesAtSavedStep \
             -only-testing:AlongUITests/AlongUITests/testTodayLogsDosesAndDoseSheetSavesDetails \
             -only-testing:AlongUITests/AlongUITests/testPeptideColourPersistsAfterEditing \
             CODE_SIGNING_ALLOWED=NO test

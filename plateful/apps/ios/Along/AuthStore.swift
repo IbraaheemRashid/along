@@ -185,10 +185,10 @@ struct AlongUser: Equatable {
             message = "Your email and password from setup are needed to create the account. Go back one step and enter them again."
             return nil
         }
-        return await submitEmailSignIn(clearPasswordOnSuccess: true)
+        return await submitEmailSignIn(allowAccountCreation: true)
     }
 
-    @discardableResult func submitEmailSignIn(clearPasswordOnSuccess: Bool = true) async -> String? {
+    @discardableResult func submitEmailSignIn(allowAccountCreation: Bool = false) async -> String? {
         guard !isBusy else { return nil }
         let email = emailDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         let password = passwordDraft
@@ -208,7 +208,7 @@ struct AlongUser: Equatable {
             let result = try await Auth.auth().signIn(withEmail: email, password: password)
             guard Auth.auth().currentUser?.uid == result.user.uid else { return nil }
             user = map(result.user)
-            if clearPasswordOnSuccess { passwordDraft = "" }
+            passwordDraft = ""
             showsEmailForm = false
             return result.user.uid
         } catch {
@@ -216,12 +216,12 @@ struct AlongUser: Equatable {
             let missingUser = ns.code == AuthErrorCode.userNotFound.rawValue
                 || ns.code == AuthErrorCode.invalidCredential.rawValue
                 || ns.code == AuthErrorCode.wrongPassword.rawValue
-            if missingUser {
+            if allowAccountCreation && missingUser {
                 do {
                     let created = try await Auth.auth().createUser(withEmail: email, password: password)
                     guard Auth.auth().currentUser?.uid == created.user.uid else { return nil }
                     user = map(created.user)
-                    if clearPasswordOnSuccess { passwordDraft = "" }
+                    passwordDraft = ""
                     showsEmailForm = false
                     message = nil
                     return created.user.uid

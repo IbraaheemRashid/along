@@ -150,6 +150,7 @@ struct SetupFlowView: View {
     }
 
     private var accountAction: FooterAction {
+        if !auth.isConfigured { return FooterAction(title: "Continue on this iPhone", action: advance) }
         if auth.isSignedIn {
             return FooterAction(title: "Continue") {
                 commitAccountEmail()
@@ -206,7 +207,7 @@ struct SetupFlowView: View {
     // MARK: Navigation
 
     private func advance() {
-        guard draft.canContinue(at: step) else { return }
+        guard draft.canContinue(at: step) || (step == .account && (!auth.isConfigured || auth.isSignedIn)) else { return }
         fieldFocused = false
         var next = store.setup
         if step == .weight { next.prepareTarget() }
@@ -279,7 +280,14 @@ struct SetupFlowView: View {
                 forward = false
                 store.setup.step = .frequency
             }
-        case .account: accountScreen
+        case .account:
+            if auth.isConfigured { accountScreen }
+            else {
+                SetupQuestionPage(title: "Keep your journal on this iPhone", subtitle: "This build saves your protocol on this device. You can export and restore a backup from Settings.") {
+                    Label("Saved on this iPhone", systemImage: "iphone")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
         case .paywall: paywallScreen
         }
     }
@@ -287,8 +295,8 @@ struct SetupFlowView: View {
     private var accountScreen: some View {
         SetupScrollPage {
             SetupHeading(
-                title: "Save your protocol",
-                subtitle: "Add your email now. We’ll sign you in automatically when you subscribe so your plan syncs across devices."
+                title: billing.isEntitled ? "Connect your journal" : "Save your protocol",
+                subtitle: billing.isEntitled ? "Your membership is active. Confirm your account to open your journal." : "Use your account to keep a backup and open your journal on another device."
             )
             VStack(spacing: 12) {
                 AlongFormField(text: $accountEmail, kind: .email, placeholder: "Email", identifier: "setup.account.email") {
@@ -862,7 +870,11 @@ struct SetupFlowView: View {
         var destination = source
         var userID = auth.user?.id
         if userID == nil && auth.isConfigured {
-            userID = await auth.ensureSignedInAfterPurchase(email: submitted.accountEmail)
+            guard let verified = await auth.ensureSignedInAfterPurchase(email: submitted.accountEmail) else {
+                if auth.journals?.active === source { source.setup.step = .account }
+                return
+            }
+            userID = verified
         }
         if let profiles = auth.journals, let userID {
             guard let selected = await profiles.continueSetup(submitted, from: source, userID: userID) else { return }

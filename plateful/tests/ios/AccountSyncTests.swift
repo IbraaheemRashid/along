@@ -197,6 +197,13 @@ enum AccountSyncTests {
             preconditionFailure("Another UID cannot authorize this deletion")
         } catch {}
         let removedDirectory = reopened.active.storageDirectory
+        do {
+            try await reopened.eraseAccount("C", prepareIdentity: {}, deleteIdentity: { throw CocoaError(.fileWriteUnknown) })
+            preconditionFailure("Propagate an interrupted identity deletion")
+        } catch {}
+        expect(backend.records["C"] == nil && reopened.deletionPending, "Retry remains available after cloud and local erasure")
+        await reopened.sync.flush()
+        expect(backend.records["C"] == nil, "A failed identity removal cannot republish the erased journal")
         try await reopened.eraseAccount("C", prepareIdentity: {}, deleteIdentity: { identitiesDeleted += 1 })
         let remaining = try FileManager.default.contentsOfDirectory(atPath: removedDirectory.path)
         expect(remaining.isEmpty && backend.records["C"] == nil && identitiesDeleted == 1, "Retry removes the account backup, local files and identity")
