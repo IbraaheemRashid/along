@@ -167,6 +167,27 @@ struct AlongUser: Equatable {
         message = nil
     }
 
+    func requestPasswordReset(email: String) async {
+        guard !isBusy, isConfigured else { return }
+        let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard SetupDraft.validEmail(address) else {
+            message = "Enter your account email to request a reset link."
+            return
+        }
+        #if canImport(FirebaseAuth)
+        isBusy = true
+        defer { isBusy = false }
+        message = nil
+        let sent = "If this email has a password account, check your inbox for a reset link."
+        do {
+            try await Auth.auth().sendPasswordReset(withEmail: address)
+            message = sent
+        } catch {
+            message = (error as NSError).code == AuthErrorCode.userNotFound.rawValue ? sent : "Couldn’t request a reset link. Please try again."
+        }
+        #endif
+    }
+
     /// Stash onboarding credentials; Firebase create/sign-in happens after purchase.
     func stageOnboardingCredentials(email: String, password: String) {
         emailDraft = email.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -397,6 +418,7 @@ enum FirebaseBootstrap {
             options.apiKey = "A" + String(repeating: "0", count: 38)
             FirebaseApp.configure(options: options)
             Auth.auth().useEmulator(withHost: "127.0.0.1", port: 9099)
+            if ProcessInfo.processInfo.arguments.contains("--reset-demo") { try? Auth.auth().signOut() }
             let database = Firestore.firestore()
             let settings = database.settings
             settings.host = "127.0.0.1:8080"

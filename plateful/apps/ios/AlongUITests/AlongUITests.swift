@@ -615,6 +615,9 @@ final class AlongUITests: XCTestCase {
         tap("setup.subscribe")
         XCTAssertTrue(navigationTab("Today").waitForExistence(timeout: 40))
         tap("today.log-extra")
+        XCTAssertFalse(app.buttons["dose.save"].isEnabled)
+        tap("dose.peptide.BPC-157")
+        tap("site.skip")
         tap("dose.save")
 
         var signIn = URLRequest(url: authURL)
@@ -657,6 +660,49 @@ final class AlongUITests: XCTestCase {
         document.setValue("Bearer owner", forHTTPHeaderField: "Authorization")
         let (_, removedBackup) = try await URLSession.shared.data(for: document)
         XCTAssertEqual((removedBackup as? HTTPURLResponse)?.statusCode, 404)
+    }
+
+    @MainActor func testReturningAccountCanRecoverPasswordAndSignIn() async throws {
+        let host = "http://127.0.0.1:9099"
+        guard (try? await URLSession.shared.data(from: URL(string: host)!)) != nil else {
+            throw XCTSkip("Start the local Auth emulator to exercise password recovery.")
+        }
+        let email = "recover-\(UUID().uuidString.lowercased())@example.invalid"
+        let key = "A" + String(repeating: "0", count: 38)
+        func accountRequest(_ action: String, _ data: [String: String]) async throws {
+            var request = URLRequest(url: URL(string: host + "/identitytoolkit.googleapis.com/v1/accounts:" + action + "?key=" + key)!)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: data)
+            let (_, response) = try await URLSession.shared.data(for: request)
+            XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        }
+        try await accountRequest("signUp", ["email": email, "password": "original-local-password"])
+        launchSandbox(arguments: ["--local-account-test"])
+        tap("setup.sign-in")
+        tap("setup.sign-in.email")
+        let address = app.textFields["setup.sign-in.email.field"]
+        reveal(address)
+        address.tap()
+        address.typeText(email + "\n")
+        tap("setup.sign-in.reset-password")
+        let notice = app.staticTexts["setup.sign-in.notice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 10))
+        XCTAssertTrue(notice.label.contains("reset link"), notice.label)
+
+        let codes = URL(string: host + "/emulator/v1/projects/demo-along-uitest/oobCodes")!
+        let (data, _) = try await URLSession.shared.data(from: codes)
+        let inbox = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let messages = try XCTUnwrap(inbox["oobCodes"] as? [[String: Any]])
+        let reset = try XCTUnwrap(messages.first { $0["email"] as? String == email && $0["requestType"] as? String == "PASSWORD_RESET" })
+        let password = "new-local-password"
+        try await accountRequest("resetPassword", ["oobCode": try XCTUnwrap(reset["oobCode"] as? String), "newPassword": password])
+        let field = app.secureTextFields["setup.sign-in.password.field"]
+        reveal(field)
+        field.tap()
+        field.typeText(password + "\n")
+        XCTAssertTrue(app.buttons["Sign out"].waitForExistence(timeout: 15))
+        XCTAssertFalse(navigationTab("Today").exists)
     }
 
     func testUnconnectedPurchaseAndRestoreNeverUnlockApp() {
@@ -977,6 +1023,7 @@ final class AlongUITests: XCTestCase {
 
         tap("today.log-extra")
         XCTAssertTrue(app.buttons["dose.peptide.BPC-157"].waitForExistence(timeout: 4))
+        XCTAssertFalse(app.buttons["dose.save"].isEnabled, "An extra dose needs a named peptide when several are tracked")
         app.buttons["dose.peptide.BPC-157"].tap()
         XCTAssertTrue(app.buttons["site.skip"].waitForExistence(timeout: 4), "Choosing a peptide opens the 3D site picker")
         capture("site-picker-whole-body")

@@ -447,6 +447,13 @@ struct SetupSignInSheet: View {
                             }
                             .disabled(auth.isBusy)
                             .accessibilityIdentifier("setup.sign-in.email.submit")
+                            Button("Forgot password?") {
+                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                                let address = email
+                                Task { await auth.requestPasswordReset(email: address) }
+                            }
+                            .frame(minHeight: 44)
+                            .accessibilityIdentifier("setup.sign-in.reset-password")
                         }
                     }
                     if let notice = auth.message {
