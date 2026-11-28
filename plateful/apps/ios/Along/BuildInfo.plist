@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>ALONG_BILLING_ANNUAL_PRODUCT_ID</key>
+	<string>$(ALONG_BILLING_ANNUAL_PRODUCT_ID)</string>
+	<key>ALONG_BILLING_ENTITLEMENT_ID</key>
+	<string>$(ALONG_BILLING_ENTITLEMENT_ID)</string>
+	<key>ALONG_BILLING_MONTHLY_PRODUCT_ID</key>
+	<string>$(ALONG_BILLING_MONTHLY_PRODUCT_ID)</string>
+	<key>ALONG_PRIVACY_URL</key>
+	<string>$(ALONG_PRIVACY_URL)</string>
+	<key>ALONG_SUPERWALL_PUBLIC_KEY</key>
+	<string>$(ALONG_SUPERWALL_PUBLIC_KEY)</string>
+	<key>ALONG_TERMS_URL</key>
+	<string>$(ALONG_TERMS_URL)</string>
+</dict>
+</plist>

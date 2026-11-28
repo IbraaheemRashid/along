@@ -109,18 +109,9 @@ for scope in ["project", "target"]:
         settings = "CLANG_ENABLE_MODULES = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SWIFT_VERSION = 5.0;"
         if scope == "target":
             settings += " ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;"
-            for key in [
-                "ALONG_BILLING_ANNUAL_PRODUCT_ID",
-                "ALONG_BILLING_MONTHLY_PRODUCT_ID",
-                "ALONG_SUPERWALL_PUBLIC_KEY",
-                "ALONG_BILLING_ENTITLEMENT_ID",
-                "ALONG_TERMS_URL",
-                "ALONG_PRIVACY_URL",
-            ]:
-                settings += f' INFOPLIST_KEY_{key} = "$({key})";'
             settings += (
                 ' PRODUCT_NAME = Along; PRODUCT_BUNDLE_IDENTIFIER = dev.along.prototype; TARGETED_DEVICE_FAMILY = "1,2";'
-                " GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = Along;"
+                " GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = Along/BuildInfo.plist; INFOPLIST_KEY_CFBundleDisplayName = Along;"
                 ' INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";'
                 " INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;"
                 " INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;"
@@ -161,6 +152,8 @@ obj("uitestgroup", f'isa = PBXGroup; children = ({ident("uitestfile")},); path =
 obj("uitestproduct", "isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = AlongUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR;")
 obj("uitestsources", f'isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ({ident("uitestbuildfile")},); runOnlyForDeploymentPostprocessing = 0;')
 obj("uitestframeworks", "isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;")
+obj("uiteststorekit", f'isa = PBXBuildFile; fileRef = {ident("storekit")};')
+obj("uitestresources", f'isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ({ident("uiteststorekit")},); runOnlyForDeploymentPostprocessing = 0;')
 obj("uitestproxy", f'isa = PBXContainerItemProxy; containerPortal = {ident("project")}; proxyType = 1; remoteGlobalIDString = {ident("target")}; remoteInfo = Along;')
 obj("uitestdependency", f'isa = PBXTargetDependency; target = {ident("target")}; targetProxy = {ident("uitestproxy")};')
 for config in ["Debug", "Release"]:
@@ -173,7 +166,7 @@ for config in ["Debug", "Release"]:
 obj("uitestconfigs", f'isa = XCConfigurationList; buildConfigurations = ({ident("uitestDebug")},{ident("uitestRelease")},); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;')
 obj(
     "uitesttarget",
-    f'isa = PBXNativeTarget; buildConfigurationList = {ident("uitestconfigs")}; buildPhases = ({ident("uitestsources")},{ident("uitestframeworks")},); buildRules = (); dependencies = ({ident("uitestdependency")},); name = AlongUITests; productName = AlongUITests; productReference = {ident("uitestproduct")}; productType = "com.apple.product-type.bundle.ui-testing";',
+    f'isa = PBXNativeTarget; buildConfigurationList = {ident("uitestconfigs")}; buildPhases = ({ident("uitestsources")},{ident("uitestframeworks")},{ident("uitestresources")},); buildRules = (); dependencies = ({ident("uitestdependency")},); name = AlongUITests; productName = AlongUITests; productReference = {ident("uitestproduct")}; productType = "com.apple.product-type.bundle.ui-testing";',
 )
 obj(
     "project",

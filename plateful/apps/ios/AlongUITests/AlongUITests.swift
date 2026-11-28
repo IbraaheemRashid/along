@@ -1,4 +1,5 @@
 import XCTest
+import StoreKitTest
 import UIKit
 
 final class AlongUITests: XCTestCase {
@@ -554,6 +555,31 @@ final class AlongUITests: XCTestCase {
         assertSetupStep("commitment")
         tap("setup.back")
         assertSetupStep("birthday")
+    }
+
+    func testLocalStoreKitCheckoutAndRelaunch() throws {
+        let file = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Along", withExtension: "storekit"))
+        let session = try SKTestSession(contentsOf: file)
+        session.resetToDefaultState()
+        session.clearTransactions()
+        session.disableDialogs = true
+        defer { session.clearTransactions() }
+
+        launchSandbox(arguments: ["--setup-step", "paywall", "--local-storekit-test"])
+        assertSetupStep("paywall")
+        let subscribe = app.buttons["setup.subscribe"]
+        let loaded = expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: subscribe)
+        wait(for: [loaded], timeout: 25)
+        tap("setup.subscribe")
+        XCTAssertTrue(navigationTab("Today").waitForExistence(timeout: 30))
+        XCTAssertFalse(element("journal.preview").exists)
+        XCTAssertEqual(session.allTransactions().first?.productIdentifier, "dev.along.membership.annual")
+        navigationTab("Settings").tap()
+        capture("local-storekit-membership")
+        app.terminate()
+        launchSandbox(reset: false, arguments: ["--local-storekit-test"])
+        XCTAssertTrue(navigationTab("Today").waitForExistence(timeout: 20))
+        XCTAssertFalse(app.buttons["setup.subscribe"].exists)
     }
 
     func testUnconnectedPurchaseAndRestoreNeverUnlockApp() {

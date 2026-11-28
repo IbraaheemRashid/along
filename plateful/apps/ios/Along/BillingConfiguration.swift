@@ -49,6 +49,12 @@ struct BillingConfiguration: Equatable, Sendable {
     }
     static func forCurrentLaunch(arguments: [String] = ProcessInfo.processInfo.arguments, bundle: Bundle = .main) -> State {
         #if DEBUG
+        #if targetEnvironment(simulator)
+        if arguments.contains("--ui-testing") && arguments.contains("--local-storekit-test"),
+           let config = load(bundle: bundle).value, config.superwallPublicKey == localStoreKitKey {
+            return .ready(config)
+        }
+        #endif
         let reviewFlags = ["--ui-testing", "--onboarding-step", "--review-onboarding", "--setup-step", "--sample-journey", "--reset-demo"]
         if arguments.contains(where: reviewFlags.contains) { return .unconfigured(["Isolated development review"]) }
         #endif

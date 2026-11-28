@@ -26,9 +26,10 @@ jobs:
         working-directory: plateful/apps/ios
         run: |
           xcodebuild -project Along.xcodeproj -scheme Along -destination "id=$DEVICE" \
-            -parallel-testing-enabled NO -resultBundlePath "$RUNNER_TEMP/Along.xcresult" \
+            -parallel-testing-enabled NO -derivedDataPath "$RUNNER_TEMP/Along-build" -resultBundlePath "$RUNNER_TEMP/Along.xcresult" \
             -only-testing:AlongUITests/AlongUITests/testFullSetupStopsAtPaywallAndCanOpenExplicitDesignPreview \
             -only-testing:AlongUITests/AlongUITests/testOneTapDoseShowsActualTimeAndAppearsInCalendarWithoutANote \
+            -only-testing:AlongUITests/AlongUITests/testLocalStoreKitCheckoutAndRelaunch \
             -only-testing:AlongUITests/AlongUITests/testUnconnectedPurchaseAndRestoreNeverUnlockApp \
             -only-testing:AlongUITests/AlongUITests/testWelcomeSignInSheetExplainsAccountsAndOffersRestore \
             -only-testing:AlongUITests/AlongUITests/testIncompleteSetupResumesAtSavedStep \
@@ -38,6 +39,10 @@ jobs:
       - name: Collect walkthrough screenshots and results
         if: always()
         run: |
+          app="$RUNNER_TEMP/Along-build/Build/Products/Debug-iphonesimulator/Along.app"
+          if test -d "$app"; then
+            ditto -c -k --keepParent "$app" "$RUNNER_TEMP/Along-iPhone-Simulator.zip"
+          fi
           if test -d "$RUNNER_TEMP/Along.xcresult"; then
             xcrun xcresulttool export attachments --path "$RUNNER_TEMP/Along.xcresult" --output-path "$RUNNER_TEMP/along-screens"
             ditto -c -k --keepParent "$RUNNER_TEMP/Along.xcresult" "$RUNNER_TEMP/Along-results.zip"
@@ -49,3 +54,4 @@ jobs:
           path: |
             ${{ runner.temp }}/along-screens
             ${{ runner.temp }}/Along-results.zip
+            ${{ runner.temp }}/Along-iPhone-Simulator.zip
