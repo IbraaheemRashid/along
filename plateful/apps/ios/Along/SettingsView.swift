@@ -44,7 +44,7 @@ struct SettingsView: View {
         .sheet(isPresented: $showSignIn) {
             SetupSignInSheet(restoreBackup: { showSignIn = false; showBackup = true })
         }
-        .confirmationDialog("Delete all data on this iPhone?", isPresented: $confirmDelete, titleVisibility: .visible) {
+        .confirmationDialog("Delete this journal from this iPhone?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete everything", role: .destructive) { deleteLocalData() }
         } message: {
             Text("This clears your protocol, dose history, weight records and setup on this device. Export a backup first if you want to keep them. Your App Store subscription is unchanged.")
@@ -60,6 +60,11 @@ struct SettingsView: View {
                     symbol: "person.crop.circle.fill"
                 )
                 SettingsDivider()
+                if cloudSync.conflict != nil {
+                    AccountBackupChoice()
+                } else if cloudSync.message != nil {
+                    SettingsRow(title: "Retry backup", symbol: "arrow.clockwise") { Task { await cloudSync.prepare() } }
+                }
                 SettingsRow(title: "Sign out", symbol: "rectangle.portrait.and.arrow.right", destructive: true, showsChevron: false) {
                     auth.signOut()
                 }
@@ -75,10 +80,10 @@ struct SettingsView: View {
 
     private var cloudSyncDetail: String {
         if cloudSync.isSyncing { return "Syncing…" }
+        if let message = cloudSync.message ?? auth.message { return message }
         if let synced = cloudSync.lastSyncedAt {
             return "Last synced \(synced.formatted(date: .abbreviated, time: .shortened))"
         }
-        if let message = cloudSync.message ?? auth.message { return message }
         return auth.isConfigured ? "Cloud backup on" : "Saved on this iPhone"
     }
 
@@ -158,7 +163,7 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
             SettingsDivider()
-            SettingsRow(title: "Delete all local data", symbol: "trash", destructive: true) {
+            SettingsRow(title: store.accountID == nil ? "Delete on-device journal" : "Delete this account’s local data", symbol: "trash", destructive: true) {
                 confirmDelete = true
             }
         }
@@ -204,6 +209,23 @@ struct SettingsView: View {
             }
             store.clearJournal()
         }
+    }
+}
+
+struct AccountBackupChoice: View {
+    @Environment(CloudSync.self) private var sync
+    @State private var choose = false
+
+    var body: some View {
+        Button("Choose which journal to keep") { choose = true }
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .confirmationDialog("Which journal should Along keep?", isPresented: $choose) {
+                Button("Use account backup", role: .destructive) { sync.resolveConflict(useAccount: true) }
+                Button("Use this iPhone’s journal", role: .destructive) { sync.resolveConflict(useAccount: false) }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("The version you choose will replace the other copy. You can export this iPhone’s journal from Backup & restore first.")
+            }
     }
 }
 

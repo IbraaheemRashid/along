@@ -6,7 +6,9 @@ Along talks to **Firebase Auth + Firestore** from the iPhone (no Cloudflare Work
 
 **Main tabs:** Today · Progress · Settings (Health tab removed). Peptides open as a sheet from Today or Settings.
 
-**Cloud doc:** `users/{uid}/app/state` with `journalBase64` + `setupBase64`.
+**Account storage.** Each signed-in UID has its own device journal and Firestore document at `users/{uid}/app/state`. Backups include `journalBase64`, `setupBase64` and a revision used by conditional writes. Existing backups without a revision use a digest of their saved payload. The original on-device journal remains separate. To bring older local entries into a chosen account, export the on-device journal and use the existing confirmed backup restore in that account.
+
+**Two-account device check.** Give two test accounts distinctly named records. On one phone, open A, make an edit offline, sign out, and sign in to B. Verify B shows its own records and backup. Reconnect and return to A to check that the offline edit reaches A. Repeat with an empty account and confirm it starts with an empty journal.
 
 ## 1. Firebase
 

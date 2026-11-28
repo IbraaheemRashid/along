@@ -1,5 +1,6 @@
 import SwiftUI
 import Observation
+import CryptoKit
 
 private struct OnboardingArchive: Codable {
     var version = 1
@@ -27,7 +28,7 @@ private struct OnboardingArchive: Codable {
     var referenceDate = Date.now
     var toast: String?
     var error: String?
-    private static var writeOptions: Data.WritingOptions {
+    static var writeOptions: Data.WritingOptions {
         #if os(iOS)
         [.atomic, .completeFileProtection]
         #else
@@ -56,15 +57,37 @@ private struct OnboardingArchive: Codable {
         draft.startDate = journal.startDate
         return draft
     }
+    let accountID: String?
+    var storageDirectory: URL { url.deletingLastPathComponent() }
+    var canSyncJournal: Bool { canSave && canSaveDraft && error == nil }
+    var hasPersonalRecords: Bool {
+        journal.hasOnboarded || !journal.protocolPeptides.isEmpty || !journal.protocolLogs.isEmpty ||
+            !journal.checkIns.isEmpty || !journal.weights.isEmpty || !journal.milestones.isEmpty ||
+            !(journal.routineDays ?? []).isEmpty || journal.setupProfile != nil || setup.step != .welcome
+    }
+
+    /// Fingerprint the exact persisted files. The sync checkpoint contains no journal content.
+    func syncFileHashes() throws -> [String] {
+        try [url, setupURL].map { file in
+            do { return SHA256.hash(data: try Data(contentsOf: file)).map { String(format: "%02x", $0) }.joined() }
+            catch let error as CocoaError where error.code == .fileReadNoSuchFile { return "missing" }
+        }
+    }
+
     let startupArguments: [String]
-    init(directory: URL? = nil, arguments: [String] = ProcessInfo.processInfo.arguments, clearCredentials: @escaping () -> Void = TokenVault.clear) {
+    init(directory: URL? = nil, accountID: String? = nil, arguments: [String] = ProcessInfo.processInfo.arguments, clearCredentials: @escaping () -> Void = TokenVault.clear) {
+        self.accountID = accountID
         startupArguments = arguments
         var folder = "Along"
         #if DEBUG
         let isReviewSession = arguments.contains("--ui-testing") || arguments.contains("--onboarding-step") || arguments.contains("--review-onboarding") || arguments.contains("--setup-step")
         if isReviewSession { folder = "AlongDesignReview" }
         #endif
-        let directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(folder, isDirectory: true)
+        var directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(folder, isDirectory: true)
+        if let accountID {
+            let key = SHA256.hash(data: Data(accountID.utf8)).map { String(format: "%02x", $0) }.joined()
+            directory = directory.appendingPathComponent("Accounts", isDirectory: true).appendingPathComponent(key, isDirectory: true)
+        }
         url = directory.appendingPathComponent("journal-v1.json")
         draftURL = directory.appendingPathComponent("onboarding-draft-v1.json")
         setupURL = directory.appendingPathComponent("setup-v2.json")
@@ -334,10 +357,20 @@ private struct OnboardingArchive: Codable {
         journal = candidate
         return true
     }
-    @discardableResult func saveSetup() -> Bool {
-        guard setup.isValid else { return false }
+    @discardableResult func replaceSetup(_ draft: SetupDraft) -> Bool {
+        guard persistSetup(draft) else { return false }
+        loadingDraft = true
+        setup = draft
+        loadingDraft = false
+        return true
+    }
+
+    @discardableResult func saveSetup() -> Bool { persistSetup(setup) }
+
+    private func persistSetup(_ draft: SetupDraft) -> Bool {
+        guard draft.isValid else { return false }
         do {
-            let data = try JSONEncoder().encode(setup)
+            let data = try JSONEncoder().encode(draft)
             var resource = setupURL.deletingLastPathComponent()
             var values = URLResourceValues(); values.isExcludedFromBackup = true
             try resource.setResourceValues(values)

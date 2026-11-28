@@ -1,7 +1,7 @@
 import Foundation
 
 @main struct CoreTests {
-    @MainActor static func main() throws {
+    @MainActor static func main() async throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         let now = ISO8601DateFormatter().date(from: "2026-11-01T12:00:00Z")!
@@ -490,6 +490,8 @@ import Foundation
 
         resumedSetup.resetOnboarding()
         expect(resumedSetup.setup == SetupDraft(), "Restarting setup clears every answer")
+        let accountChecks = try await AccountSyncTests.run(in: testRoot.appendingPathComponent("account-switching"))
+        print("PASS: \(accountChecks) account isolation and backup checks")
         print("PASS: \(checks) meaningful Along domain checks")
     }
 }

@@ -10,6 +10,8 @@ import Foundation
     var failPermission = false
     var failAfterFirstSchedule = false
     var pretendSuccessWithoutScheduling = false
+    var holdNextReplace = false
+    var inFlightReplace: CheckedContinuation<Void, Never>?
     enum Failure: Error { case expected }
     func state() async -> ReminderSystemState { ReminderSystemState(permission: permission, pendingIDs: pending) }
     func requestPermission() async throws -> Bool {
@@ -20,6 +22,10 @@ import Foundation
     }
     func replace(with schedules: [ReminderSchedule]) async throws {
         replaceCount += 1
+        if holdNextReplace {
+            holdNextReplace = false
+            await withCheckedContinuation { inFlightReplace = $0 }
+        }
         pending = pending.filter { !ReminderStore.isAlongReminder($0) }
         if pretendSuccessWithoutScheduling { return }
         for schedule in schedules {
@@ -122,6 +128,15 @@ import Foundation
         expect(reloaded.preferences == preferences && reloaded.hasSavedPreferences, "Saved preferences survive restart")
         expect(await reloaded.sync(sources: [daily, weekly]) && reloaded.isScheduled && fake.requestCount == 1, "Sync reschedules without prompting again")
         expect(await store.save(preferences, sources: [daily, weekly]) && fake.requestCount == 1, "A second save with authorization does not ask again")
+
+        fake.holdNextReplace = true
+        let earlierProfile = Task { await store.sync(sources: [daily]) }
+        while fake.inFlightReplace == nil { await Task.yield() }
+        _ = await store.sync(sources: [])
+        fake.inFlightReplace?.resume()
+        _ = await earlierProfile.value
+        for _ in 0..<1000 where !fake.pending.isEmpty { await Task.yield() }
+        expect(fake.pending.isEmpty, "Sign-out clears the old profile’s notifications even during an earlier update")
 
         fake.failAfterFirstSchedule = true
         expect(!(await store.save(preferences, sources: [daily, weekly])), "Partial scheduling failures are reported")

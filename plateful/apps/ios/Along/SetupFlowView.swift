@@ -11,6 +11,7 @@ struct SetupFlowView: View {
     @State private var showLocalData = false
     @State private var showSignIn = false
     @State private var requestingReminders = false
+    @State private var completingPurchase = false
     @State private var previousPlan: SetupDraft?
     @State private var search = ""
     @State private var accountEmail = ""
@@ -172,10 +173,14 @@ struct SetupFlowView: View {
     @ViewBuilder private var footerAccessory: some View {
         switch step {
         case .welcome:
-            Button { showSignIn = true } label: {
-                (Text("Already have an account? ").foregroundStyle(SetupTheme.muted) + Text("Sign in").fontWeight(.semibold).foregroundStyle(SetupTheme.ink))
-                    .font(.subheadline).frame(maxWidth: .infinity, minHeight: 44)
-            }.accessibilityIdentifier("setup.sign-in")
+            if auth.isSignedIn {
+                SignedInSetupActions()
+            } else {
+                Button { showSignIn = true } label: {
+                    (Text("Already have an account? ").foregroundStyle(SetupTheme.muted) + Text("Sign in").fontWeight(.semibold).foregroundStyle(SetupTheme.ink))
+                        .font(.subheadline).frame(maxWidth: .infinity, minHeight: 44)
+                }.accessibilityIdentifier("setup.sign-in")
+            }
             if hasLocalRecords {
                 SetupTextButton(title: "Your data & reminders", identifier: "setup.local-data") { showLocalData = true }
             }
@@ -315,32 +320,14 @@ struct SetupFlowView: View {
                     Image(systemName: "apple.logo").font(.system(size: 19, weight: .medium))
                 } action: {
                     fieldFocused = false
-                    Task {
-                        await auth.signInWithApple()
-                        if auth.isSignedIn {
-                            if let email = auth.user?.email {
-                                accountEmail = email
-                                store.setup.accountEmail = email
-                            }
-                            advance()
-                        }
-                    }
+                    Task { await continueWithProvider(auth.signInWithApple) }
                 }
                 accountProvider("Continue with Google", identifier: "google", filled: false) {
                     Text("G").font(.system(size: 19, weight: .bold, design: .rounded))
                         .foregroundStyle(LinearGradient(colors: [Color(red: 0.26, green: 0.52, blue: 0.96), Color(red: 0.92, green: 0.26, blue: 0.21), Color(red: 0.98, green: 0.74, blue: 0.02), Color(red: 0.2, green: 0.66, blue: 0.33)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 } action: {
                     fieldFocused = false
-                    Task {
-                        await auth.signInWithGoogle()
-                        if auth.isSignedIn {
-                            if let email = auth.user?.email {
-                                accountEmail = email
-                                store.setup.accountEmail = email
-                            }
-                            advance()
-                        }
-                    }
+                    Task { await continueWithProvider(auth.signInWithGoogle) }
                 }
 
                 if let notice = auth.message {
@@ -851,18 +838,44 @@ struct SetupFlowView: View {
         }
     }
 
-    /// Persist setup answers first, then create/sign-in so cloud restore cannot clobber them.
-    private func completePaidSetup() async {
-        persistAccountCredentials()
-        guard store.finishSetup() else { return }
-        await signInAfterSetupIfNeeded()
+    private func continueWithProvider(_ signIn: () async -> String?) async {
+        let source = store
+        let submitted = source.setup
+        guard let id = await signIn(), let user = auth.user, user.id == id else { return }
+        let destination: JournalStore
+        if let profiles = auth.journals {
+            guard let selected = await profiles.continueSetup(submitted, from: source, userID: user.id) else { return }
+            destination = selected
+        } else { destination = source }
+        guard !destination.journal.hasOnboarded, destination.setup.step == .account else { return }
+        if let email = user.email { destination.setup.accountEmail = email }
+        destination.setup.step = .paywall
     }
 
-    /// Temporary unlock while App Store / Superwall aren’t wired. Still creates the account.
-    private func completeSkippedPaywall() async {
+    private func completePaidSetup() async {
+        guard !completingPurchase else { return }
+        completingPurchase = true
+        defer { completingPurchase = false }
         persistAccountCredentials()
-        guard store.finishSetupPreview() else { return }
-        await signInAfterSetupIfNeeded()
+        let source = store
+        let submitted = source.setup
+        var destination = source
+        var userID = auth.user?.id
+        if userID == nil && auth.isConfigured {
+            userID = await auth.ensureSignedInAfterPurchase(email: submitted.accountEmail)
+        }
+        if let profiles = auth.journals, let userID {
+            guard let selected = await profiles.continueSetup(submitted, from: source, userID: userID) else { return }
+            destination = selected
+        }
+        guard auth.journals == nil || auth.journals?.active === destination,
+              !destination.journal.hasOnboarded, destination.setup.step == .paywall else { return }
+        _ = destination.finishSetup()
+    }
+
+    private func completeSkippedPaywall() async {
+        // Development records always stay local.
+        _ = store.finishSetupPreview()
     }
 
     /// Keep AuthStore as the source of truth so a view rebuild can’t lose the password.
@@ -874,18 +887,6 @@ struct SetupFlowView: View {
             auth.stageOnboardingCredentials(email: email, password: password)
         }
         _ = store.saveSetup()
-    }
-
-    private func signInAfterSetupIfNeeded() async {
-        guard !auth.isSignedIn else { return }
-        persistAccountCredentials()
-        let email = store.setup.accountEmail
-        guard SetupDraft.validEmail(email) else { return }
-        // Prefer the staged password; never invent a new one if the member already chose one.
-        if auth.passwordDraft.count < 6, accountPassword.count >= 6 {
-            auth.stageOnboardingCredentials(email: email, password: accountPassword)
-        }
-        _ = await auth.ensureSignedInAfterPurchase(email: email)
     }
 
     private var paywallFinePrint: some View {
@@ -962,5 +963,21 @@ struct SetupScrollPage<Content: View>: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .scrollDismissesKeyboard(.interactively)
+    }
+}
+
+private struct SignedInSetupActions: View {
+    @Environment(AuthStore.self) private var auth
+    @Environment(CloudSync.self) private var sync
+
+    var body: some View {
+        if let message = sync.message {
+            Text(message).font(.footnote).foregroundStyle(SetupTheme.muted)
+            if sync.conflict == nil {
+                Button("Retry account backup") { Task { await sync.prepare() } }
+            }
+        }
+        Button("Sign out") { auth.signOut() }
+            .frame(minHeight: 44)
     }
 }

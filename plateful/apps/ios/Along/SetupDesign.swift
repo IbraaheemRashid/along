@@ -383,7 +383,7 @@ struct SetupCard<Content: View>: View {
 
 /// Account sign-in sheet. Provider button chrome is unchanged; taps run real auth.
 struct SetupSignInSheet: View {
-    var restoreBackup: () -> Void
+    var restoreBackup: (() -> Void)?
     var onSignedIn: (() -> Void)? = nil
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
@@ -413,8 +413,7 @@ struct SetupSignInSheet: View {
                         Image(systemName: "apple.logo").font(.system(size: 19, weight: .medium))
                     } action: {
                         Task {
-                            await auth.signInWithApple()
-                            if auth.isSignedIn { onSignedIn?(); dismiss() }
+                            if let id = await auth.signInWithApple(), auth.user?.id == id { onSignedIn?(); dismiss() }
                         }
                     }
                     provider("Sign in with Google", identifier: "google", filled: false) {
@@ -422,8 +421,7 @@ struct SetupSignInSheet: View {
                             .foregroundStyle(LinearGradient(colors: [Color(red: 0.26, green: 0.52, blue: 0.96), Color(red: 0.92, green: 0.26, blue: 0.21), Color(red: 0.98, green: 0.74, blue: 0.02), Color(red: 0.2, green: 0.66, blue: 0.33)], startPoint: .topLeading, endPoint: .bottomTrailing))
                     } action: {
                         Task {
-                            await auth.signInWithGoogle()
-                            if auth.isSignedIn { onSignedIn?(); dismiss() }
+                            if let id = await auth.signInWithGoogle(), auth.user?.id == id { onSignedIn?(); dismiss() }
                         }
                     }
                     provider("Continue with email", identifier: "email", filled: false) {
@@ -454,11 +452,13 @@ struct SetupSignInSheet: View {
                 .padding(.horizontal, 24).padding(.top, 22).padding(.bottom, 8)
                 .disabled(auth.isBusy)
             }
-            Button(action: restoreBackup) {
-                (Text("Have a backup file? ").foregroundStyle(SetupTheme.muted) + Text("Restore it").fontWeight(.semibold).foregroundStyle(SetupTheme.ink))
-                    .font(.footnote).frame(maxWidth: .infinity, minHeight: 44)
-            }.accessibilityIdentifier("setup.restore-backup")
-            .padding(.bottom, 6)
+            if let restoreBackup {
+                Button(action: restoreBackup) {
+                    (Text("Have a backup file? ").foregroundStyle(SetupTheme.muted) + Text("Restore it").fontWeight(.semibold).foregroundStyle(SetupTheme.ink))
+                        .font(.footnote).frame(maxWidth: .infinity, minHeight: 44)
+                }.accessibilityIdentifier("setup.restore-backup")
+                .padding(.bottom, 6)
+            }
         }
         .background(SetupTheme.surface)
         .ignoresSafeArea(.keyboard)
@@ -475,8 +475,7 @@ struct SetupSignInSheet: View {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         auth.stageOnboardingCredentials(email: email, password: password)
         Task {
-            await auth.submitEmailSignIn()
-            if auth.isSignedIn { onSignedIn?(); dismiss() }
+            if let id = await auth.submitEmailSignIn(), auth.user?.id == id { onSignedIn?(); dismiss() }
         }
     }
 

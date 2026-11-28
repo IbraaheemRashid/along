@@ -7,7 +7,7 @@ import GoogleSignIn
 #endif
 
 @main struct AlongApp: App {
-    @State private var store: JournalStore
+    @State private var journals: AccountJournals
     @State private var reminders: ReminderStore
     @State private var previewReminders: ReminderStore
     @State private var billing: BillingStore
@@ -15,46 +15,84 @@ import GoogleSignIn
     @State private var attribution: AttributionStore
     @State private var analytics: AnalyticsClient
     @State private var auth: AuthStore
-    @State private var cloudSync: CloudSync
+
+    private struct ReminderSelection: Equatable {
+        let profile: ObjectIdentifier
+        let peptides: [TrackedPeptide]
+        let enabledForProfile: Bool
+    }
 
     init() {
         // Firebase must configure before any Auth/Firestore-touching state inits.
         CrashReporting.start()
         FirebaseBootstrap.configureIfNeeded()
-        _store = State(initialValue: JournalStore())
+        let profiles = AccountJournals(device: JournalStore())
+        let identity = AuthStore(journals: profiles)
+        identity.start()
+        _journals = State(initialValue: profiles)
+        _auth = State(initialValue: identity)
         _reminders = State(initialValue: ReminderStore())
         _previewReminders = State(initialValue: ReminderStore(deliveryEnabled: false))
         _billing = State(initialValue: BillingStore(configuration: BillingConfiguration.forCurrentLaunch()))
         _previewBilling = State(initialValue: BillingStore(configuration: .unconfigured(["Local billing preview"])))
         _attribution = State(initialValue: AttributionStore())
         _analytics = State(initialValue: AnalyticsClient())
-        _auth = State(initialValue: AuthStore())
-        _cloudSync = State(initialValue: CloudSync())
     }
 
     var body: some Scene {
         WindowGroup {
-            RootView().environment(store)
+            let store = journals.active
+            let ownsReminders = !journals.chooseDeviceJournal && store.journal.isDesignPreview != true && !store.journal.hasSampleData
+            Group {
+                if journals.chooseDeviceJournal {
+                    DeviceJournalChoice(openLocal: journals.openDeviceJournal)
+                } else { RootView() }
+            }
+                .id(ObjectIdentifier(store))
+                .environment(store)
                 .environment(store.journal.isDesignPreview == true || store.journal.hasSampleData ? previewReminders : reminders)
                 .environment(store.journal.isDesignPreview == true || store.journal.hasSampleData ? previewBilling : billing)
                 .environment(attribution)
                 .environment(analytics)
                 .environment(auth)
-                .environment(cloudSync)
+                .environment(journals.sync)
                 .tint(Theme.accent)
+                .task(id: ReminderSelection(profile: ObjectIdentifier(store), peptides: store.journal.protocolPeptides,
+                                            enabledForProfile: ownsReminders)) {
+                    guard !Task.isCancelled else { return }
+                    _ = await reminders.sync(sources: ownsReminders ? store.journal.reminderSources : [],
+                                             batchExpiries: ownsReminders ? store.journal.batchExpiryReminderSources : [])
+                }
                 .onOpenURL { url in
                     #if canImport(GoogleSignIn)
                     _ = GIDSignIn.sharedInstance.handle(url)
                     #endif
                 }
                 .task {
-                    auth.start()
                     await attribution.start()
                     analytics.track(.init(name: "app_opened", feature: "app", surface: "launch", result: "success"))
                 }
         }
     }
 }
+private struct DeviceJournalChoice: View {
+    var openLocal: () -> Void
+    @State private var showSignIn = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Open a journal").font(.largeTitle.bold())
+            Text("Sign in for your account history, or open the separate journal saved on this iPhone.")
+                .foregroundStyle(.secondary)
+            SetupPrimaryButton(title: "Sign in", identifier: "account.choose-sign-in") { showSignIn = true }
+            Button("Open journal on this iPhone", action: openLocal)
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .padding(24)
+        .sheet(isPresented: $showSignIn) { SetupSignInSheet(restoreBackup: nil) }
+    }
+}
+
 struct RootView: View {
     @Environment(JournalStore.self) private var store
     @Environment(ReminderStore.self) private var reminders
@@ -85,7 +123,7 @@ struct RootView: View {
     var body: some View {
         @Bindable var store = store
         Group {
-            if !billing.hasCheckedEntitlements && !previewAccess {
+            if (!billing.hasCheckedEntitlements && !previewAccess) || (cloudSync.isSyncing && !store.hasPersonalRecords) {
                 ProgressView("Opening your space…").frame(maxWidth: .infinity, maxHeight: .infinity).pageBackground()
             } else if store.journal.hasOnboarded && (billing.isEntitled || previewAccess) {
                 TabView(selection: $store.selectedTab) {
@@ -97,6 +135,11 @@ struct RootView: View {
             } else if store.journal.hasOnboarded { MembershipView(canClose: false) }
             else { SetupFlowView() }
         }
+        .safeAreaInset(edge: .top) {
+            if cloudSync.conflict != nil && !store.journal.hasOnboarded {
+                AccountBackupChoice().padding(.horizontal)
+            }
+        }
         .preferredColorScheme(colorScheme)
         .task(id: ObjectIdentifier(billing)) { await billing.start() }
         .task(id: store.journal.hasOnboarded) {
@@ -104,31 +147,17 @@ struct RootView: View {
                 _ = await attribution.capture(from: store.journal.setupProfile ?? store.setup)
             }
         }
-        .task(id: store.journal.protocolPeptides) {
-            if reminders.preferences.isEnabled {
-                _ = await reminders.sync(sources: store.journal.reminderSources,
-                                        batchExpiries: store.journal.batchExpiryReminderSources)
-            }
-        }
-        .task(id: auth.user?.id) {
-            await restoreCloudIfNeeded()
-        }
-        .onChange(of: store.journal) { _, _ in
-            if let id = auth.user?.id {
-                cloudSync.schedulePush(journal: store.journal, setup: store.setup, userID: id)
-            }
-        }
-        .onChange(of: store.setup) { _, _ in
-            if let id = auth.user?.id {
-                cloudSync.schedulePush(journal: store.journal, setup: store.setup, userID: id)
-            }
-        }
+        .task(id: ObjectIdentifier(cloudSync)) { await cloudSync.prepare() }
+        .onChange(of: store.journal) { _, _ in cloudSync.changed() }
+        .onChange(of: store.setup) { _, _ in cloudSync.changed() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 store.referenceDate = .now
                 Task {
+                    await cloudSync.prepare()
                     await billing.refresh()
                     await reminders.refresh()
+                    guard auth.journals == nil || auth.journals?.active === store else { return }
                     if reminders.preferences.isEnabled {
                         _ = await reminders.sync(sources: store.journal.reminderSources,
                                                 batchExpiries: store.journal.batchExpiryReminderSources)
@@ -175,19 +204,4 @@ struct RootView: View {
             } message: { Text(store.error ?? "") }
     }
 
-    /// Returning members (local setup not finished) restore from the cloud.
-    /// Once this device has finished onboarding, local answers win and we upload —
-    /// so pay/preview sign-in never wipes the protocol just created.
-    private func restoreCloudIfNeeded() async {
-        guard let id = auth.user?.id else { return }
-        if store.journal.hasOnboarded {
-            await cloudSync.push(journal: store.journal, setup: store.setup, userID: id)
-            return
-        }
-        if let remote = await cloudSync.pull(userID: id), remote.journal.hasOnboarded {
-            _ = store.updateJournal { $0 = remote.journal }
-            store.setup = remote.setup
-            store.showToast("Restored from your account")
-        }
-    }
 }

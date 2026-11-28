@@ -14,7 +14,11 @@ The reminder planner respects future start dates and keeps long-running interval
 - The Swift sources compiled and linked directly for the arm64 iOS Simulator in Debug and Release, using the optional-service fallback paths. The XCTest source type-checked against the simulator SDK. The project file passed `plutil -lint`.
 - Xcode UI tests were attempted twice. The host denied the SwiftPM manifest-cache write, and the CoreSimulator service was unavailable. The new end-to-end case records a dose from Today, checks its time, and opens that note-free entry from the calendar. Its runtime result is pending.
 
-**Paid release remains pending.** On a device with two accounts, the existing sync path can upload an onboarded local journal to the newly signed-in account. Account ownership and conflict handling need a fix before enabling production sync. Device checks still include sandbox purchase and restore, real notification delivery, and the walkthrough with configured services.
+**Account switching fixed, 28 November.** Each authenticated UID opens a separate local journal. The previous shared file stays available through the on-device journal choice. A new checkout may transfer the setup the person just submitted. Returning accounts open their own saved records. Firestore writes compare the server revision inside a transaction. A failed read leaves uploads paused, and competing changes prompt a choice before either copy is replaced.
+
+The account suite uses real journal files and a controlled in-memory cloud client. It exercises two existing accounts, a new buyer, sign-out and cold launch, interrupted reads and writes, offline edits, retries, and choosing either side of a conflict. A reminder regression also covers signing out during a pending schedule update. The full suite now passes 669 checks, including 32 account checks and 52 reminder checks. Debug and Release sources compile for arm64 iOS Simulator with optional services disabled. The host could not connect to CoreSimulator or write SwiftPM’s manifest cache for the dependency-linked build.
+
+**Before paid release**, run the same two-account walkthrough against a test Firebase project on an iPhone, then verify sandbox purchase and restore and real notification delivery.
 
 ## Peptide colours, 25 November 2026
 
