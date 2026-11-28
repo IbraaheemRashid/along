@@ -30,6 +30,18 @@ extension Journal {
 extension JournalStore {
     var reminderProfile: String { accountID == nil ? "device" : storageDirectory.lastPathComponent }
 
+    func slot(for reminder: ReminderDestination) -> DoseSlot? {
+        guard reminder.profile == reminderProfile, DayIdentity.isValid(reminder.dayKey), reminder.dayKey <= todayKey,
+              let peptide = peptide(reminder.peptideID) else { return nil }
+        let time = DoseTime(hour: reminder.minutes / 60, minute: reminder.minutes % 60)
+        if let log = journal.protocolLogs.first(where: {
+            $0.peptideID == peptide.id && $0.dayKey == reminder.dayKey && $0.scheduledTime == time
+        }) {
+            return DoseSlot(peptide: peptide, dayKey: log.dayKey, time: time, log: log)
+        }
+        return slots(on: reminder.dayKey).first { $0.peptide.id == peptide.id && $0.time == time }
+    }
+
     var reminderSources: [DoseReminderSource] {
         let day = todayKey
         var answers: [UUID: [String: Set<Int>]] = [:]

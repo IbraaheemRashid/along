@@ -18,6 +18,7 @@ jobs:
       - name: Select Xcode and boot an iPhone
         run: |
           sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+          echo "DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
           xcodebuild -version
           device=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(v["udid"] for k in sorted(d,reverse=True) if "SimRuntime.iOS-" in k for v in d[k] if "iPhone" in v["name"]))')
           echo "DEVICE=$device" >> "$GITHUB_ENV"
@@ -30,6 +31,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Check the journal, reminder planner, backup and billing policies
+        working-directory: plateful
+        run: bash scripts/check.sh
       - name: Start isolated account services
         working-directory: plateful
         run: |
@@ -41,6 +45,7 @@ jobs:
           cat "$RUNNER_TEMP/emulators.log"
           exit 1
       - uses: actions/cache/restore@v4
+        continue-on-error: true
         id: build-cache
         with:
           path: ${{ runner.temp }}/Along-build
@@ -50,6 +55,7 @@ jobs:
         run: |
           xcodebuild -quiet -project Along.xcodeproj -scheme Along -destination "id=$DEVICE" -derivedDataPath "$RUNNER_TEMP/Along-build" CODE_SIGNING_ALLOWED=NO build-for-testing
       - uses: actions/cache/save@v4
+        continue-on-error: true
         if: steps.build-cache.outputs.cache-hit != 'true'
         with:
           path: ${{ runner.temp }}/Along-build
@@ -60,6 +66,7 @@ jobs:
           xcodebuild -project Along.xcodeproj -scheme Along -destination "id=$DEVICE" \
             -parallel-testing-enabled NO -derivedDataPath "$RUNNER_TEMP/Along-build" -resultBundlePath "$RUNNER_TEMP/Along.xcresult" \
             -only-testing:AlongUITests/AlongUITests/testFullSetupStopsAtPaywallAndCanOpenExplicitDesignPreview \
+            -only-testing:AlongUITests/AlongUITests/testNextDoseOpensItsPlannedDay \
             -only-testing:AlongUITests/AlongUITests/testOneTapDoseShowsActualTimeAndAppearsInCalendarWithoutANote \
             -only-testing:AlongUITests/AlongUITests/testAccountCheckoutBackupAndDeletion \
             -only-testing:AlongUITests/AlongUITests/testLocalStoreKitCheckoutAndRelaunch \
@@ -69,6 +76,14 @@ jobs:
             -only-testing:AlongUITests/AlongUITests/testTodayLogsDosesAndDoseSheetSavesDetails \
             -only-testing:AlongUITests/AlongUITests/testPeptideColourPersistsAfterEditing \
             CODE_SIGNING_ALLOWED=NO test-without-building
+      - name: Check that the walkthrough ran without skips
+        run: |
+          xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/Along.xcresult" > "$RUNNER_TEMP/walkthrough-summary.json"
+          jq -e '.failedTests == 0 and .skippedTests == 0 and .passedTests > 0' "$RUNNER_TEMP/walkthrough-summary.json"
+      - name: Compile the Release app with linked services
+        working-directory: plateful/apps/ios
+        run: |
+          xcodebuild -quiet -project Along.xcodeproj -scheme Along -configuration Release -destination "id=$DEVICE" -derivedDataPath "$RUNNER_TEMP/Along-build" CODE_SIGNING_ALLOWED=NO build
       - name: Collect walkthrough screenshots and results
         if: always()
         run: |
@@ -78,6 +93,19 @@ jobs:
           fi
           if test -d "$RUNNER_TEMP/Along.xcresult"; then
             xcrun xcresulttool export attachments --path "$RUNNER_TEMP/Along.xcresult" --output-path "$RUNNER_TEMP/along-screens"
+            python3 - <<'PYTHON'
+          import json, os, pathlib, shutil
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          exported = root / "along-screens"
+          gallery = root / "Walkthrough"
+          gallery.mkdir(exist_ok=True)
+          for test in json.loads((exported / "manifest.json").read_text()):
+              for item in test["attachments"]:
+                  name = item["suggestedHumanReadableName"].rsplit("_", 2)[0]
+                  source = exported / item["exportedFileName"]
+                  if source.suffix == ".png" and name.startswith(("setup-", "today-", "progress-", "next-", "site-", "dose-", "calendar-", "local-storekit-")):
+                      shutil.copyfile(source, gallery / (name + ".png"))
+          PYTHON
             ditto -c -k --keepParent "$RUNNER_TEMP/Along.xcresult" "$RUNNER_TEMP/Along-results.zip"
           fi
       - uses: actions/upload-artifact@v4
@@ -85,6 +113,12 @@ jobs:
         with:
           name: iPhone-walkthrough
           path: |
-            ${{ runner.temp }}/along-screens
-            ${{ runner.temp }}/Along-results.zip
+            ${{ runner.temp }}/Walkthrough
             ${{ runner.temp }}/Along-iPhone-Simulator.zip
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: XCTest-results
+          path: |
+            ${{ runner.temp }}/Along-results.zip
+            ${{ runner.temp }}/walkthrough-summary.json

@@ -4,7 +4,7 @@ A peptide protocol tracker for iOS, built in SwiftUI. Along supports people who 
 
 ## Run it
 
-Open [`plateful/apps/ios/Along.xcodeproj`](plateful/apps/ios/Along.xcodeproj) in Xcode, select the **Along** scheme and an iPhone Simulator, then Run. In a Debug build, **Open app preview · no payment** on the paywall explores the app without a subscription.
+Open [`plateful/apps/ios/Along.xcodeproj`](plateful/apps/ios/Along.xcodeproj) in Xcode, select the **Along** scheme and an iPhone Simulator, then Run. In a Debug build, **Open design preview** on the paywall explores the app without a subscription.
 
 - [Full setup and development guide](plateful/README.md)
 - [Build plan](plateful/docs/peptide-tracker-plan.md)

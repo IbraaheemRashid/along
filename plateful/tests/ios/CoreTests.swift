@@ -500,11 +500,17 @@ import Foundation
             func planned() -> [ReminderSchedule] {
                 ReminderPlanner.schedules(for: preferences, sources: local.reminderSources, now: early, calendar: calendar)
             }
+            let requestID = planned()[0].id
+            let destination = ReminderDestination(identifier: requestID, deliveredAt: early, calendar: calendar)!
+            expect(local.slot(for: destination)?.id == slot.id, "Tapping the reminder resolves the displayed dose")
+            let otherJournal = JournalStore(directory: local.storageDirectory, accountID: "other", arguments: [])
+            expect(otherJournal.savePeptide(item) && otherJournal.slot(for: destination) == nil, "Even a matching restored peptide UUID cannot open another account’s notification")
             expect(planned().first?.repeats == true, "A newly scheduled peptide receives its daily reminder")
             for status in [DoseLog.Status.taken, .skipped] {
                 expect(local.logDose(slot, status: status, at: early), "Save an early answer")
                 expect(planned().first?.dateComponents.day == 21, "The next reminder after an early answer is tomorrow")
                 let answer = local.slots(on: day)[0].log!
+                expect(local.slot(for: destination)?.log?.id == answer.id, "An already delivered reminder reopens the saved answer")
                 expect(local.removeDose(answer.id) && planned().first?.repeats == true, "Undo re-arms today's original reminder")
             }
             expect(local.saveDose(DoseLog(peptideID: item.id, dayKey: day, takenAt: early)) && planned().first?.repeats == true, "An extra log leaves the scheduled reminder active")

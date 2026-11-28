@@ -49,6 +49,7 @@ struct ProgressScreen: View {
         }
         .scrollIndicators(.hidden)
         .appBackground()
+        .accessibilityHidden(selectedDay != nil || showWeight)
         .sheet(isPresented: $showWeight) { WeightLogSheet() }
         .sheet(item: $selectedDay) { selection in
             let entries = historyLogs.filter { $0.dayKey == selection.id }
@@ -58,7 +59,7 @@ struct ProgressScreen: View {
                         if entries.isEmpty {
                             Text("No doses recorded for this day.").foregroundStyle(SetupTheme.muted)
                         }
-                        ForEach(entries) { log in historyRow(log) }
+                        ForEach(entries) { log in DoseHistoryRow(log: log, peptide: store.peptide(log.peptideID), inCalendar: true) }
                     }.padding(20)
                 }
                 .navigationTitle(DayIdentity.formatted(key: selection.id, rawDate: .now, style: .dateTime.weekday(.abbreviated).day().month(.abbreviated).year()))
@@ -423,6 +424,7 @@ private struct FilterChip: View {
 private struct DoseHistoryRow: View {
     var log: DoseLog
     var peptide: TrackedPeptide?
+    var inCalendar = false
     @State private var editor: DoseSheet.Mode?
 
     var body: some View {
@@ -432,7 +434,7 @@ private struct DoseHistoryRow: View {
         } label: { content }
         .buttonStyle(.plain)
         .accessibilityHint("Edit this dose record")
-        .accessibilityIdentifier("progress.entry.\(log.id)")
+        .accessibilityIdentifier((inCalendar ? "progress.day-entry." : "progress.entry.") + log.id.uuidString)
         .sheet(item: $editor) { DoseSheet(mode: $0) }
     }
 

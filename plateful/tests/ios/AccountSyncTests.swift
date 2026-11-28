@@ -196,6 +196,10 @@ enum AccountSyncTests {
             try await reopened.eraseAccount("B", prepareIdentity: {}, deleteIdentity: { identitiesDeleted += 1 })
             preconditionFailure("Another UID cannot authorize this deletion")
         } catch {}
+        let otherPhone = AccountJournals(device: JournalStore(directory: root.appendingPathComponent("other-phone"), arguments: []), backend: backend)
+        otherPhone.select("C")
+        await otherPhone.sync.prepare()
+        otherPhone.select(nil)
         let removedDirectory = reopened.active.storageDirectory
         do {
             try await reopened.eraseAccount("C", prepareIdentity: {}, deleteIdentity: { throw CocoaError(.fileWriteUnknown) })
@@ -205,6 +209,10 @@ enum AccountSyncTests {
         await reopened.sync.flush()
         expect(backend.records["C"] == nil, "A failed identity removal cannot republish the erased journal")
         try await reopened.eraseAccount("C", prepareIdentity: {}, deleteIdentity: { identitiesDeleted += 1 })
+        otherPhone.select("C")
+        await otherPhone.sync.prepare()
+        await otherPhone.sync.flush()
+        expect(backend.records["C"] == nil && otherPhone.sync.message != nil, "A second device with an earlier checkpoint cannot recreate a deleted account backup")
         let remaining = try FileManager.default.contentsOfDirectory(atPath: removedDirectory.path)
         expect(remaining.isEmpty && backend.records["C"] == nil && identitiesDeleted == 1, "Retry removes the account backup, local files and identity")
         expect(backend.records["B"]?.revision == unrelated && checkoutDevice.journal.name == journalName && reopened.active === checkoutDevice, "Deleting one account preserves other journals")

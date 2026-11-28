@@ -82,8 +82,12 @@ private enum BackupError: Error { case unavailable, invalid, changed }
             let local = AccountBackup(journal: store.journal, setup: store.setup)
             revision = remote?.revision
             message = nil
+            let checkpointURL = store.storageDirectory.appendingPathComponent("cloud-checkpoint.json")
+            if remote == nil && FileManager.default.fileExists(atPath: checkpointURL.path) {
+                message = "Your previously synced backup was removed. Your journal is still on this iPhone."
+                return
+            }
             if let remote {
-                let checkpointURL = store.storageDirectory.appendingPathComponent("cloud-checkpoint.json")
                 let checkpoint = (try? Data(contentsOf: checkpointURL)).flatMap { try? JSONDecoder().decode(Checkpoint.self, from: $0) }
                 let matchesCheckpoint = try checkpoint.map { try store.syncFileHashes() == $0.files } ?? false
                 if local == remote.value {
@@ -233,6 +237,11 @@ struct FirebaseAccountBackup: AccountBackupClient {
     func write(_ value: AccountBackup, userID: String, replacing revision: String?) async throws -> String {
         #if canImport(FirebaseFirestore) && canImport(FirebaseAuth)
         let ref = try reference(userID)
+        if revision == nil {
+            guard let user = Auth.auth().currentUser, user.uid == userID else { throw BackupError.unavailable }
+            _ = try await user.getIDToken(forcingRefresh: true)
+            guard Auth.auth().currentUser?.uid == userID else { throw BackupError.unavailable }
+        }
         let next = UUID().uuidString
         let journal = try JSONEncoder().encode(value.journal).base64EncodedString()
         let setup = try JSONEncoder().encode(value.setup).base64EncodedString()

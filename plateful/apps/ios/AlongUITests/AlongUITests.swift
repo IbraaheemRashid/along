@@ -605,9 +605,9 @@ final class AlongUITests: XCTestCase {
         let passwordField = app.secureTextFields["setup.account.password"]
         reveal(passwordField)
         passwordField.tap()
-        passwordField.typeText(password)
-        if app.keyboards.buttons["Go"].exists { app.keyboards.buttons["Go"].tap() } else { tap("setup.continue") }
+        passwordField.typeText(password + "\n")
         let action = app.buttons["setup.subscribe"]
+        XCTAssertTrue(action.waitForExistence(timeout: 8))
         let loaded = expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: action)
         await fulfillment(of: [loaded], timeout: 30)
         tap("setup.subscribe")
@@ -896,6 +896,18 @@ final class AlongUITests: XCTestCase {
         }
     }
 
+    func testNextDoseOpensItsPlannedDay() {
+        launchSandbox(arguments: ["--setup-complete"])
+        tap("today.dose.BPC-157.toggle")
+        tap("today.dose.Tirzepatide.toggle")
+        tap("today.next")
+        let summary = element("today.summary")
+        XCTAssertTrue(summary.label.contains("Tomorrow") && summary.label.contains("planned"), summary.label)
+        XCTAssertFalse(app.buttons["today.dose.BPC-157.toggle"].exists)
+        XCTAssertFalse(app.buttons["today.log-extra"].exists)
+        capture("next-planned-day")
+    }
+
     func testOneTapDoseShowsActualTimeAndAppearsInCalendarWithoutANote() {
         launchSandbox(arguments: ["--setup-complete"])
         let before = Date.now
@@ -908,7 +920,7 @@ final class AlongUITests: XCTestCase {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd"
         tap("progress.day.\(formatter.string(from: after))")
-        let entry = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "progress.entry.", "BPC-157")).firstMatch
+        let entry = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "progress.day-entry.", "BPC-157")).firstMatch
         XCTAssertTrue(entry.waitForExistence(timeout: 5))
         XCTAssertTrue(entry.label.contains("Taken"))
         entry.tap()

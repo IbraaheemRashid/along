@@ -160,10 +160,7 @@ struct RootView: View {
                 .onChange(of: ReminderInbox.shared.pending, initial: true) { _, destination in
                     guard let destination else { return }
                     ReminderInbox.shared.pending = nil
-                    guard destination.profile == store.reminderProfile, destination.dayKey <= store.todayKey,
-                          let slot = store.slots(on: destination.dayKey).first(where: {
-                              $0.peptide.id == destination.peptideID && $0.time?.minutes == destination.minutes
-                          }) else { return }
+                    guard let slot = store.slot(for: destination) else { return }
                     store.selectedTab = 0
                     reminderSheet = .slot(slot)
                 }

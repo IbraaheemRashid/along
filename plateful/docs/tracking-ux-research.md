@@ -25,6 +25,12 @@ I reviewed UK App Store listings, release notes, individual customer reviews, Ap
 4. **Explain what a percentage counts.** Progress explains when a scheduled dose enters its 7- and 30-day totals. Today counts answered slots, showing the taken and skipped counts separately. Catalogue reference charts now sit behind a disclosure in the editor, away from a person’s actual progress.
 5. **Make reminders honour the same schedule.** A future start date delays notifications. An interval continues to use its original start day even years later. Editing the protocol refreshes reminder planning while the app is open.
 
+## Walking through the revised tracker
+
+Apple Health gives scheduled and recorded medications separate places on the same day. GoodRx puts the two answers directly on the reminder. Apple’s Design Award profile of Gentler Streak highlights a summary that puts activity in the context of the person’s own history. For Along, that makes a practical test possible. After a user records an early dose, the reminder, Today row and calendar should all agree. If they change next week’s schedule, the previous week should still read the same. [Apple Health](https://support.apple.com/guide/iphone/track-your-medications-iph811670c81/ios) · [GoodRx screen on Mobbin](https://mobbin.com/screens/95f9bc43-c218-4b83-b008-5a451404b138) · [2024 Apple Design Awards](https://developer.apple.com/design/awards/2024/)
+
+The next-dose card opens the scheduled entry or its future day. A taken or skipped entry silences its outstanding reminder. A person can mute one peptide while continuing to log it. The calendar opens the saved record for correction, and schedule edits carry an effective date. These behaviors can be verified with a test journal. Whether people return and choose to pay still needs observation with prospective users.
+
 ## What to watch in the next usability session
 
 Give each participant a fictional protocol with a weekly day different from the signup day. Ask them to predict the next date before continuing, log a dose at a different time from its schedule, then find yesterday’s entry without writing a note. Also show an off day and ask what Along expects them to do. Record where they hesitate, take a wrong turn or need help. Successful unaided retrieval and correct interpretation of the next date are better tests of this change than how many screens they visited.
