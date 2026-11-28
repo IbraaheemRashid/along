@@ -72,6 +72,7 @@ struct DoseReminderSource: Equatable {
     var amountText: String?
     var cadence: Cadence
     var times: [Time]
+    var answeredMinutes: [String: Set<Int>] = [:]
     var startKey: String? = nil
 }
 
@@ -104,6 +105,38 @@ struct ReminderSchedule: Equatable, Identifiable {
         components.hour = hour
         components.minute = minute
         self.dateComponents = components
+    }
+}
+
+/// Only identifiers issued for an owned journal may open a dose.
+struct ReminderDestination: Equatable {
+    let profile: String
+    let peptideID: UUID
+    let minutes: Int
+    let dayKey: String
+
+    init?(identifier: String, deliveredAt: Date, calendar: Calendar = .current) {
+        guard identifier.hasPrefix(ReminderPlanner.idPrefix) else { return nil }
+        let parts = identifier.dropFirst(ReminderPlanner.idPrefix.count).split(separator: ".")
+        guard parts.count == 3 else { return nil }
+        let owner = parts[0].split(separator: "_")
+        guard owner.count == 2, let id = UUID(uuidString: String(owner[1])),
+              let minutes = Int(parts[2]), (0..<1440).contains(minutes) else { return nil }
+        self.profile = String(owner[0])
+        self.peptideID = id
+        self.minutes = minutes
+        let components: DateComponents
+        if parts[1].first == "i" {
+            let fields = parts[1].dropFirst().split(separator: "-")
+            guard fields.count == 3, let y = Int(fields[0]), let m = Int(fields[1]), let d = Int(fields[2]),
+                  (1900...9999).contains(y), (1...12).contains(m), (1...31).contains(d) else { return nil }
+            components = DateComponents(year: y, month: m, day: d)
+        } else {
+            guard parts[1] == "daily" || (1...7).contains(where: { parts[1] == "w\($0)" }) else { return nil }
+            components = calendar.dateComponents([.year, .month, .day], from: deliveredAt)
+        }
+        guard let year = components.year, let month = components.month, let day = components.day else { return nil }
+        dayKey = String(format: "%04d-%02d-%02d", year, month, day)
     }
 }
 
@@ -143,10 +176,21 @@ enum ReminderPlanner {
         var result: [ReminderSchedule] = []
         for source in sources {
             let copy = Self.copy(for: source)
-            if let key = source.startKey, let start = date(for: key, calendar: calendar),
-               start > calendar.startOfDay(for: now) {
-                result += datedSchedules(for: source, from: start, now: now, calendar: calendar)
-                if result.count >= maximumSchedules { break }
+            let today = calendar.startOfDay(for: now)
+            let start = source.startKey.flatMap { date(for: $0, calendar: calendar) }
+            let futureAnswer = source.answeredMinutes.contains { key, minutes in
+                guard let day = date(for: key, calendar: calendar) else { return false }
+                return minutes.contains { value in
+                    calendar.date(bySettingHour: value / 60, minute: value % 60, second: 0, of: day).map { $0 > now } ?? false
+                }
+            }
+            if start.map({ $0 > today }) == true || futureAnswer {
+                let anchor: Date
+                if case .interval(_, let key) = source.cadence {
+                    guard let intervalStart = date(for: key, calendar: calendar) else { continue }
+                    anchor = intervalStart
+                } else { anchor = start ?? today }
+                result += datedSchedules(for: source, from: anchor, now: now, calendar: calendar)
                 continue
             }
             switch source.cadence {
@@ -168,12 +212,21 @@ enum ReminderPlanner {
                 guard (2...30).contains(days), let start = date(for: startKey, calendar: calendar) else { continue }
                 result += datedSchedules(for: source, from: start, now: now, calendar: calendar)
             }
-            if result.count >= maximumSchedules { break }
         }
-        if result.count < maximumSchedules {
-            result.append(contentsOf: batchSchedules(batchExpiries, now: now, calendar: calendar, room: maximumSchedules - result.count))
+        result += batchSchedules(batchExpiries, now: now, calendar: calendar, room: .max)
+        if result.count > maximumSchedules {
+            var ordered: [(schedule: ReminderSchedule, date: Date)] = result.map { schedule in
+                let next = schedule.repeats
+                    ? calendar.nextDate(after: now, matching: schedule.dateComponents, matchingPolicy: .nextTime)
+                    : calendar.date(from: schedule.dateComponents)
+                return (schedule, next ?? .distantFuture)
+            }
+            ordered.sort { lhs, rhs in
+                if lhs.date == rhs.date { return lhs.schedule.id < rhs.schedule.id }
+                return lhs.date < rhs.date
+            }
+            return ordered.prefix(maximumSchedules).map { $0.schedule }
         }
-        if result.count > maximumSchedules { return Array(result.prefix(maximumSchedules)) }
         return result
     }
 
@@ -226,6 +279,8 @@ enum ReminderPlanner {
                 let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: moment)
                 guard let year = parts.year, let month = parts.month, let date = parts.day,
                       let hour = parts.hour, let minute = parts.minute else { continue }
+                let key = String(format: "%04d-%02d-%02d", year, month, date)
+                guard source.answeredMinutes[key]?.contains(time.minutes) != true else { continue }
                 result.append(ReminderSchedule(id: "\(idPrefix)\(source.id).i\(year)-\(month)-\(date).\(time.minutes)",
                                                title: copy.title, body: copy.body, year: year, month: month,
                                                day: date, hour: hour, minute: minute, repeats: false))

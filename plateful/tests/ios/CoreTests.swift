@@ -485,6 +485,60 @@ import Foundation
         expect(protocolStore.journal.protocolLogs.count == 2, "Pausing keeps dose history")
         expect(protocolStore.removeDose(duplicate.id) && protocolStore.journal.protocolLogs.count == 1, "Doses can be deleted")
         expect(protocolStore.removePeptide(firstPeptide.id) && protocolStore.peptide(firstPeptide.id) == nil && protocolStore.journal.protocolLogs.isEmpty, "Removing a peptide removes its history")
+        do {
+            let local = JournalStore(directory: testRoot.appendingPathComponent("dose-reminder-walkthrough"), arguments: [], clearCredentials: {})
+            let early = calendar.date(from: DateComponents(year: 2026, month: 10, day: 20, hour: 7, minute: 45))!
+            let day = DayIdentity.key(for: early)!
+            local.referenceDate = early
+            let time = DoseTime(hour: 8, minute: 0)
+            var item = TrackedPeptide(name: "Sample schedule", schedule: .daily(at: time), startKey: day)
+            item.batchExpiryKey = "2026-11-20"
+            var preferences = ReminderPreferences()
+            preferences.enabled = true
+            expect(local.savePeptide(item), "Save the scheduled peptide used in the notification walkthrough")
+            let slot = local.slots(on: day)[0]
+            func planned() -> [ReminderSchedule] {
+                ReminderPlanner.schedules(for: preferences, sources: local.reminderSources, now: early, calendar: calendar)
+            }
+            let requestID = planned()[0].id
+            let destination = ReminderDestination(identifier: requestID, deliveredAt: early, calendar: calendar)!
+            expect(local.slot(for: destination)?.id == slot.id, "Tapping the reminder resolves the displayed dose")
+            let otherJournal = JournalStore(directory: local.storageDirectory, accountID: "other", arguments: [])
+            expect(otherJournal.savePeptide(item) && otherJournal.slot(for: destination) == nil, "Even a matching restored peptide UUID cannot open another account’s notification")
+            expect(planned().first?.repeats == true, "A newly scheduled peptide receives its daily reminder")
+            for status in [DoseLog.Status.taken, .skipped] {
+                expect(local.logDose(slot, status: status, at: early), "Save an early answer")
+                expect(planned().first?.dateComponents.day == 21, "The next reminder after an early answer is tomorrow")
+                let answer = local.slots(on: day)[0].log!
+                expect(local.slot(for: destination)?.log?.id == answer.id, "An already delivered reminder reopens the saved answer")
+                expect(local.removeDose(answer.id) && planned().first?.repeats == true, "Undo re-arms today's original reminder")
+            }
+            expect(local.saveDose(DoseLog(peptideID: item.id, dayKey: day, takenAt: early)) && planned().first?.repeats == true, "An extra log leaves the scheduled reminder active")
+            item.doseRemindersEnabled = false
+            expect(local.savePeptide(item) && planned().isEmpty && local.slots(on: day).contains(where: { !$0.isExtra }), "Silencing one peptide preserves its tracking schedule")
+            expect(local.journal.batchExpiryReminderSources.count == 1, "An independent batch reminder is kept")
+            let restored = try JournalBackup.decode(JournalBackup.make(from: local.journal).encoded()).restoring(into: Journal())
+            expect(restored.protocolPeptides.first?.doseRemindersEnabled == false, "A restored backup preserves the person's reminder choice")
+        }
+
+        let changes = JournalStore(directory: testRoot.appendingPathComponent("protocol-changes"), arguments: [], clearCredentials: {})
+        changes.referenceDate = ISO8601DateFormatter().date(from: "2026-11-20T12:00:00Z")!
+        let initial = TrackedPeptide(name: "Example", schedule: .on([2], at: morning), startKey: "2026-10-01")
+        expect(changes.savePeptide(initial), "Record the original Monday routine")
+        let logAt = ISO8601DateFormatter().date(from: "2026-11-02T10:00:00Z")!
+        let beforeChange = changes.slots(on: "2026-11-02")[0]
+        expect(changes.logDose(beforeChange, at: logAt), "The original Monday is logged")
+        let originalAdherence = ProtocolSchedule.adherence(from: "2026-11-01", to: "2026-11-08", peptides: changes.journal.protocolPeptides, logs: changes.journal.protocolLogs, now: changes.referenceDate)
+        var thursdays = initial
+        thursdays.schedule = .on([5], at: evening)
+        expect(changes.savePeptide(thursdays, effectiveFrom: "2026-11-09"), "Save the effective date of the revised schedule")
+        expect(changes.slots(on: "2026-11-02").first?.isTaken == true && changes.slots(on: "2026-11-05").isEmpty, "Old Monday remains scheduled and the previous Thursday stays empty")
+        expect(changes.slots(on: "2026-11-09").isEmpty && changes.slots(on: "2026-11-12").first?.time == evening, "The new Thursday plan starts on its effective date")
+        let unchangedAdherence = ProtocolSchedule.adherence(from: "2026-11-01", to: "2026-11-08", peptides: changes.journal.protocolPeptides, logs: changes.journal.protocolLogs, now: changes.referenceDate)
+        expect(originalAdherence == unchangedAdherence && originalAdherence.taken == 1, "Changing weekdays preserves historic adherence")
+        expect(changes.setPaused(initial.id, true) && changes.slots(on: "2026-11-12").count == 1 && changes.slots(on: "2026-11-26").isEmpty, "Pausing today preserves prior Thursdays")
+        let revisedBackup = try JournalBackup.decode(JournalBackup.make(from: changes.journal).encoded()).restoring(into: Journal())
+        expect(revisedBackup.protocolPeptides == changes.journal.protocolPeptides, "Schedule revisions survive backup and restore")
         let reloaded = JournalStore(directory: setupRoot, arguments: [], clearCredentials: {})
         expect(reloaded.journal.protocolPeptides == protocolStore.journal.protocolPeptides, "Protocol changes persist across launches")
 

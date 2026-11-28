@@ -18,6 +18,7 @@ struct AccountBackupRecord {
 
 @MainActor protocol AccountBackupClient {
     func read(userID: String) async throws -> AccountBackupRecord?
+    func remove(userID: String) async throws
     func write(_ value: AccountBackup, userID: String, replacing revision: String?) async throws -> String
 }
 
@@ -38,6 +39,7 @@ private enum BackupError: Error { case unavailable, invalid, changed }
     private var opening: Task<Void, Never>?
     private var debounce: Task<Void, Never>?
     private var writing = false
+    private var writeWaiters: [CheckedContinuation<Void, Never>] = []
 
     private struct Checkpoint: Codable {
         var revision: String
@@ -53,6 +55,12 @@ private enum BackupError: Error { case unavailable, invalid, changed }
         closed = true
         debounce?.cancel()
         opening?.cancel()
+    }
+
+    func closeAndWait() async {
+        close()
+        if let opening { await opening.value }
+        if writing { await withCheckedContinuation { writeWaiters.append($0) } }
     }
 
     func prepare() async {
@@ -74,8 +82,12 @@ private enum BackupError: Error { case unavailable, invalid, changed }
             let local = AccountBackup(journal: store.journal, setup: store.setup)
             revision = remote?.revision
             message = nil
+            let checkpointURL = store.storageDirectory.appendingPathComponent("cloud-checkpoint.json")
+            if remote == nil && FileManager.default.fileExists(atPath: checkpointURL.path) {
+                message = "Your previously synced backup was removed. Your journal is still on this iPhone."
+                return
+            }
             if let remote {
-                let checkpointURL = store.storageDirectory.appendingPathComponent("cloud-checkpoint.json")
                 let checkpoint = (try? Data(contentsOf: checkpointURL)).flatMap { try? JSONDecoder().decode(Checkpoint.self, from: $0) }
                 let matchesCheckpoint = try checkpoint.map { try store.syncFileHashes() == $0.files } ?? false
                 if local == remote.value {
@@ -131,7 +143,12 @@ private enum BackupError: Error { case unavailable, invalid, changed }
         guard !closed, ready, !writing, let store, let id = store.accountID else { return }
         writing = true
         isSyncing = true
-        defer { writing = false; isSyncing = false }
+        defer {
+            writing = false
+            isSyncing = false
+            writeWaiters.forEach { $0.resume() }
+            writeWaiters.removeAll()
+        }
         // An edit made during a network write is sent in order against the new revision.
         while !closed && store.canSyncJournal && store.journal.hasOnboarded &&
               !store.journal.hasSampleData && store.journal.isDesignPreview != true {
@@ -168,7 +185,7 @@ struct FirebaseAccountBackup: AccountBackupClient {
     nonisolated init() {}
     #if canImport(FirebaseFirestore) && canImport(FirebaseAuth)
     @MainActor private func reference(_ uid: String) throws -> DocumentReference {
-        guard Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil,
+        guard FirebaseBootstrap.usesAccountEmulators || Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil,
               Auth.auth().currentUser?.uid == uid else { throw BackupError.unavailable }
         return Firestore.firestore().collection("users").document(uid).collection("app").document("state")
     }
@@ -182,6 +199,22 @@ struct FirebaseAccountBackup: AccountBackupClient {
         return SHA256.hash(data: Data((journal + "." + setup).utf8)).map { String(format: "%02x", $0) }.joined()
     }
     #endif
+
+    func remove(userID: String) async throws {
+        #if canImport(FirebaseFirestore) && canImport(FirebaseAuth)
+        let ref = try reference(userID)
+        // Transactions fail offline instead of queuing a delete for a later login.
+        _ = try await Firestore.firestore().runTransaction { transaction, errorPointer in
+            do {
+                _ = try transaction.getDocument(ref)
+                transaction.deleteDocument(ref)
+            } catch { errorPointer?.pointee = error as NSError }
+            return nil
+        }
+        #else
+        throw BackupError.unavailable
+        #endif
+    }
 
     func read(userID: String) async throws -> AccountBackupRecord? {
         #if canImport(FirebaseFirestore) && canImport(FirebaseAuth)
@@ -204,6 +237,11 @@ struct FirebaseAccountBackup: AccountBackupClient {
     func write(_ value: AccountBackup, userID: String, replacing revision: String?) async throws -> String {
         #if canImport(FirebaseFirestore) && canImport(FirebaseAuth)
         let ref = try reference(userID)
+        if revision == nil {
+            guard let user = Auth.auth().currentUser, user.uid == userID else { throw BackupError.unavailable }
+            _ = try await user.getIDToken(forcingRefresh: true)
+            guard Auth.auth().currentUser?.uid == userID else { throw BackupError.unavailable }
+        }
         let next = UUID().uuidString
         let journal = try JSONEncoder().encode(value.journal).base64EncodedString()
         let setup = try JSONEncoder().encode(value.setup).base64EncodedString()

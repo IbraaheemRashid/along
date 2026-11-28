@@ -150,6 +150,7 @@ struct SetupFlowView: View {
     }
 
     private var accountAction: FooterAction {
+        if !auth.isConfigured { return FooterAction(title: "Continue on this iPhone", action: advance) }
         if auth.isSignedIn {
             return FooterAction(title: "Continue") {
                 commitAccountEmail()
@@ -181,7 +182,7 @@ struct SetupFlowView: View {
                         .font(.subheadline).frame(maxWidth: .infinity, minHeight: 44)
                 }.accessibilityIdentifier("setup.sign-in")
             }
-            if hasLocalRecords {
+            if store.hasPersonalRecords {
                 SetupTextButton(title: "Your data & reminders", identifier: "setup.local-data") { showLocalData = true }
             }
         case .compounds:
@@ -199,14 +200,10 @@ struct SetupFlowView: View {
         }
     }
 
-    private var hasLocalRecords: Bool {
-        !store.journal.checkIns.isEmpty || !store.journal.weights.isEmpty || !store.journal.milestones.isEmpty
-    }
-
     // MARK: Navigation
 
     private func advance() {
-        guard draft.canContinue(at: step) else { return }
+        guard draft.canContinue(at: step) || (step == .account && (!auth.isConfigured || auth.isSignedIn)) else { return }
         fieldFocused = false
         var next = store.setup
         if step == .weight { next.prepareTarget() }
@@ -279,7 +276,14 @@ struct SetupFlowView: View {
                 forward = false
                 store.setup.step = .frequency
             }
-        case .account: accountScreen
+        case .account:
+            if auth.isConfigured { accountScreen }
+            else {
+                SetupQuestionPage(title: "Keep your journal on this iPhone", subtitle: "This build saves your protocol on this device. You can export and restore a backup from Settings.") {
+                    Label("Saved on this iPhone", systemImage: "iphone")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
         case .paywall: paywallScreen
         }
     }
@@ -287,15 +291,18 @@ struct SetupFlowView: View {
     private var accountScreen: some View {
         SetupScrollPage {
             SetupHeading(
-                title: "Save your protocol",
-                subtitle: "Add your email now. We’ll sign you in automatically when you subscribe so your plan syncs across devices."
+                title: billing.isEntitled ? "Connect your journal" : "Save your protocol",
+                subtitle: billing.isEntitled ? "Your membership is active. Confirm your account to open your journal." : "Use your account to keep a backup and open your journal on another device."
             )
             VStack(spacing: 12) {
                 AlongFormField(text: $accountEmail, kind: .email, placeholder: "Email", identifier: "setup.account.email") {
                     fieldFocused = false
                 }
                 if !auth.isSignedIn {
-                    AlongFormField(text: $accountPassword, kind: .password, placeholder: "Password (min 6 characters)", identifier: "setup.account.password")
+                    AlongFormField(text: $accountPassword, kind: .password, placeholder: "Password (min 6 characters)", identifier: "setup.account.password") {
+                        let action = accountAction
+                        if action.enabled { action.action() }
+                    }
                 }
                 if auth.isSignedIn {
                     Label(auth.user?.email ?? "Signed in", systemImage: "checkmark.circle.fill")
@@ -694,7 +701,6 @@ struct SetupFlowView: View {
                 .padding(.horizontal, 16).frame(minHeight: 60)
                 .background(SetupTheme.tile, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .accessibilityIdentifier("setup.referral")
-                .task { if draft.referralCode.isEmpty { fieldFocused = true } }
             if !draft.canContinue(at: .referral) {
                 Text("Use letters, numbers, - or _ only.").font(.footnote).foregroundStyle(SetupTheme.highlight).frame(maxWidth: .infinity)
             }
@@ -862,7 +868,11 @@ struct SetupFlowView: View {
         var destination = source
         var userID = auth.user?.id
         if userID == nil && auth.isConfigured {
-            userID = await auth.ensureSignedInAfterPurchase(email: submitted.accountEmail)
+            guard let verified = await auth.ensureSignedInAfterPurchase(email: submitted.accountEmail) else {
+                if auth.journals?.active === source { source.setup.step = .account }
+                return
+            }
+            userID = verified
         }
         if let profiles = auth.journals, let userID {
             guard let selected = await profiles.continueSetup(submitted, from: source, userID: userID) else { return }
@@ -898,7 +908,7 @@ struct SetupFlowView: View {
                 VStack(spacing: 0) { paywallLinks }
             }.font(.caption).foregroundStyle(SetupTheme.muted).tint(SetupTheme.muted).frame(minHeight: 32)
             #if DEBUG
-            Button("Continue without paying · temporary") {
+            Button("Open design preview") {
                 Task { await completeSkippedPaywall() }
             }
             .font(.caption.weight(.semibold))

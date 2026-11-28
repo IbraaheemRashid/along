@@ -73,6 +73,21 @@ import Foundation
         expect(oneshots.count == ReminderPlanner.intervalHorizon && oneshots.allSatisfy { !$0.repeats }, "Interval peptides pre-schedule upcoming one-shot reminders")
         expect(oneshots.first?.dateComponents.hour == 9 && oneshots.first?.dateComponents.minute == 30, "Interval reminders keep the chosen clock time")
 
+        var answered = daily
+        answered.answeredMinutes = ["2026-01-02": [1200]]
+        let afterEarlyLog = ReminderPlanner.schedules(for: preferences, sources: [answered], now: now, calendar: calendar)
+        expect(afterEarlyLog.first?.dateComponents.day == 3 && afterEarlyLog.first?.dateComponents.hour == 8, "An early answer suppresses only its occurrence")
+        expect(afterEarlyLog.contains { $0.dateComponents.day == 3 && $0.dateComponents.hour == 20 }, "The same time tomorrow remains scheduled")
+        answered.answeredMinutes = [:]
+        expect(ReminderPlanner.schedules(for: preferences, sources: [answered], now: now, calendar: calendar).allSatisfy(\.repeats), "Undo restores the original recurring reminders")
+
+        let id = UUID()
+        let prefix = ReminderPlanner.idPrefix + "device_" + id.uuidString
+        let routed = ReminderDestination(identifier: prefix + ".i2026-1-1.480", deliveredAt: now, calendar: calendar)
+        expect(routed?.dayKey == "2026-01-01" && routed?.minutes == 480 && routed?.peptideID == id && routed?.profile == "device", "A dated tap carries its intended day and journal")
+        expect(ReminderDestination(identifier: prefix + ".daily.480", deliveredAt: now, calendar: calendar)?.dayKey == "2026-01-02", "A recurring tap uses the delivery day")
+        expect(ReminderDestination(identifier: ReminderPlanner.idPrefix + id.uuidString + ".daily.480", deliveredAt: now) == nil, "Legacy unowned notifications cannot cross journals")
+
         var futureDaily = daily
         futureDaily.startKey = "2026-01-08"
         var futureWeekly = weekly

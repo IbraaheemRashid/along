@@ -46,7 +46,7 @@ struct AlongTextField: UIViewRepresentable {
             field.textContentType = .none
             field.autocapitalizationType = .none
             field.isSecureTextEntry = false
-            field.returnKeyType = .next
+            field.returnKeyType = .done
         case .password:
             field.keyboardType = .default
             field.textContentType = .none
@@ -71,8 +71,9 @@ struct AlongTextField: UIViewRepresentable {
         }
 
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            textField.resignFirstResponder()
             parent.onSubmit?()
-            return true
+            return false
         }
     }
 }

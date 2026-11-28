@@ -8,7 +8,7 @@ struct ReminderSettingsView: View {
     @State private var draft = ReminderPreferences()
     @State private var loaded = false
 
-    private var sources: [DoseReminderSource] { store.journal.reminderSources }
+    private var sources: [DoseReminderSource] { store.reminderSources }
     private var batches: [BatchExpiryReminderSource] { store.journal.batchExpiryReminderSources }
     private var planned: [ReminderSchedule] {
         ReminderPlanner.schedules(for: draft, sources: sources, batchExpiries: batches)
@@ -31,7 +31,7 @@ struct ReminderSettingsView: View {
 
             if draft.enabled {
                 if sources.isEmpty && batches.isEmpty {
-                    Text("Add an active peptide in Protocol to choose reminder times.")
+                    Text("Open a peptide in Settings → Your peptides to set its schedule and turn dose reminders on.")
                         .font(.caption).foregroundStyle(SetupTheme.muted)
                 } else {
                     VStack(alignment: .leading, spacing: 8) {
@@ -50,6 +50,10 @@ struct ReminderSettingsView: View {
                                 Spacer()
                                 Text("Batch · \(batch.expiryKey)").font(.caption).foregroundStyle(SetupTheme.muted)
                             }
+                        }
+                        if planned.contains(where: { !$0.repeats && $0.id.hasPrefix(ReminderPlanner.idPrefix) }) {
+                            Text("Along queues upcoming doses and refreshes the list when you open the app.")
+                                .font(.caption).foregroundStyle(SetupTheme.muted)
                         }
                         if planned.count >= ReminderPlanner.maximumSchedules {
                             Text("Showing the first \(ReminderPlanner.maximumSchedules) reminders. iOS caps pending notifications.")

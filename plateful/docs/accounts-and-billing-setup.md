@@ -2,11 +2,13 @@
 
 Along talks to **Firebase Auth + Firestore** from the iPhone (no Cloudflare Worker). Superwall stays for paywalls/A-B. Until the files below exist, Debug still runs with local StoreKit (`pk_local_storekit`).
 
-**Onboarding account flow:** questionnaire → plan → **account** (email/password or Apple/Google) → paywall. Firebase create/sign-in runs automatically after a successful purchase (OAuth may already be signed in). Welcome “Sign in” is for returning members only.
+**Onboarding account flow:** questionnaire → plan → **account** (email/password or Apple/Google) → paywall. Firebase create/sign-in runs automatically after a successful purchase (OAuth may already be signed in). Welcome “Sign in” opens an existing account. When account services are unavailable, setup explains on-device storage and continues without collecting credentials. If account confirmation fails after purchase, the person can retry using the active membership.
 
 **Main tabs:** Today · Progress · Settings (Health tab removed). Peptides open as a sheet from Today or Settings.
 
 **Account storage.** Each signed-in UID has its own device journal and Firestore document at `users/{uid}/app/state`. Backups include `journalBase64`, `setupBase64` and a revision used by conditional writes. Existing backups without a revision use a digest of their saved payload. The original on-device journal remains separate. To bring older local entries into a chosen account, export the on-device journal and use the existing confirmed backup restore in that account.
+
+**Account deletion.** Settings and the membership screen’s data controls both offer deletion. Email accounts confirm their password. Apple and Google accounts confirm the same provider identity. The account journal stops syncing while the app removes the backup, the local account files and the identity. An interrupted request can resume after relaunch. The on-device journal and other accounts stay separate. App Store subscriptions are managed in the owner’s Apple Account.
 
 **Two-account device check.** Give two test accounts distinctly named records. On one phone, open A, make an edit offline, sign out, and sign in to B. Verify B shows its own records and backup. Reconnect and return to A to check that the offline edit reaches A. Repeat with an empty account and confirm it starts with an empty journal.
 

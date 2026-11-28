@@ -5,6 +5,9 @@ import SwiftUI
 #if canImport(FirebaseAuth)
 import FirebaseAuth
 #endif
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 #if canImport(FirebaseCore)
 import FirebaseCore
 #endif
@@ -46,7 +49,8 @@ struct AlongUser: Equatable {
 
     var isConfigured: Bool {
         #if DEBUG
-        guard journals != nil, !ProcessInfo.processInfo.arguments.contains("--ui-testing") else { return false }
+        guard journals != nil else { return false }
+        if ProcessInfo.processInfo.arguments.contains("--ui-testing") { return FirebaseBootstrap.usesAccountEmulators }
         #endif
         return Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil
     }
@@ -163,6 +167,27 @@ struct AlongUser: Equatable {
         message = nil
     }
 
+    func requestPasswordReset(email: String) async {
+        guard !isBusy, isConfigured else { return }
+        let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard SetupDraft.validEmail(address) else {
+            message = "Enter your account email to request a reset link."
+            return
+        }
+        #if canImport(FirebaseAuth)
+        isBusy = true
+        defer { isBusy = false }
+        message = nil
+        let sent = "If this email has a password account, check your inbox for a reset link."
+        do {
+            try await Auth.auth().sendPasswordReset(withEmail: address)
+            message = sent
+        } catch {
+            message = (error as NSError).code == AuthErrorCode.userNotFound.rawValue ? sent : "Couldn’t request a reset link. Please try again."
+        }
+        #endif
+    }
+
     /// Stash onboarding credentials; Firebase create/sign-in happens after purchase.
     func stageOnboardingCredentials(email: String, password: String) {
         emailDraft = email.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -185,10 +210,10 @@ struct AlongUser: Equatable {
             message = "Your email and password from setup are needed to create the account. Go back one step and enter them again."
             return nil
         }
-        return await submitEmailSignIn(clearPasswordOnSuccess: true)
+        return await submitEmailSignIn(allowAccountCreation: true)
     }
 
-    @discardableResult func submitEmailSignIn(clearPasswordOnSuccess: Bool = true) async -> String? {
+    @discardableResult func submitEmailSignIn(allowAccountCreation: Bool = false) async -> String? {
         guard !isBusy else { return nil }
         let email = emailDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         let password = passwordDraft
@@ -208,7 +233,7 @@ struct AlongUser: Equatable {
             let result = try await Auth.auth().signIn(withEmail: email, password: password)
             guard Auth.auth().currentUser?.uid == result.user.uid else { return nil }
             user = map(result.user)
-            if clearPasswordOnSuccess { passwordDraft = "" }
+            passwordDraft = ""
             showsEmailForm = false
             return result.user.uid
         } catch {
@@ -216,12 +241,12 @@ struct AlongUser: Equatable {
             let missingUser = ns.code == AuthErrorCode.userNotFound.rawValue
                 || ns.code == AuthErrorCode.invalidCredential.rawValue
                 || ns.code == AuthErrorCode.wrongPassword.rawValue
-            if missingUser {
+            if allowAccountCreation && missingUser {
                 do {
                     let created = try await Auth.auth().createUser(withEmail: email, password: password)
                     guard Auth.auth().currentUser?.uid == created.user.uid else { return nil }
                     user = map(created.user)
-                    if clearPasswordOnSuccess { passwordDraft = "" }
+                    passwordDraft = ""
                     showsEmailForm = false
                     message = nil
                     return created.user.uid
@@ -236,6 +261,75 @@ struct AlongUser: Equatable {
         message = "Firebase Auth isn’t linked in this build."
         #endif
         return nil
+    }
+
+    /// Reauthenticate the same user before removing any journal data.
+    func deleteAccount(password: String, reminders: ReminderStore) async {
+        guard !isBusy, let journals, let uid = user?.id, journals.active.accountID == uid else { return }
+        #if canImport(FirebaseAuth)
+        guard isConfigured, let current = Auth.auth().currentUser, current.uid == uid else { return }
+        isBusy = true
+        message = nil
+        defer { isBusy = false }
+        do {
+            let provider = user?.provider
+            let credential: AuthCredential
+            var appleCode: String?
+            switch provider {
+            case "apple.com":
+                let nonce = randomNonce()
+                let request = ASAuthorizationAppleIDProvider().createRequest()
+                request.nonce = sha256(nonce)
+                let coordinator = AppleSignInCoordinator()
+                appleSignInDelegate = coordinator
+                defer { appleSignInDelegate = nil }
+                let authorization = try await coordinator.perform(request)
+                guard let apple = authorization.credential as? ASAuthorizationAppleIDCredential,
+                      let data = apple.identityToken, let token = String(data: data, encoding: .utf8),
+                      let codeData = apple.authorizationCode, let code = String(data: codeData, encoding: .utf8) else {
+                    message = "Apple could not confirm this account. Try again."
+                    return
+                }
+                credential = OAuthProvider.appleCredential(withIDToken: token, rawNonce: nonce, fullName: apple.fullName)
+                appleCode = code
+            case "google.com":
+                #if canImport(GoogleSignIn)
+                guard let presenter = topViewController() else { message = "Open this screen again to confirm with Google."; return }
+                let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: presenter)
+                guard let token = result.user.idToken?.tokenString else { message = "Google could not confirm this account."; return }
+                credential = GoogleAuthProvider.credential(withIDToken: token, accessToken: result.user.accessToken.tokenString)
+                #else
+                message = "Google Sign In is unavailable in this build."
+                return
+                #endif
+            case "password":
+                guard let email = current.email, !password.isEmpty else { message = "Enter your password to confirm."; return }
+                credential = EmailAuthProvider.credential(withEmail: email, password: password)
+            default:
+                message = "Reopen the app and sign in again to confirm your account."
+                return
+            }
+            let verified = try await current.reauthenticate(with: credential)
+            guard verified.user.uid == uid, Auth.auth().currentUser?.uid == uid else { throw CocoaError(.userCancelled) }
+            try await journals.eraseAccount(uid) {
+                guard Auth.auth().currentUser?.uid == uid else { throw CocoaError(.userCancelled) }
+                if let appleCode { try await Auth.auth().revokeToken(withAuthorizationCode: appleCode) }
+                if reminders.deliveryEnabled, !(await reminders.reset()) { throw CocoaError(.fileWriteUnknown) }
+            } deleteIdentity: {
+                guard Auth.auth().currentUser?.uid == uid else { throw CocoaError(.userCancelled) }
+                try await current.delete()
+            }
+            if Auth.auth().currentUser == nil {
+                #if canImport(GoogleSignIn)
+                GIDSignIn.sharedInstance.signOut()
+                #endif
+                TokenVault.clear()
+                user = nil
+            }
+        } catch { message = error.localizedDescription }
+        #else
+        message = "Accounts are unavailable in this build."
+        #endif
     }
 
     func signOut() {
@@ -258,7 +352,8 @@ struct AlongUser: Equatable {
 
     #if canImport(FirebaseAuth)
     private func map(_ user: User) -> AlongUser {
-        let provider = user.providerData.first?.providerID ?? "firebase"
+        let providers = user.providerData.map(\.providerID)
+        let provider = ["apple.com", "google.com", "password"].first(where: providers.contains) ?? "firebase"
         return AlongUser(id: user.uid, email: user.email, displayName: user.displayName, provider: provider)
     }
     #endif
@@ -304,7 +399,35 @@ struct AlongUser: Equatable {
 }
 
 enum FirebaseBootstrap {
+    static var usesAccountEmulators: Bool {
+        #if DEBUG && targetEnvironment(simulator) && canImport(FirebaseAuth) && canImport(FirebaseFirestore)
+        let arguments = ProcessInfo.processInfo.arguments
+        return arguments.contains("--ui-testing") && arguments.contains("--local-account-test")
+        #else
+        return false
+        #endif
+    }
+
     static func configureIfNeeded() {
+        #if DEBUG && targetEnvironment(simulator) && canImport(FirebaseAuth) && canImport(FirebaseFirestore) && canImport(FirebaseCore)
+        if usesAccountEmulators {
+            guard FirebaseApp.app() == nil else { return }
+            let options = FirebaseOptions(googleAppID: "1:1234567890:ios:0123456789abcdef", gcmSenderID: "1234567890")
+            options.projectID = "demo-along-uitest"
+            // Firebase validates the shape even when Auth and Firestore use loopback.
+            options.apiKey = "A" + String(repeating: "0", count: 38)
+            FirebaseApp.configure(options: options)
+            Auth.auth().useEmulator(withHost: "127.0.0.1", port: 9099)
+            if ProcessInfo.processInfo.arguments.contains("--reset-demo") { try? Auth.auth().signOut() }
+            let database = Firestore.firestore()
+            let settings = database.settings
+            settings.host = "127.0.0.1:8080"
+            settings.isSSLEnabled = false
+            settings.cacheSettings = MemoryCacheSettings()
+            database.settings = settings
+            return
+        }
+        #endif
         guard Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil else { return }
         #if canImport(FirebaseCore)
         if FirebaseApp.app() == nil {

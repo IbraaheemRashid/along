@@ -1,12 +1,15 @@
 import XCTest
+import StoreKitTest
 import UIKit
 
 final class AlongUITests: XCTestCase {
     private var app: XCUIApplication!
+    private var journalSession = UUID()
 
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
+        journalSession = UUID()
     }
 
     override func tearDownWithError() throws {
@@ -28,11 +31,17 @@ final class AlongUITests: XCTestCase {
 
     /// Every launch, including persistence checks, stays in the UI-test data directory.
     private func launchSandbox(reset: Bool = true, arguments: [String] = []) {
-        app.launchArguments = ["--ui-testing"] + (reset ? ["--reset-demo"] : []) + arguments
+        app.launchArguments = ["--ui-testing", "--test-journal", journalSession.uuidString] + (reset ? ["--reset-demo"] : []) + arguments
         app.launch()
     }
 
     private func capture(_ name: String) {
+        if !name.hasPrefix("failure-") {
+            // SwiftUI updates the accessibility tree before its slide and sheet transitions finish.
+            let toast = element("journal.toast")
+            if toast.exists { _ = toast.waitForNonExistence(timeout: 4) }
+            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.8))
+        }
         // Capture the composited screen, including native bars and safe areas.
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name
@@ -51,7 +60,7 @@ final class AlongUITests: XCTestCase {
             let top = max(bounds.minY + 16, app.frame.minY + 100)
             var bottom = min(bounds.maxY - 16, app.frame.maxY - 100)
             if app.keyboards.firstMatch.exists { bottom = min(bottom, app.keyboards.firstMatch.frame.minY - 12) }
-            for identifier in ["setup.continue", "setup.subscribe"] {
+            for identifier in ["setup.continue", "setup.subscribe", "peptide.save"] {
                 let action = app.buttons[identifier]
                 if action.exists && action.isHittable { bottom = min(bottom, action.frame.minY - 16) }
             }
@@ -134,6 +143,11 @@ final class AlongUITests: XCTestCase {
 
     private func fillAccountAndContinue() {
         let email = app.textFields["setup.account.email"]
+        if !email.exists {
+            XCTAssertTrue(app.buttons["setup.continue"].label.contains("this iPhone"))
+            tap("setup.continue")
+            return
+        }
         reveal(email)
         email.tap()
         email.typeText("uitest@along.dev")
@@ -511,8 +525,32 @@ final class AlongUITests: XCTestCase {
         XCTAssertTrue(app.buttons["setup.restore"].exists)
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label CONTAINS[cd] %@", "trial")).count, 0,
                        "The paywall must not contain a trial CTA")
-        XCTAssertTrue(app.buttons["setup.skip-paywall"].waitForExistence(timeout: 3), "Temporary paywall skip while StoreKit isn’t wired")
+        XCTAssertTrue(app.buttons["setup.skip-paywall"].waitForExistence(timeout: 3), "The development build offers an explicit preview")
         capture("setup-completed-paywall")
+        tap("setup.skip-paywall")
+        XCTAssertTrue(element("journal.preview").waitForExistence(timeout: 10))
+        tap("today.log-extra")
+        tap("dose.save")
+        navigationTab("Progress").tap()
+        let entry = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "progress.entry.")).firstMatch
+        reveal(entry)
+        XCTAssertTrue(entry.label.contains("BPC-157"))
+        entry.tap()
+        XCTAssertTrue(app.buttons["dose.delete"].exists)
+        let note = element("dose.note")
+        reveal(note)
+        note.tap()
+        note.typeText("Walkthrough record")
+        tap("dose.save")
+        XCTAssertTrue(entry.label.contains("Walkthrough record"))
+        capture("progress-edited-history")
+        app.terminate()
+        launchSandbox(reset: false)
+        navigationTab("Progress").tap()
+        reveal(entry)
+        XCTAssertTrue(entry.label.contains("Walkthrough record"))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "progress.entry.")).count, 1)
+
     }
 
     func testSetupWithoutWeightGoalSkipsWeightScreens() {
@@ -525,6 +563,170 @@ final class AlongUITests: XCTestCase {
         assertSetupStep("commitment")
         tap("setup.back")
         assertSetupStep("birthday")
+    }
+
+    func testLocalStoreKitCheckoutAndRelaunch() throws {
+        let file = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Along", withExtension: "storekit"))
+        let session = try SKTestSession(contentsOf: file)
+        session.resetToDefaultState()
+        session.clearTransactions()
+        session.disableDialogs = true
+        defer { session.clearTransactions() }
+
+        launchSandbox(arguments: ["--setup-step", "paywall", "--local-storekit-test"])
+        assertSetupStep("paywall")
+        let subscribe = app.buttons["setup.subscribe"]
+        let loaded = expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: subscribe)
+        wait(for: [loaded], timeout: 25)
+        tap("setup.subscribe")
+        XCTAssertTrue(navigationTab("Today").waitForExistence(timeout: 30))
+        XCTAssertFalse(element("journal.preview").exists)
+        XCTAssertEqual(session.allTransactions().first?.productIdentifier, "dev.along.membership.annual")
+        navigationTab("Settings").tap()
+        capture("local-storekit-membership")
+        app.terminate()
+        launchSandbox(reset: false, arguments: ["--local-storekit-test"])
+        XCTAssertTrue(navigationTab("Today").waitForExistence(timeout: 20))
+        XCTAssertFalse(app.buttons["setup.subscribe"].exists)
+    }
+
+    /// Uses only the loopback Firebase emulators and Xcode's local StoreKit session.
+    @MainActor func testAccountCheckoutBackupAndDeletion() async throws {
+        let fixtureKey = "A" + String(repeating: "0", count: 38)
+        let authURL = URL(string: "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=\(fixtureKey)")!
+        let documentRoot = "http://127.0.0.1:8080/v1/projects/demo-along-uitest/databases/(default)/documents/users/"
+        guard (try? await URLSession.shared.data(from: URL(string: "http://127.0.0.1:9099/")!)) != nil else {
+            throw XCTSkip("Start the Along account emulators to exercise cloud backup and deletion.")
+        }
+        let file = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Along", withExtension: "storekit"))
+        let session = try SKTestSession(contentsOf: file)
+        session.resetToDefaultState()
+        session.clearTransactions()
+        session.disableDialogs = true
+        defer { session.clearTransactions() }
+        let email = "walkthrough-\(UUID().uuidString.lowercased())@example.invalid"
+        let password = "along-local-fixture"
+        launchSandbox(arguments: ["--setup-step", "account", "--local-storekit-test", "--local-account-test"])
+        let emailField = app.textFields["setup.account.email"]
+        guard emailField.waitForExistence(timeout: 8) else { return XCTFail("The account form must appear after launch") }
+        reveal(emailField)
+        emailField.tap()
+        emailField.typeText(email)
+        let passwordField = app.secureTextFields["setup.account.password"]
+        reveal(passwordField)
+        passwordField.tap()
+        passwordField.typeText(password + "\n")
+        let action = app.buttons["setup.subscribe"]
+        guard action.waitForExistence(timeout: 8) else { return XCTFail("The account form must lead to checkout") }
+        // Passwords can offer to save the login when the secure field disappears, before or after checkout.
+        let prompt = app.sheets["Save Password?"]
+        if prompt.waitForExistence(timeout: 8) { prompt.buttons["Not Now"].tap() }
+        for _ in 0..<30 {
+            if prompt.exists { prompt.buttons["Not Now"].tap() }
+            if action.isEnabled && action.isHittable { break }
+            try await Task.sleep(for: .seconds(1))
+        }
+        guard action.isEnabled && action.isHittable else { return XCTFail("Checkout must be ready to open") }
+        action.tap()
+        let today = navigationTab("Today")
+        for _ in 0..<40 {
+            if prompt.exists { prompt.buttons["Not Now"].tap() }
+            if today.exists && today.isHittable { break }
+            try await Task.sleep(for: .seconds(1))
+        }
+        guard today.exists && today.isHittable else { return XCTFail("Checkout must open Today") }
+        if prompt.waitForExistence(timeout: 2) { prompt.buttons["Not Now"].tap() }
+        let extra = app.buttons["today.log-extra"]
+        guard extra.isHittable else { return XCTFail("The logged-in journal must offer an extra dose") }
+        extra.tap()
+        XCTAssertFalse(app.buttons["dose.save"].isEnabled)
+        tap("dose.peptide.BPC-157")
+        tap("site.skip")
+        tap("dose.save")
+
+        var signIn = URLRequest(url: authURL)
+        signIn.httpMethod = "POST"
+        signIn.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        signIn.httpBody = try JSONSerialization.data(withJSONObject: ["email": email, "password": password, "returnSecureToken": true] as [String: Any])
+        let (identityData, identityResponse) = try await URLSession.shared.data(for: signIn)
+        XCTAssertEqual((identityResponse as? HTTPURLResponse)?.statusCode, 200)
+        let identity = try XCTUnwrap(JSONSerialization.jsonObject(with: identityData) as? [String: Any])
+        let uid = try XCTUnwrap(identity["localId"] as? String)
+        var document = URLRequest(url: URL(string: documentRoot + uid + "/app/state")!)
+        document.setValue("Bearer " + (try XCTUnwrap(identity["idToken"] as? String)), forHTTPHeaderField: "Authorization")
+        var savedLogs = 0
+        for _ in 0..<30 {
+            let (data, _) = try await URLSession.shared.data(for: document)
+            let response = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let fields = response?["fields"] as? [String: [String: Any]]
+            if let base64 = fields?["journalBase64"]?["stringValue"] as? String, let bytes = Data(base64Encoded: base64),
+               let journal = try JSONSerialization.jsonObject(with: bytes) as? [String: Any] {
+                savedLogs = (journal["doseLogs"] as? [[String: Any]])?.count ?? 0
+            }
+            if savedLogs == 1 { break }
+            try await Task.sleep(for: .seconds(1))
+        }
+        XCTAssertEqual(savedLogs, 1, "The authenticated backup contains the dose recorded in Today")
+
+        navigationTab("Settings").tap()
+        let delete = app.buttons["Delete account"]
+        reveal(delete)
+        delete.tap()
+        let confirmation = app.secureTextFields["account.delete.password"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+        confirmation.tap()
+        confirmation.typeText(password)
+        tap("account.delete.confirm")
+        XCTAssertTrue(element("setup.screen.welcome").waitForExistence(timeout: 25))
+        let (_, deletedIdentity) = try await URLSession.shared.data(for: signIn)
+        XCTAssertEqual((deletedIdentity as? HTTPURLResponse)?.statusCode, 400)
+        // The emulator's owner token lets the test inspect the document after the UID is gone.
+        document.setValue("Bearer owner", forHTTPHeaderField: "Authorization")
+        let (_, removedBackup) = try await URLSession.shared.data(for: document)
+        XCTAssertEqual((removedBackup as? HTTPURLResponse)?.statusCode, 404)
+    }
+
+    @MainActor func testReturningAccountCanRecoverPasswordAndSignIn() async throws {
+        let host = "http://127.0.0.1:9099"
+        guard (try? await URLSession.shared.data(from: URL(string: host)!)) != nil else {
+            throw XCTSkip("Start the local Auth emulator to exercise password recovery.")
+        }
+        let email = "recover-\(UUID().uuidString.lowercased())@example.invalid"
+        let key = "A" + String(repeating: "0", count: 38)
+        func accountRequest(_ action: String, _ data: [String: String]) async throws {
+            var request = URLRequest(url: URL(string: host + "/identitytoolkit.googleapis.com/v1/accounts:" + action + "?key=" + key)!)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: data)
+            let (_, response) = try await URLSession.shared.data(for: request)
+            XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        }
+        try await accountRequest("signUp", ["email": email, "password": "original-local-password"])
+        launchSandbox(arguments: ["--local-account-test"])
+        tap("setup.sign-in")
+        tap("setup.sign-in.email")
+        let address = app.textFields["setup.sign-in.email.field"]
+        reveal(address)
+        address.tap()
+        address.typeText(email + "\n")
+        tap("setup.sign-in.reset-password")
+        let notice = app.staticTexts["setup.sign-in.notice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 10))
+        XCTAssertTrue(notice.label.contains("reset link"), notice.label)
+
+        let codes = URL(string: host + "/emulator/v1/projects/demo-along-uitest/oobCodes")!
+        let (data, _) = try await URLSession.shared.data(from: codes)
+        let inbox = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let messages = try XCTUnwrap(inbox["oobCodes"] as? [[String: Any]])
+        let reset = try XCTUnwrap(messages.first { $0["email"] as? String == email && $0["requestType"] as? String == "PASSWORD_RESET" })
+        let password = "new-local-password"
+        try await accountRequest("resetPassword", ["oobCode": try XCTUnwrap(reset["oobCode"] as? String), "newPassword": password])
+        let field = app.secureTextFields["setup.sign-in.password.field"]
+        reveal(field)
+        field.tap()
+        field.typeText(password + "\n")
+        XCTAssertTrue(app.buttons["Sign out"].waitForExistence(timeout: 15))
+        XCTAssertFalse(navigationTab("Today").exists)
     }
 
     func testUnconnectedPurchaseAndRestoreNeverUnlockApp() {
@@ -547,8 +749,11 @@ final class AlongUITests: XCTestCase {
         launchSandbox(reset: false)
         assertSetupStep("paywall")
         tap("setup.back")
+        assertSetupStep("account")
+        tap("setup.back")
         assertSetupStep("plan")
-        XCTAssertFalse(app.buttons["setup.back"].exists, "The plan reveal never steps back into the loader")
+        tap("setup.continue")
+        assertSetupStep("account")
         tap("setup.continue")
         assertSetupStep("paywall")
     }
@@ -557,21 +762,10 @@ final class AlongUITests: XCTestCase {
         launchSandbox()
         assertSetupStep("welcome")
         tap("setup.sign-in")
-        XCTAssertTrue(app.buttons["setup.sign-in.apple"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["setup.sign-in.google"].exists && app.buttons["setup.sign-in.email"].exists)
-        capture("setup-sign-in")
-        tap("setup.sign-in.apple")
-        // Without GoogleService-Info.plist, auth explains configuration is required.
-        // With Firebase linked, the system sheet may appear instead — either is fine for this smoke.
-        let notice = app.staticTexts["setup.sign-in.notice"]
-        let systemAuth = app.otherElements["Sign In with Apple"].firstMatch
-        XCTAssertTrue(notice.waitForExistence(timeout: 5) || systemAuth.waitForExistence(timeout: 5),
-                      "Sign-in either shows a config notice or the Apple sheet")
+        XCTAssertTrue(element("setup.sign-in.unavailable").waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["setup.sign-in.apple"].exists)
         XCTAssertFalse(navigationTab("Today").exists)
-        capture("setup-sign-in-notice")
-        if notice.exists {
-            // Stay on the sheet and restore from backup when auth is not configured.
-        }
+        capture("setup-sign-in")
         tap("setup.restore-backup")
         XCTAssertTrue(app.navigationBars["Backup & restore"].waitForExistence(timeout: 5))
         app.navigationBars["Backup & restore"].buttons["Done"].tap()
@@ -774,6 +968,18 @@ final class AlongUITests: XCTestCase {
         }
     }
 
+    func testNextDoseOpensItsPlannedDay() {
+        launchSandbox(arguments: ["--setup-complete"])
+        tap("today.dose.BPC-157.toggle")
+        tap("today.dose.Tirzepatide.toggle")
+        tap("today.next")
+        let summary = element("today.summary")
+        XCTAssertTrue(summary.label.contains("Tomorrow") && summary.label.contains("planned"), summary.label)
+        XCTAssertFalse(app.buttons["today.dose.BPC-157.toggle"].exists)
+        XCTAssertFalse(app.buttons["today.log-extra"].exists)
+        capture("next-planned-day")
+    }
+
     func testOneTapDoseShowsActualTimeAndAppearsInCalendarWithoutANote() {
         launchSandbox(arguments: ["--setup-complete"])
         let before = Date.now
@@ -786,9 +992,18 @@ final class AlongUITests: XCTestCase {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd"
         tap("progress.day.\(formatter.string(from: after))")
-        let entry = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "progress.entry.", "BPC-157")).firstMatch
+        let entry = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "progress.day-entry.", "BPC-157")).firstMatch
         XCTAssertTrue(entry.waitForExistence(timeout: 5))
         XCTAssertTrue(entry.label.contains("Taken"))
+        entry.tap()
+        XCTAssertTrue(app.buttons["dose.save"].waitForExistence(timeout: 5))
+        let note = element("dose.note")
+        reveal(note)
+        note.tap()
+        note.typeText("Calendar correction")
+        tap("dose.save")
+        XCTAssertTrue(entry.label.contains("Calendar correction"))
+        capture("calendar-corrected-dose")
     }
 
     func testTodayLogsDosesAndDoseSheetSavesDetails() {
@@ -796,6 +1011,9 @@ final class AlongUITests: XCTestCase {
         let summary = element("today.summary")
         XCTAssertTrue(summary.waitForExistence(timeout: 8))
         XCTAssertTrue(summary.label.contains("0") && summary.label.contains("2"), summary.label)
+        let title = element("today.title"), banner = element("journal.preview")
+        XCTAssertTrue(title.exists && banner.exists)
+        XCTAssertGreaterThanOrEqual(title.frame.minY, banner.frame.maxY, "The preview banner must leave the app title visible")
         capture("today-fresh")
 
         tap("today.dose.BPC-157.toggle")
@@ -832,6 +1050,7 @@ final class AlongUITests: XCTestCase {
 
         tap("today.log-extra")
         XCTAssertTrue(app.buttons["dose.peptide.BPC-157"].waitForExistence(timeout: 4))
+        XCTAssertFalse(app.buttons["dose.save"].isEnabled, "An extra dose needs a named peptide when several are tracked")
         app.buttons["dose.peptide.BPC-157"].tap()
         XCTAssertTrue(app.buttons["site.skip"].waitForExistence(timeout: 4), "Choosing a peptide opens the 3D site picker")
         capture("site-picker-whole-body")
@@ -891,16 +1110,17 @@ final class AlongUITests: XCTestCase {
 
         element("protocol.peptide.BPC-157").tap()
         let green = app.buttons["peptide.color.green"], teal = app.buttons["peptide.color.teal"]
-        XCTAssertTrue(green.waitForExistence(timeout: 4))
+        reveal(green, centerInScroll: true)
         XCTAssertTrue(green.isSelected && !teal.isSelected, "An untouched peptide shows its category colour")
         XCTAssertEqual(teal.label, "Teal")
-        tap("peptide.color.teal")
+        reveal(teal, centerInScroll: true)
+        teal.tap()
         XCTAssertTrue(teal.isSelected && !green.isSelected)
         tap("peptide.save")
         XCTAssertTrue(element("protocol.peptide.BPC-157").waitForExistence(timeout: 4))
 
         element("protocol.peptide.BPC-157").tap()
-        XCTAssertTrue(teal.waitForExistence(timeout: 4))
+        reveal(teal, centerInScroll: true)
         XCTAssertTrue(teal.isSelected && !green.isSelected, "The chosen colour is kept when editing again")
         tap("peptide.close")
 
@@ -909,7 +1129,7 @@ final class AlongUITests: XCTestCase {
         XCTAssertTrue(element("today.summary").waitForExistence(timeout: 8))
         openPeptideList()
         element("protocol.peptide.BPC-157").tap()
-        XCTAssertTrue(teal.waitForExistence(timeout: 4))
+        reveal(teal, centerInScroll: true)
         XCTAssertTrue(teal.isSelected, "The chosen colour persists across launches")
     }
 

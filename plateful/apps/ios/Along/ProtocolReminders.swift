@@ -2,7 +2,7 @@ import Foundation
 
 extension TrackedPeptide {
     var reminderSource: DoseReminderSource? {
-        guard !isPaused, schedule.isValid else { return nil }
+        guard doseRemindersEnabled != false, !isPaused, schedule.isValid else { return nil }
         let cadence: DoseReminderSource.Cadence
         switch schedule.kind {
         case .unscheduled: return nil
@@ -22,8 +22,39 @@ extension TrackedPeptide {
 }
 
 extension Journal {
-    var reminderSources: [DoseReminderSource] { protocolPeptides.compactMap(\.reminderSource) }
     var batchExpiryReminderSources: [BatchExpiryReminderSource] {
         protocolPeptides.compactMap(\.batchExpiryReminderSource)
+    }
+}
+
+extension JournalStore {
+    var reminderProfile: String { accountID == nil ? "device" : storageDirectory.lastPathComponent }
+
+    func slot(for reminder: ReminderDestination) -> DoseSlot? {
+        guard reminder.profile == reminderProfile, DayIdentity.isValid(reminder.dayKey), reminder.dayKey <= todayKey,
+              let peptide = peptide(reminder.peptideID) else { return nil }
+        let time = DoseTime(hour: reminder.minutes / 60, minute: reminder.minutes % 60)
+        if let log = journal.protocolLogs.first(where: {
+            $0.peptideID == peptide.id && $0.dayKey == reminder.dayKey && $0.scheduledTime == time
+        }) {
+            return DoseSlot(peptide: peptide, dayKey: log.dayKey, time: time, log: log)
+        }
+        return slots(on: reminder.dayKey).first { $0.peptide.id == peptide.id && $0.time == time }
+    }
+
+    var reminderSources: [DoseReminderSource] {
+        let day = todayKey
+        var answers: [UUID: [String: Set<Int>]] = [:]
+        for log in journal.protocolLogs where log.dayKey >= day {
+            if let time = log.scheduledTime {
+                answers[log.peptideID, default: [:]][log.dayKey, default: []].insert(time.minutes)
+            }
+        }
+        return journal.protocolPeptides.compactMap { peptide in
+            guard var source = peptide.reminderSource else { return nil }
+            source.id = "\(reminderProfile)_\(source.id)"
+            source.answeredMinutes = answers[peptide.id] ?? [:]
+            return source
+        }
     }
 }

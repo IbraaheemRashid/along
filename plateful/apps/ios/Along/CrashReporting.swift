@@ -18,7 +18,7 @@ enum CrashReporting {
     }
 
     static func start() {
-        guard isConfigured else { return }
+        guard isConfigured, !FirebaseBootstrap.usesAccountEmulators else { return }
         FirebaseBootstrap.configureIfNeeded()
         #if canImport(FirebaseCrashlytics)
         Crashlytics.crashlytics().setCrashlyticsCollectionEnabled(true)

@@ -1,0 +1,140 @@
+name: iPhone walkthrough
+on:
+  pull_request:
+    paths:
+      - 'plateful/apps/ios/**'
+      - 'plateful/firebase.walkthrough.json'
+      - 'plateful/firestore.rules'
+      - '.github/workflows/ios-walkthrough.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  walkthrough:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode and boot an iPhone
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+          echo "DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+          xcodebuild -version
+          device=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(v["udid"] for k in sorted(d,reverse=True) if "SimRuntime.iOS-" in k for v in d[k] if "iPhone" in v["name"]))')
+          echo "DEVICE=$device" >> "$GITHUB_ENV"
+          xcrun simctl boot "$device"
+          xcrun simctl bootstatus "$device" -b
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check the journal, reminder planner, backup and billing policies
+        working-directory: plateful
+        run: bash scripts/check.sh
+      - name: Start isolated account services
+        working-directory: plateful
+        run: |
+          npx --yes firebase-tools@14.22.0 emulators:start --only auth,firestore --project demo-along-uitest --config firebase.walkthrough.json > "$RUNNER_TEMP/emulators.log" 2>&1 &
+          for attempt in {1..120}; do
+            if nc -z 127.0.0.1 9099 && nc -z 127.0.0.1 8080; then exit 0; fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/emulators.log"
+          exit 1
+      - uses: actions/cache/restore@v4
+        continue-on-error: true
+        id: build-cache
+        with:
+          path: ${{ runner.temp }}/Along-build
+          key: along-iphone-26.3-v1-${{ runner.arch }}-${{ hashFiles('plateful/apps/ios/**/Package.resolved') }}
+      # Simulator-only ad hoc signing gives the app its own Keychain for the real Auth SDK.
+      - name: Build the shipping project for testing
+        working-directory: plateful/apps/ios
+        run: |
+          xcodebuild -quiet -project Along.xcodeproj -scheme Along -destination "id=$DEVICE" -derivedDataPath "$RUNNER_TEMP/Along-build" CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=ALONGUITST build-for-testing
+      - uses: actions/cache/save@v4
+        continue-on-error: true
+        if: steps.build-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ runner.temp }}/Along-build
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
+      - name: Verify checkout, cloud backup and account deletion
+        working-directory: plateful/apps/ios
+        run: |
+          xcodebuild -project Along.xcodeproj -scheme Along -destination "id=$DEVICE" \
+            -parallel-testing-enabled NO -derivedDataPath "$RUNNER_TEMP/Along-build" -resultBundlePath "$RUNNER_TEMP/Account.xcresult" \
+            -only-testing:AlongUITests/AlongUITests/testAccountCheckoutBackupAndDeletion \
+            CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=ALONGUITST test-without-building
+      - name: Walk through setup, logging, history and persistence
+        working-directory: plateful/apps/ios
+        run: |
+          xcodebuild -project Along.xcodeproj -scheme Along -destination "id=$DEVICE" \
+            -parallel-testing-enabled NO -derivedDataPath "$RUNNER_TEMP/Along-build" -resultBundlePath "$RUNNER_TEMP/Tracker.xcresult" \
+            -only-testing:AlongUITests/AlongUITests/testFullSetupStopsAtPaywallAndCanOpenExplicitDesignPreview \
+            -only-testing:AlongUITests/AlongUITests/testNextDoseOpensItsPlannedDay \
+            -only-testing:AlongUITests/AlongUITests/testOneTapDoseShowsActualTimeAndAppearsInCalendarWithoutANote \
+            -only-testing:AlongUITests/AlongUITests/testReturningAccountCanRecoverPasswordAndSignIn \
+            -only-testing:AlongUITests/AlongUITests/testLocalStoreKitCheckoutAndRelaunch \
+            -only-testing:AlongUITests/AlongUITests/testUnconnectedPurchaseAndRestoreNeverUnlockApp \
+            -only-testing:AlongUITests/AlongUITests/testWelcomeSignInSheetExplainsAccountsAndOffersRestore \
+            -only-testing:AlongUITests/AlongUITests/testIncompleteSetupResumesAtSavedStep \
+            -only-testing:AlongUITests/AlongUITests/testTodayLogsDosesAndDoseSheetSavesDetails \
+            -only-testing:AlongUITests/AlongUITests/testPeptideColourPersistsAfterEditing \
+            CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=ALONGUITST test-without-building
+      - name: Gather native test results
+        if: always()
+        run: |
+          if test -d "$RUNNER_TEMP/Tracker.xcresult" && test -d "$RUNNER_TEMP/Account.xcresult"; then
+            xcrun xcresulttool merge --output-path "$RUNNER_TEMP/Along.xcresult" "$RUNNER_TEMP/Account.xcresult" "$RUNNER_TEMP/Tracker.xcresult"
+          elif test -d "$RUNNER_TEMP/Account.xcresult"; then
+            mv "$RUNNER_TEMP/Account.xcresult" "$RUNNER_TEMP/Along.xcresult"
+          fi
+      - name: Check that the walkthrough ran without skips
+        run: |
+          xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/Along.xcresult" > "$RUNNER_TEMP/walkthrough-summary.json"
+          jq -e '.failedTests == 0 and .skippedTests == 0 and .passedTests == 11' "$RUNNER_TEMP/walkthrough-summary.json"
+      - name: Compile the Release app with linked services
+        working-directory: plateful/apps/ios
+        run: |
+          xcodebuild -quiet -project Along.xcodeproj -scheme Along -configuration Release -destination "id=$DEVICE" -derivedDataPath "$RUNNER_TEMP/Along-build" CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=ALONGUITST build
+      - name: Collect walkthrough screenshots and results
+        if: always()
+        run: |
+          app="$RUNNER_TEMP/Along-build/Build/Products/Debug-iphonesimulator/Along.app"
+          if test -d "$app"; then
+            ditto -c -k --keepParent "$app" "$RUNNER_TEMP/Along-iPhone-Simulator.zip"
+          fi
+          if test -d "$RUNNER_TEMP/Along.xcresult"; then
+            xcrun xcresulttool export attachments --path "$RUNNER_TEMP/Along.xcresult" --output-path "$RUNNER_TEMP/along-screens"
+            python3 - <<'PYTHON'
+          import json, os, pathlib, shutil
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          exported = root / "along-screens"
+          gallery = root / "Walkthrough"
+          gallery.mkdir(exist_ok=True)
+          for test in json.loads((exported / "manifest.json").read_text()):
+              for item in test["attachments"]:
+                  name = item["suggestedHumanReadableName"].rsplit("_", 2)[0]
+                  source = exported / item["exportedFileName"]
+                  if source.suffix == ".png" and name.startswith(("setup-", "today-", "progress-", "next-", "site-", "dose-", "calendar-", "local-storekit-")):
+                      shutil.copyfile(source, gallery / (name + ".png"))
+          PYTHON
+            ditto -c -k --keepParent "$RUNNER_TEMP/Along.xcresult" "$RUNNER_TEMP/Along-results.zip"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: iPhone-walkthrough
+          path: |
+            ${{ runner.temp }}/Walkthrough
+            ${{ runner.temp }}/Along-iPhone-Simulator.zip
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: XCTest-results
+          path: |
+            ${{ runner.temp }}/Along-results.zip
+            ${{ runner.temp }}/walkthrough-summary.json

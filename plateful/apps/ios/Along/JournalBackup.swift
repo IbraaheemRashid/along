@@ -272,17 +272,27 @@ struct JournalBackup: Codable, Equatable {
         if let raw = content["peptides"] {
             guard let entries = raw as? [Any], entries.count <= TrackedPeptide.limit else { throw Failure.invalidArchive }
             for entry in entries {
-                let peptide = try object(entry, required: ["id", "name", "unit", "schedule", "startKey", "isPaused", "note", "isSample"], optional: ["amount", "batchExpiryKey", "color"])
+                let peptide = try object(entry, required: ["id", "name", "unit", "schedule", "startKey", "isPaused", "note", "isSample"], optional: ["amount", "batchExpiryKey", "color", "previousSchedules", "doseRemindersEnabled"])
                 if let rawKey = peptide["batchExpiryKey"] {
                     guard let key = rawKey as? String, DayIdentity.isValid(key) else { throw Failure.invalidArchive }
                 }
                 if let rawColor = peptide["color"] {
                     guard let value = rawColor as? String, PeptideColor(rawValue: value) != nil else { throw Failure.invalidArchive }
                 }
-                let schedule = try object(peptide["schedule"], required: ["kind", "weekdays", "intervalDays", "times"])
-                guard let weekdays = schedule["weekdays"] as? [Int], Set(weekdays).count == weekdays.count,
-                      let times = schedule["times"] as? [Any] else { throw Failure.invalidArchive }
-                for time in times { _ = try object(time, required: ["hour", "minute"]) }
+                var schedules = [peptide["schedule"]]
+                if let rawHistory = peptide["previousSchedules"] {
+                    guard let history = rawHistory as? [Any], history.count <= 1024 else { throw Failure.invalidArchive }
+                    for raw in history {
+                        let old = try object(raw, required: ["until", "startKey", "schedule", "isPaused"])
+                        schedules.append(old["schedule"])
+                    }
+                }
+                for raw in schedules {
+                    let schedule = try object(raw, required: ["kind", "weekdays", "intervalDays", "times"])
+                    guard let weekdays = schedule["weekdays"] as? [Int], Set(weekdays).count == weekdays.count,
+                          let times = schedule["times"] as? [Any] else { throw Failure.invalidArchive }
+                    for time in times { _ = try object(time, required: ["hour", "minute"]) }
+                }
             }
         }
         if let raw = content["doseLogs"] {

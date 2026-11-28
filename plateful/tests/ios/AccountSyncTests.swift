@@ -3,11 +3,17 @@ import Foundation
 @MainActor private final class TestAccountBackups: AccountBackupClient {
     var records: [String: AccountBackupRecord] = [:]
     var writes: [String] = []
+    var removalError = false
     var readError = false
     var pauseRead = false
     var pauseWrite = false
     var pendingRead: CheckedContinuation<Void, Never>?
     var pendingWrite: CheckedContinuation<Void, Never>?
+
+    func remove(userID: String) async throws {
+        if removalError { throw CocoaError(.fileWriteUnknown) }
+        records.removeValue(forKey: userID)
+    }
 
     func read(userID: String) async throws -> AccountBackupRecord? {
         let result = records[userID]
@@ -169,6 +175,47 @@ enum AccountSyncTests {
         relaunched.sync.resolveConflict(useAccount: false)
         await relaunched.sync.flush()
         expect(backend.records["C"]?.value.journal.name == "C local choice", "Explicitly keeping local data updates only the accepted remote revision")
+        let journalName = checkoutDevice.journal.name
+        let unrelated = backend.records["B"]?.revision
+        backend.removalError = true
+        var identitiesDeleted = 0
+        do {
+            try await relaunched.eraseAccount("C", prepareIdentity: {}, deleteIdentity: { identitiesDeleted += 1 })
+            preconditionFailure("An unavailable backup service must interrupt deletion")
+        } catch {}
+        expect(relaunched.deletionPending && identitiesDeleted == 0, "Deletion can retry with the authenticated identity intact")
+        let reopened = AccountJournals(device: checkoutDevice, backend: backend)
+        reopened.select("C")
+        expect(reopened.deletionPending, "An interrupted deletion is recovered on launch")
+        let beforeWrites = backend.writes
+        await reopened.sync.prepare()
+        await reopened.sync.flush()
+        expect(backend.writes == beforeWrites, "A pending deletion cannot upload a new backup")
+        backend.removalError = false
+        do {
+            try await reopened.eraseAccount("B", prepareIdentity: {}, deleteIdentity: { identitiesDeleted += 1 })
+            preconditionFailure("Another UID cannot authorize this deletion")
+        } catch {}
+        let otherPhone = AccountJournals(device: JournalStore(directory: root.appendingPathComponent("other-phone"), arguments: []), backend: backend)
+        otherPhone.select("C")
+        await otherPhone.sync.prepare()
+        otherPhone.select(nil)
+        let removedDirectory = reopened.active.storageDirectory
+        do {
+            try await reopened.eraseAccount("C", prepareIdentity: {}, deleteIdentity: { throw CocoaError(.fileWriteUnknown) })
+            preconditionFailure("Propagate an interrupted identity deletion")
+        } catch {}
+        expect(backend.records["C"] == nil && reopened.deletionPending, "Retry remains available after cloud and local erasure")
+        await reopened.sync.flush()
+        expect(backend.records["C"] == nil, "A failed identity removal cannot republish the erased journal")
+        try await reopened.eraseAccount("C", prepareIdentity: {}, deleteIdentity: { identitiesDeleted += 1 })
+        otherPhone.select("C")
+        await otherPhone.sync.prepare()
+        await otherPhone.sync.flush()
+        expect(backend.records["C"] == nil && otherPhone.sync.message != nil, "A second device with an earlier checkpoint cannot recreate a deleted account backup")
+        let remaining = try FileManager.default.contentsOfDirectory(atPath: removedDirectory.path)
+        expect(remaining.isEmpty && backend.records["C"] == nil && identitiesDeleted == 1, "Retry removes the account backup, local files and identity")
+        expect(backend.records["B"]?.revision == unrelated && checkoutDevice.journal.name == journalName && reopened.active === checkoutDevice, "Deleting one account preserves other journals")
         return checks
     }
 }

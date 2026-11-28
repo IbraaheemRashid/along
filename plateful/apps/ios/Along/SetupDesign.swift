@@ -9,7 +9,7 @@ enum SetupTheme {
     static let surface = dynamic(.white, .black)
     static let ink = dynamic(UIColor(red: 0.07, green: 0.07, blue: 0.09, alpha: 1), .white)
     static let inverseInk = dynamic(.white, UIColor(red: 0.07, green: 0.07, blue: 0.09, alpha: 1))
-    static let muted = dynamic(UIColor(red: 0.53, green: 0.53, blue: 0.56, alpha: 1), UIColor(red: 0.62, green: 0.62, blue: 0.66, alpha: 1))
+    static let muted = dynamic(UIColor(red: 0.40, green: 0.40, blue: 0.43, alpha: 1), UIColor(red: 0.62, green: 0.62, blue: 0.66, alpha: 1))
     static let tile = dynamic(UIColor(red: 0.965, green: 0.965, blue: 0.98, alpha: 1), UIColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1))
     static let iconTile = dynamic(UIColor(red: 0.95, green: 0.95, blue: 0.975, alpha: 1), UIColor(red: 0.17, green: 0.17, blue: 0.19, alpha: 1))
     static let border = dynamic(UIColor(red: 0.91, green: 0.91, blue: 0.93, alpha: 1), UIColor(red: 0.2, green: 0.2, blue: 0.22, alpha: 1))
@@ -409,39 +409,52 @@ struct SetupSignInSheet: View {
             Divider()
             ScrollView {
                 VStack(spacing: 12) {
-                    provider("Sign in with Apple", identifier: "apple", filled: true) {
-                        Image(systemName: "apple.logo").font(.system(size: 19, weight: .medium))
-                    } action: {
-                        Task {
-                            if let id = await auth.signInWithApple(), auth.user?.id == id { onSignedIn?(); dismiss() }
+                    if !auth.isConfigured {
+                        Text(restoreBackup == nil ? "Account sign-in is unavailable in this build." : "This build keeps journals on this iPhone. You can restore an exported Along backup here.")
+                            .multilineTextAlignment(.center)
+                            .accessibilityIdentifier("setup.sign-in.unavailable")
+                    } else {
+                        provider("Sign in with Apple", identifier: "apple", filled: true) {
+                            Image(systemName: "apple.logo").font(.system(size: 19, weight: .medium))
+                        } action: {
+                            Task {
+                                if let id = await auth.signInWithApple(), auth.user?.id == id { onSignedIn?(); dismiss() }
+                            }
                         }
-                    }
-                    provider("Sign in with Google", identifier: "google", filled: false) {
-                        Text("G").font(.system(size: 19, weight: .bold, design: .rounded))
-                            .foregroundStyle(LinearGradient(colors: [Color(red: 0.26, green: 0.52, blue: 0.96), Color(red: 0.92, green: 0.26, blue: 0.21), Color(red: 0.98, green: 0.74, blue: 0.02), Color(red: 0.2, green: 0.66, blue: 0.33)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    } action: {
-                        Task {
-                            if let id = await auth.signInWithGoogle(), auth.user?.id == id { onSignedIn?(); dismiss() }
+                        provider("Sign in with Google", identifier: "google", filled: false) {
+                            Text("G").font(.system(size: 19, weight: .bold, design: .rounded))
+                                .foregroundStyle(LinearGradient(colors: [Color(red: 0.26, green: 0.52, blue: 0.96), Color(red: 0.92, green: 0.26, blue: 0.21), Color(red: 0.98, green: 0.74, blue: 0.02), Color(red: 0.2, green: 0.66, blue: 0.33)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        } action: {
+                            Task {
+                                if let id = await auth.signInWithGoogle(), auth.user?.id == id { onSignedIn?(); dismiss() }
+                            }
                         }
-                    }
-                    provider("Continue with email", identifier: "email", filled: false) {
-                        Image(systemName: "envelope").font(.system(size: 17, weight: .medium))
-                    } action: {
-                        showEmailForm = true
-                        auth.beginEmailSignIn()
-                    }
-                    if showEmailForm {
-                        AlongFormField(text: $email, kind: .email, placeholder: "Email", identifier: "setup.sign-in.email.field")
-                        AlongFormField(text: $password, kind: .password, placeholder: "Password", identifier: "setup.sign-in.password.field", onSubmit: submitEmail)
-                        Button(action: submitEmail) {
-                            Text(auth.isBusy ? "Please wait…" : "Continue")
-                                .font(.system(.body, weight: .semibold))
-                                .foregroundStyle(SetupTheme.inverseInk)
-                                .frame(maxWidth: .infinity, minHeight: 48)
-                                .background(SetupTheme.ink, in: Capsule())
+                        provider("Continue with email", identifier: "email", filled: false) {
+                            Image(systemName: "envelope").font(.system(size: 17, weight: .medium))
+                        } action: {
+                            showEmailForm = true
+                            auth.beginEmailSignIn()
                         }
-                        .disabled(auth.isBusy)
-                        .accessibilityIdentifier("setup.sign-in.email.submit")
+                        if showEmailForm {
+                            AlongFormField(text: $email, kind: .email, placeholder: "Email", identifier: "setup.sign-in.email.field")
+                            AlongFormField(text: $password, kind: .password, placeholder: "Password", identifier: "setup.sign-in.password.field", onSubmit: submitEmail)
+                            Button(action: submitEmail) {
+                                Text(auth.isBusy ? "Please wait…" : "Continue")
+                                    .font(.system(.body, weight: .semibold))
+                                    .foregroundStyle(SetupTheme.inverseInk)
+                                    .frame(maxWidth: .infinity, minHeight: 48)
+                                    .background(SetupTheme.ink, in: Capsule())
+                            }
+                            .disabled(auth.isBusy)
+                            .accessibilityIdentifier("setup.sign-in.email.submit")
+                            Button("Forgot password?") {
+                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                                let address = email
+                                Task { await auth.requestPasswordReset(email: address) }
+                            }
+                            .frame(minHeight: 44)
+                            .accessibilityIdentifier("setup.sign-in.reset-password")
+                        }
                     }
                     if let notice = auth.message {
                         Text(notice).font(.footnote).foregroundStyle(SetupTheme.muted).multilineTextAlignment(.center)

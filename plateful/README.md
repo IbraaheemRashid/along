@@ -6,7 +6,7 @@ A native SwiftUI peptide protocol tracker. Along helps people who have just boug
 
 Open `apps/ios/Along.xcodeproj` in Xcode, choose the **Along** scheme and an iPhone Simulator, then Run. No Apple developer account, server, API key or payment is required for simulator use. iOS 17 or later.
 
-Setup is a peptide-specific onboarding that ends in a direct subscription offer with **no trial**. In a Debug build, **Open app preview · no payment** on the paywall opens the app without a subscription. Any setup screen can be opened directly:
+Setup is a peptide-specific onboarding that ends in a direct subscription offer with **no trial**. In a Debug build, **Open design preview** on the paywall opens the app without a subscription. Any setup screen can be opened directly:
 
 ```sh
 xcrun simctl launch booted dev.along.prototype --setup-step paywall

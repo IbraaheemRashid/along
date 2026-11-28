@@ -81,7 +81,13 @@ private struct OnboardingArchive: Codable {
         var folder = "Along"
         #if DEBUG
         let isReviewSession = arguments.contains("--ui-testing") || arguments.contains("--onboarding-step") || arguments.contains("--review-onboarding") || arguments.contains("--setup-step")
-        if isReviewSession { folder = "AlongDesignReview" }
+        if isReviewSession {
+            folder = "AlongDesignReview"
+            if arguments.contains("--ui-testing"), let index = arguments.firstIndex(of: "--test-journal"),
+               arguments.indices.contains(index + 1), let id = UUID(uuidString: arguments[index + 1]) {
+                folder += "/\(id.uuidString)"
+            }
+        }
         #endif
         var directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(folder, isDirectory: true)
         if let accountID {

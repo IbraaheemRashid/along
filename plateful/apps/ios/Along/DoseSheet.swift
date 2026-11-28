@@ -273,9 +273,10 @@ struct DoseSheet: View {
                 takenAt = slot.dayKey == store.todayKey ? .now : min(scheduled, .now)
             }
         case .extra(let day):
-            let first = store.journal.activePeptides.first ?? store.journal.protocolPeptides.first
-            peptideID = first?.id
-            amountText = first?.amount.map(Self.format) ?? ""; unit = first?.unit ?? .mg
+            let choices = store.journal.protocolPeptides
+            let onlyPeptide = choices.count == 1 ? choices.first : nil
+            peptideID = onlyPeptide?.id
+            amountText = onlyPeptide?.amount.map(Self.format) ?? ""; unit = onlyPeptide?.unit ?? .mg
             takenAt = day == store.todayKey ? .now : min(DayIdentity.date(for: day) ?? .now, .now)
         }
     }
