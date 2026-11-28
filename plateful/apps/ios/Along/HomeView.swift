@@ -63,6 +63,7 @@ struct HomeView: View {
             HStack(spacing: 8) {
                 Image(systemName: "leaf.fill").font(.system(size: 18, weight: .semibold))
                 Text("Along").font(.system(size: 26, weight: .bold)).tracking(-0.5)
+                    .accessibilityIdentifier("today.title")
             }.foregroundStyle(SetupTheme.ink).accessibilityAddTraits(.isHeader)
             Spacer()
         }

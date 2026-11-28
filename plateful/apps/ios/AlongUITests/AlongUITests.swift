@@ -34,6 +34,12 @@ final class AlongUITests: XCTestCase {
     }
 
     private func capture(_ name: String) {
+        if !name.hasPrefix("failure-") {
+            // SwiftUI updates the accessibility tree before its slide and sheet transitions finish.
+            let toast = element("journal.toast")
+            if toast.exists { _ = toast.waitForNonExistence(timeout: 4) }
+            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.8))
+        }
         // Capture the composited screen, including native bars and safe areas.
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name
@@ -987,6 +993,9 @@ final class AlongUITests: XCTestCase {
         let summary = element("today.summary")
         XCTAssertTrue(summary.waitForExistence(timeout: 8))
         XCTAssertTrue(summary.label.contains("0") && summary.label.contains("2"), summary.label)
+        let title = element("today.title"), banner = element("journal.preview")
+        XCTAssertTrue(title.exists && banner.exists)
+        XCTAssertGreaterThanOrEqual(title.frame.minY, banner.frame.maxY, "The preview banner must leave the app title visible")
         capture("today-fresh")
 
         tap("today.dose.BPC-157.toggle")
