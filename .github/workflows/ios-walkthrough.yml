@@ -1,0 +1,48 @@
+name: iPhone walkthrough
+on:
+  pull_request:
+    paths:
+      - 'plateful/apps/ios/**'
+      - '.github/workflows/ios-walkthrough.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  walkthrough:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode and boot an iPhone
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$xcode/Contents/Developer"
+          xcodebuild -version
+          device=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(v["udid"] for k in sorted(d,reverse=True) if "SimRuntime.iOS-" in k for v in d[k] if "iPhone" in v["name"]))')
+          echo "DEVICE=$device" >> "$GITHUB_ENV"
+          xcrun simctl boot "$device"
+          xcrun simctl bootstatus "$device" -b
+      - name: Walk through setup, logging, history and persistence
+        working-directory: plateful/apps/ios
+        run: |
+          xcodebuild -project Along.xcodeproj -scheme Along -destination "id=$DEVICE" \
+            -parallel-testing-enabled NO -resultBundlePath "$RUNNER_TEMP/Along.xcresult" \
+            -only-testing:AlongUITests/AlongUITests/testFullSetupStopsAtPaywallAndCanOpenExplicitDesignPreview \
+            -only-testing:AlongUITests/AlongUITests/testOneTapDoseShowsActualTimeAndAppearsInCalendarWithoutANote \
+            -only-testing:AlongUITests/AlongUITests/testTodayLogsDosesAndDoseSheetSavesDetails \
+            -only-testing:AlongUITests/AlongUITests/testPeptideColourPersistsAfterEditing \
+            CODE_SIGNING_ALLOWED=NO test
+      - name: Collect walkthrough screenshots and results
+        if: always()
+        run: |
+          if test -d "$RUNNER_TEMP/Along.xcresult"; then
+            xcrun xcresulttool export attachments --path "$RUNNER_TEMP/Along.xcresult" --output-path "$RUNNER_TEMP/along-screens"
+            ditto -c -k --keepParent "$RUNNER_TEMP/Along.xcresult" "$RUNNER_TEMP/Along-results.zip"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: iPhone-walkthrough
+          path: |
+            ${{ runner.temp }}/along-screens
+            ${{ runner.temp }}/Along-results.zip
