@@ -1,6 +1,14 @@
 # Along — playbook progress
 
-Updated 23 November 2026. Working name: Along. Along is a peptide protocol tracker (supporting tool, not medical advice). The GLP-1 journal and Pip companion are retired. **Market Gate A is not passed.**
+Updated 28 November 2026. Working name: Along. Along is a peptide protocol tracker (supporting tool, not medical advice). The GLP-1 journal and Pip companion are retired. **Market Gate A is not passed.**
+
+## iPhone walkthrough verification, 28 November 2026
+
+Along keeps Today, Progress and Settings. A scheduled entry can be recorded from Today, edited from its calendar day and reopened after relaunch. A schedule change has an effective date. Taking or skipping an entry early removes its pending occurrence, and undo restores it. One peptide can be muted independently of its schedule and batch-expiry reminders.
+
+The local build explains on-device storage and continues without collecting account credentials. In a configured build, an existing subscriber can retry a failed account confirmation. Account deletion requires fresh verification, drains pending writes, removes the account backup and local account files, and deletes the identity. An interrupted deletion resumes for the same account. A second device with a previously synced backup checks the server before uploading again.
+
+Verification used 707 API, web and Swift checks. The 40 account checks exercise isolated files, failed and interrupted operations, and two-device backup removal. The web production bundle built successfully. The iPhone walkthrough uses a disposable simulator, local StoreKit transactions and isolated Firebase services. Production setup still requires App Store Connect products, approved legal URLs and signed-device validation of provider sign-in and notification delivery.
 
 ## Tracker walkthrough and competitive research, 28 November 2026
 

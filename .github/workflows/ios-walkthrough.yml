@@ -79,7 +79,7 @@ jobs:
       - name: Check that the walkthrough ran without skips
         run: |
           xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/Along.xcresult" > "$RUNNER_TEMP/walkthrough-summary.json"
-          jq -e '.failedTests == 0 and .skippedTests == 0 and .passedTests > 0' "$RUNNER_TEMP/walkthrough-summary.json"
+          jq -e '.failedTests == 0 and .skippedTests == 0 and .passedTests == 10' "$RUNNER_TEMP/walkthrough-summary.json"
       - name: Compile the Release app with linked services
         working-directory: plateful/apps/ios
         run: |

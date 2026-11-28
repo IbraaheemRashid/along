@@ -9,7 +9,7 @@ enum SetupTheme {
     static let surface = dynamic(.white, .black)
     static let ink = dynamic(UIColor(red: 0.07, green: 0.07, blue: 0.09, alpha: 1), .white)
     static let inverseInk = dynamic(.white, UIColor(red: 0.07, green: 0.07, blue: 0.09, alpha: 1))
-    static let muted = dynamic(UIColor(red: 0.53, green: 0.53, blue: 0.56, alpha: 1), UIColor(red: 0.62, green: 0.62, blue: 0.66, alpha: 1))
+    static let muted = dynamic(UIColor(red: 0.40, green: 0.40, blue: 0.43, alpha: 1), UIColor(red: 0.62, green: 0.62, blue: 0.66, alpha: 1))
     static let tile = dynamic(UIColor(red: 0.965, green: 0.965, blue: 0.98, alpha: 1), UIColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1))
     static let iconTile = dynamic(UIColor(red: 0.95, green: 0.95, blue: 0.975, alpha: 1), UIColor(red: 0.17, green: 0.17, blue: 0.19, alpha: 1))
     static let border = dynamic(UIColor(red: 0.91, green: 0.91, blue: 0.93, alpha: 1), UIColor(red: 0.2, green: 0.2, blue: 0.22, alpha: 1))

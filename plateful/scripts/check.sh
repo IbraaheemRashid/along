@@ -3,6 +3,7 @@ set -euo pipefail
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 source "$(dirname "$0")/runtime.sh"
 "$along_node_bin" --test tests/api/*.test.mjs tests/web/*.test.mjs
+python3 tests/ios/test_project_settings.py
 mkdir -p .build/ModuleCache
 xcrun swiftc -D DEBUG -module-cache-path .build/ModuleCache apps/ios/Along/Models.swift apps/ios/Along/WeekSummary.swift apps/ios/Along/DayIdentity.swift apps/ios/Along/PipProgression.swift apps/ios/Along/JournalBackup.swift apps/ios/Along/OnboardingModel.swift apps/ios/Along/SetupModel.swift apps/ios/Along/ProtocolModel.swift apps/ios/Along/InjectionSpot.swift apps/ios/Along/JournalStore.swift apps/ios/Along/ProtocolStore.swift apps/ios/Along/API.swift apps/ios/Along/CloudSync.swift apps/ios/Along/AccountJournals.swift apps/ios/Along/ProtocolReminders.swift apps/ios/Along/ReminderModel.swift tests/ios/AccountSyncTests.swift tests/ios/CoreTests.swift -o .build/core-tests
 .build/core-tests
