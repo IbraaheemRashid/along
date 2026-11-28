@@ -11,6 +11,8 @@ struct SetupFlowView: View {
     @State private var showLocalData = false
     @State private var showSignIn = false
     @State private var requestingReminders = false
+    @State private var completingPurchase = false
+    @State private var previousPlan: SetupDraft?
     @State private var search = ""
     @State private var accountEmail = ""
     @State private var accountPassword = ""
@@ -139,8 +141,8 @@ struct SetupFlowView: View {
                 if draft.referralCode.isEmpty { store.setup.referralCode = "" }
                 advance()
             }
-        case .ready: return FooterAction(title: "Build my protocol", action: advance)
-        case .plan: return FooterAction(title: "Let’s get started", action: advance)
+        case .ready: return FooterAction(title: "See my schedule", action: advance)
+        case .plan: return FooterAction(title: "Continue to account", action: advance)
         case .account: return accountAction
         case .paywall: return paywallAction
         default: return FooterAction(title: "Continue", enabled: draft.canContinue(at: step), action: advance)
@@ -171,10 +173,14 @@ struct SetupFlowView: View {
     @ViewBuilder private var footerAccessory: some View {
         switch step {
         case .welcome:
-            Button { showSignIn = true } label: {
-                (Text("Already have an account? ").foregroundStyle(SetupTheme.muted) + Text("Sign in").fontWeight(.semibold).foregroundStyle(SetupTheme.ink))
-                    .font(.subheadline).frame(maxWidth: .infinity, minHeight: 44)
-            }.accessibilityIdentifier("setup.sign-in")
+            if auth.isSignedIn {
+                SignedInSetupActions()
+            } else {
+                Button { showSignIn = true } label: {
+                    (Text("Already have an account? ").foregroundStyle(SetupTheme.muted) + Text("Sign in").fontWeight(.semibold).foregroundStyle(SetupTheme.ink))
+                        .font(.subheadline).frame(maxWidth: .infinity, minHeight: 44)
+                }.accessibilityIdentifier("setup.sign-in")
+            }
             if hasLocalRecords {
                 SetupTextButton(title: "Your data & reminders", identifier: "setup.local-data") { showLocalData = true }
             }
@@ -206,7 +212,8 @@ struct SetupFlowView: View {
         if step == .weight { next.prepareTarget() }
         if step == .target { next.hasChosenTarget = true }
         guard let destination = next.step(after: step) else { return }
-        next.step = destination
+        next.step = previousPlan != nil && step == .doseTime ? .plan : destination
+        if step == .doseTime { previousPlan = nil }
         forward = true
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.28)) { store.setup = next }
         _ = store.saveSetup()
@@ -214,9 +221,16 @@ struct SetupFlowView: View {
 
     private func back() {
         fieldFocused = false
-        guard let destination = draft.step(before: step) else { return }
+        guard let previous = draft.step(before: step) else { return }
         forward = false
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.28)) { store.setup.step = destination }
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.28)) {
+            if step == .frequency, let original = previousPlan {
+                store.setup = original
+                previousPlan = nil
+            } else {
+                store.setup.step = previous
+            }
+        }
     }
 
     private func requestReminders() {
@@ -226,7 +240,7 @@ struct SetupFlowView: View {
             preferences.enabled = true
             // Sources are empty until setup finishes; sync runs after the protocol is created.
             let saved = await reminders.save(preferences, sources: [])
-            store.setup.remindersRequested = saved || !reminders.deliveryEnabled
+            store.setup.remindersRequested = saved
             requestingReminders = false
             advance()
         }
@@ -259,7 +273,12 @@ struct SetupFlowView: View {
         case .referral: referralScreen
         case .ready: readyScreen
         case .building: SetupBuildingView(draft: draft, reduceMotion: reduceMotion) { advance() }
-        case .plan: SetupPlanView(draft: draft)
+        case .plan:
+            SetupPlanView(draft: draft) {
+                previousPlan = draft
+                forward = false
+                store.setup.step = .frequency
+            }
         case .account: accountScreen
         case .paywall: paywallScreen
         }
@@ -301,32 +320,14 @@ struct SetupFlowView: View {
                     Image(systemName: "apple.logo").font(.system(size: 19, weight: .medium))
                 } action: {
                     fieldFocused = false
-                    Task {
-                        await auth.signInWithApple()
-                        if auth.isSignedIn {
-                            if let email = auth.user?.email {
-                                accountEmail = email
-                                store.setup.accountEmail = email
-                            }
-                            advance()
-                        }
-                    }
+                    Task { await continueWithProvider(auth.signInWithApple) }
                 }
                 accountProvider("Continue with Google", identifier: "google", filled: false) {
                     Text("G").font(.system(size: 19, weight: .bold, design: .rounded))
                         .foregroundStyle(LinearGradient(colors: [Color(red: 0.26, green: 0.52, blue: 0.96), Color(red: 0.92, green: 0.26, blue: 0.21), Color(red: 0.98, green: 0.74, blue: 0.02), Color(red: 0.2, green: 0.66, blue: 0.33)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 } action: {
                     fieldFocused = false
-                    Task {
-                        await auth.signInWithGoogle()
-                        if auth.isSignedIn {
-                            if let email = auth.user?.email {
-                                accountEmail = email
-                                store.setup.accountEmail = email
-                            }
-                            advance()
-                        }
-                    }
+                    Task { await continueWithProvider(auth.signInWithGoogle) }
                 }
 
                 if let notice = auth.message {
@@ -574,23 +575,68 @@ struct SetupFlowView: View {
     }
 
     private var frequencyScreen: some View {
-        SetupQuestionPage(title: draft.experience == .planning ? "How often will you dose?" : "How often do you dose?", subtitle: "Go with what your protocol or prescriber says. You can set each peptide separately later.") {
+        SetupQuestionPage(title: draft.experience == .planning ? "How often will you dose?" : "How often do you dose?", subtitle: "Choose the frequency in your own protocol. You’ll review the days and times next.") {
             ForEach(DoseFrequency.allCases) { option in
                 SetupOptionRow(title: option.title, detail: option.detail, icon: .symbol(option.symbol), selected: draft.frequency == option,
-                               identifier: "setup.frequency.\(option.rawValue)") { store.setup.frequency = option }
+                               identifier: "setup.frequency.\(option.rawValue)") {
+                    if draft.frequency != option { store.setup.sharedWeekdays = [] }
+                    store.setup.frequency = option
+                }
             }
         }
     }
 
-    private var doseTimeScreen: some View {
-        SetupQuestionPage(title: draft.experience == .planning ? "What time suits you to dose?" : "When do you usually dose?", subtitle: "We’ll time your reminders around this.") {
-            DatePicker("Usual dose time", selection: Binding(get: { draft.doseTime }, set: { date in
-                let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
-                store.setup.doseHour = parts.hour ?? 8; store.setup.doseMinute = parts.minute ?? 0
-            }), displayedComponents: .hourAndMinute)
-            .datePickerStyle(.wheel).labelsHidden().frame(maxWidth: .infinity)
-            .accessibilityIdentifier("setup.dose-time")
+    @ViewBuilder private var doseTimeScreen: some View {
+        if draft.compounds.isEmpty {
+            SetupQuestionPage(title: "Set your schedule later", subtitle: "When you add your first peptide in Your peptides, you can choose its days and times.") {
+                Image(systemName: "calendar").font(.largeTitle).foregroundStyle(SetupTheme.muted)
+                    .accessibilityHidden(true)
+            }
+        } else if draft.frequency == .varies {
+            SetupQuestionPage(title: "When is each peptide scheduled?", subtitle: "Choose the days and time you follow for each peptide. Leave the days blank to set a schedule later in Your peptides, including intervals or multiple times a day.") {
+                ForEach(draft.compounds, id: \.self) { name in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(name).font(.headline)
+                        WeekdayPicker(selection: weekdays(for: name), identifier: "setup.weekday.\(name)")
+                        if let schedule = draft.peptideSchedules[name], let time = schedule.times.first {
+                            DatePicker("Dose time", selection: Binding(get: { time.date(on: store.todayKey) ?? .now }, set: { date in
+                                store.setup.peptideSchedules[name]?.times = [doseTime(from: date)]
+                            }), displayedComponents: .hourAndMinute)
+                                .accessibilityIdentifier("setup.dose-time.\(name)")
+                        } else {
+                            Text("Schedule not set").font(.caption).foregroundStyle(SetupTheme.muted)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                }
+            }
+        } else {
+            SetupQuestionPage(title: "When are your doses scheduled?", subtitle: draft.compounds.joined(separator: " · ")) {
+                if draft.frequency == .weekly || draft.frequency == .fewPerWeek {
+                    Text(draft.frequency == .weekly ? "Choose your dose day" : "Choose your dose days")
+                        .font(.headline).frame(maxWidth: .infinity, alignment: .leading)
+                    WeekdayPicker(selection: binding(\.sharedWeekdays), single: draft.frequency == .weekly, identifier: "setup.weekday")
+                }
+                DatePicker("Dose time", selection: Binding(get: { draft.doseTime }, set: { date in
+                    let time = doseTime(from: date)
+                    store.setup.doseHour = time.hour
+                    store.setup.doseMinute = time.minute
+                }), displayedComponents: .hourAndMinute)
+                    .datePickerStyle(.wheel).labelsHidden().frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("setup.dose-time")
+            }
         }
+    }
+
+    private func weekdays(for name: String) -> Binding<Set<Int>> {
+        Binding(get: { store.setup.peptideSchedules[name]?.weekdays ?? [] }, set: { days in
+            let time = store.setup.peptideSchedules[name]?.times.first ?? DoseTime(hour: draft.doseHour, minute: draft.doseMinute)
+            store.setup.peptideSchedules[name] = days.isEmpty ? nil : .on(days, at: time)
+        })
+    }
+
+    private func doseTime(from date: Date) -> DoseTime {
+        DoseTime(hour: Calendar.current.component(.hour, from: date), minute: Calendar.current.component(.minute, from: date))
     }
 
     private var obstaclesScreen: some View {
@@ -633,7 +679,7 @@ struct SetupFlowView: View {
     private var remindersScreen: some View {
         VStack(spacing: 30) {
             Spacer()
-            SetupHeading(title: "Never miss a dose", subtitle: "A reminder at \(draft.doseTimeText) keeps your protocol on schedule.", centered: true)
+            SetupHeading(title: "Never miss a dose", subtitle: "Along can notify you at the times you set for each peptide.", centered: true)
             SetupNotificationMock(allow: requestReminders, disabled: requestingReminders)
             Spacer(); Spacer()
         }.padding(.horizontal, 24)
@@ -656,25 +702,48 @@ struct SetupFlowView: View {
     }
 
     private var readyScreen: some View {
-        VStack(spacing: 18) {
-            Spacer()
-            SetupRingArtwork(symbol: "hand.thumbsup")
-            Label("All done!", systemImage: "checkmark.circle.fill").font(.subheadline.weight(.semibold))
-                .foregroundStyle(SetupTheme.ink).symbolRenderingMode(.multicolor)
-            Text("Time to build your protocol").setupTitleFont().multilineTextAlignment(.center).foregroundStyle(SetupTheme.ink)
-                .accessibilityAddTraits(.isHeader)
-            Spacer(); Spacer()
-        }.padding(.horizontal, 32)
+        SetupQuestionPage(title: draft.compounds.isEmpty ? "Your schedule preview" : "When was your last injection?",
+                          subtitle: draft.compounds.isEmpty ? "You can add your first peptide and its schedule later." : "Optional. Add a past injection for any peptide, or continue if you haven’t started.") {
+            ForEach(draft.compounds, id: \.self) { name in
+                SetupCard {
+                    Text(name).font(.headline)
+                    if let entry = draft.lastInjections[name] {
+                        DatePicker("Last injection", selection: Binding(get: { entry.takenAt }, set: { date in
+                            guard let key = DayIdentity.key(for: date) else { return }
+                            var updated = entry
+                            updated.takenAt = date
+                            updated.dayKey = key
+                            store.setup.lastInjections[name] = updated
+                        }), in: ...Date.now, displayedComponents: [.date, .hourAndMinute])
+                        Picker("Site (optional)", selection: Binding(get: { entry.site }, set: { store.setup.lastInjections[name]?.site = $0 })) {
+                            Text("Unspecified").tag(InjectionSite?.none)
+                            ForEach(InjectionSite.allCases) { site in Text(site.title).tag(Optional(site)) }
+                        }
+                        Button("Remove entry") { store.setup.lastInjections[name] = nil }
+                            .accessibilityLabel("Remove last injection for \(name)")
+                    } else {
+                        Button {
+                            let now = Date.now
+                            if let key = DayIdentity.key(for: now) {
+                                store.setup.lastInjections[name] = SetupInjection(takenAt: now, dayKey: key)
+                            }
+                        } label: { Label("Add last injection", systemImage: "plus") }
+                        .accessibilityLabel("Add last injection for \(name)")
+                        .accessibilityIdentifier("setup.last-injection.\(name)")
+                    }
+                }
+            }
+        }
     }
 
     // MARK: Paywall
 
     private var paywallScreen: some View {
         SetupScrollPage {
-            SetupHeading(title: "Unlock your protocol", subtitle: "Everything you just set up, ready to run.")
+            SetupHeading(title: "Unlock your protocol", subtitle: "Track the peptides and schedules you choose.")
             VStack(alignment: .leading, spacing: 14) {
                 benefit("checkmark.circle.fill", "One-tap dose log for \(draft.compounds.isEmpty ? "every peptide" : draft.compounds.prefix(2).joined(separator: " and "))")
-                benefit("bell.badge.fill", "Reminders at \(draft.doseTimeText)")
+                benefit("bell.badge.fill", draft.remindersRequested == true ? draft.reminderSummary : "Optional reminders for each scheduled dose")
                 benefit("chart.line.uptrend.xyaxis", draft.tracksWeightGoal ? "Progress towards \(draft.formattedWeight(draft.targetKg))" : "A full history of every dose")
             }.padding(.top, 22)
             VStack(spacing: 12) {
@@ -769,18 +838,44 @@ struct SetupFlowView: View {
         }
     }
 
-    /// Persist setup answers first, then create/sign-in so cloud restore cannot clobber them.
-    private func completePaidSetup() async {
-        persistAccountCredentials()
-        guard store.finishSetup() else { return }
-        await signInAfterSetupIfNeeded()
+    private func continueWithProvider(_ signIn: () async -> String?) async {
+        let source = store
+        let submitted = source.setup
+        guard let id = await signIn(), let user = auth.user, user.id == id else { return }
+        let destination: JournalStore
+        if let profiles = auth.journals {
+            guard let selected = await profiles.continueSetup(submitted, from: source, userID: user.id) else { return }
+            destination = selected
+        } else { destination = source }
+        guard !destination.journal.hasOnboarded, destination.setup.step == .account else { return }
+        if let email = user.email { destination.setup.accountEmail = email }
+        destination.setup.step = .paywall
     }
 
-    /// Temporary unlock while App Store / Superwall aren’t wired. Still creates the account.
-    private func completeSkippedPaywall() async {
+    private func completePaidSetup() async {
+        guard !completingPurchase else { return }
+        completingPurchase = true
+        defer { completingPurchase = false }
         persistAccountCredentials()
-        guard store.finishSetupPreview() else { return }
-        await signInAfterSetupIfNeeded()
+        let source = store
+        let submitted = source.setup
+        var destination = source
+        var userID = auth.user?.id
+        if userID == nil && auth.isConfigured {
+            userID = await auth.ensureSignedInAfterPurchase(email: submitted.accountEmail)
+        }
+        if let profiles = auth.journals, let userID {
+            guard let selected = await profiles.continueSetup(submitted, from: source, userID: userID) else { return }
+            destination = selected
+        }
+        guard auth.journals == nil || auth.journals?.active === destination,
+              !destination.journal.hasOnboarded, destination.setup.step == .paywall else { return }
+        _ = destination.finishSetup()
+    }
+
+    private func completeSkippedPaywall() async {
+        // Development records always stay local.
+        _ = store.finishSetupPreview()
     }
 
     /// Keep AuthStore as the source of truth so a view rebuild can’t lose the password.
@@ -794,18 +889,6 @@ struct SetupFlowView: View {
         _ = store.saveSetup()
     }
 
-    private func signInAfterSetupIfNeeded() async {
-        guard !auth.isSignedIn else { return }
-        persistAccountCredentials()
-        let email = store.setup.accountEmail
-        guard SetupDraft.validEmail(email) else { return }
-        // Prefer the staged password; never invent a new one if the member already chose one.
-        if auth.passwordDraft.count < 6, accountPassword.count >= 6 {
-            auth.stageOnboardingCredentials(email: email, password: accountPassword)
-        }
-        _ = await auth.ensureSignedInAfterPurchase(email: email)
-    }
-
     private var paywallFinePrint: some View {
         VStack(spacing: 4) {
             Text(billing.product(for: draft.plan.billingPlan).map { "\($0.priceWithPeriod), renews automatically until cancelled in Settings." } ?? "Renews automatically until cancelled in Settings.")
@@ -814,6 +897,7 @@ struct SetupFlowView: View {
                 HStack(spacing: 18) { paywallLinks }
                 VStack(spacing: 0) { paywallLinks }
             }.font(.caption).foregroundStyle(SetupTheme.muted).tint(SetupTheme.muted).frame(minHeight: 32)
+            #if DEBUG
             Button("Continue without paying · temporary") {
                 Task { await completeSkippedPaywall() }
             }
@@ -822,6 +906,7 @@ struct SetupFlowView: View {
             .frame(minHeight: 32)
             .disabled(auth.isBusy)
             .accessibilityIdentifier("setup.skip-paywall")
+            #endif
         }
         .frame(maxWidth: .infinity)
     }
@@ -878,5 +963,21 @@ struct SetupScrollPage<Content: View>: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .scrollDismissesKeyboard(.interactively)
+    }
+}
+
+private struct SignedInSetupActions: View {
+    @Environment(AuthStore.self) private var auth
+    @Environment(CloudSync.self) private var sync
+
+    var body: some View {
+        if let message = sync.message {
+            Text(message).font(.footnote).foregroundStyle(SetupTheme.muted)
+            if sync.conflict == nil {
+                Button("Retry account backup") { Task { await sync.prepare() } }
+            }
+        }
+        Button("Sign out") { auth.signOut() }
+            .frame(minHeight: 44)
     }
 }

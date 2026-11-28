@@ -8,6 +8,11 @@ struct ProgressScreen: View {
     @State private var selectedPeptide: UUID?
     @State private var showWeight = false
 
+    @State private var selectedDay: HistoryDay?
+    @State private var historyLimit = 20
+
+    private struct HistoryDay: Identifiable { let id: String }
+
     private var today: String { store.todayKey }
     private var peptides: [TrackedPeptide] { store.journal.protocolPeptides }
     private var logs: [DoseLog] { store.journal.protocolLogs }
@@ -19,9 +24,8 @@ struct ProgressScreen: View {
         let start = ProtocolSchedule.key(today, adding: -29) ?? today
         return ProtocolSchedule.adherence(from: start, to: today, peptides: peptides, logs: logs, now: store.referenceDate)
     }
-    private var noted: [DoseLog] {
-            logs.filter { !$0.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            .filter { selectedPeptide == nil || $0.peptideID == selectedPeptide }
+    private var historyLogs: [DoseLog] {
+        logs.filter { selectedPeptide == nil || $0.peptideID == selectedPeptide }
             .sorted { $0.takenAt > $1.takenAt }
     }
     private var showsWeight: Bool { store.journal.showWeight || store.journal.setupProfile?.tracksWeightGoal == true }
@@ -33,16 +37,11 @@ struct ProgressScreen: View {
                 if peptides.isEmpty {
                     empty
                 } else {
-                    adherenceCards
-                    if let selected = selectedPeptide.flatMap(store.peptide) {
-                        PeptideReferenceChart(name: selected.name)
-                    } else if peptides.count == 1, let only = peptides.first {
-                        PeptideReferenceChart(name: only.name)
-                    }
-                    batchSection
-                    siteMapSection
                     calendar
                     history
+                    adherenceCards
+                    siteMapSection
+                    batchSection
                     if showsWeight { weightSection }
                 }
             }
@@ -51,6 +50,24 @@ struct ProgressScreen: View {
         .scrollIndicators(.hidden)
         .appBackground()
         .sheet(isPresented: $showWeight) { WeightLogSheet() }
+        .sheet(item: $selectedDay) { selection in
+            let entries = historyLogs.filter { $0.dayKey == selection.id }
+            NavigationStack {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        if entries.isEmpty {
+                            Text("No doses recorded for this day.").foregroundStyle(SetupTheme.muted)
+                        }
+                        ForEach(entries) { log in historyRow(log) }
+                    }.padding(20)
+                }
+                .navigationTitle(DayIdentity.formatted(key: selection.id, rawDate: .now, style: .dateTime.weekday(.abbreviated).day().month(.abbreviated).year()))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { selectedDay = nil } } }
+            }
+            .presentationDetents([.medium, .large])
+        }
+        .onChange(of: selectedPeptide) { _, _ in historyLimit = 20 }
     }
 
     private var header: some View {
@@ -64,24 +81,32 @@ struct ProgressScreen: View {
         AppCard(padding: 22) {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Nothing to chart yet").font(.headline).foregroundStyle(SetupTheme.ink)
-                Text("Once you log doses, adherence and notes show up here. Unlogged days stay blank — never marked as missed.")
+                Text("Your calendar and dose history appear here after you add a peptide.")
                     .font(.subheadline).foregroundStyle(SetupTheme.muted)
             }
         }
     }
 
     private var adherenceCards: some View {
-        HStack(spacing: 12) {
-            AdherenceCard(title: "7 days", adherence: week)
-            AdherenceCard(title: "30 days", adherence: month)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                AdherenceCard(title: "7 days", adherence: week)
+                AdherenceCard(title: "30 days", adherence: month)
+            }
+            Text("Doses count towards these percentages once their scheduled time arrives.")
+                .font(.caption).foregroundStyle(SetupTheme.muted)
         }
         .accessibilityIdentifier("progress.adherence")
     }
 
     private var calendar: some View {
         let monthStart = monthAnchor
-        let days = monthDays(around: monthStart)
+        let calendar = Calendar.current
+        let days = DayIdentity.monthGrid(containing: monthStart, calendar: calendar)
         let taken = takenPeptides(on: Set(days))
+        let skipped = Set(logs.filter {
+            $0.status == .skipped && (selectedPeptide == nil || $0.peptideID == selectedPeptide)
+        }.map(\.dayKey))
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
                 AppSectionTitle(title: monthStart.formatted(.dateTime.month(.wide).year()))
@@ -99,12 +124,18 @@ struct ProgressScreen: View {
             .foregroundStyle(SetupTheme.ink)
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 7), spacing: 6) {
-                ForEach(Array(Calendar.current.veryShortWeekdaySymbols.enumerated()), id: \.offset) { _, symbol in
-                    Text(symbol).font(.caption2.weight(.semibold)).foregroundStyle(SetupTheme.muted).frame(maxWidth: .infinity)
+                ForEach(DayIdentity.weekdays(in: calendar), id: \.self) { weekday in
+                    Text(calendar.veryShortWeekdaySymbols[weekday - 1]).font(.caption2.weight(.semibold)).foregroundStyle(SetupTheme.muted).frame(maxWidth: .infinity)
                 }
                 ForEach(days, id: \.self) { key in
-                    DayCell(key: key, today: today, fraction: fraction(on: key), inMonth: isInDisplayedMonth(key, monthStart),
-                            taken: taken[key] ?? [])
+                    let inMonth = isInDisplayedMonth(key, monthStart)
+                    Button { selectedDay = HistoryDay(id: key) } label: {
+                        DayCell(key: key, today: today, fraction: fraction(on: key), inMonth: inMonth,
+                                taken: taken[key] ?? [], hasSkipped: skipped.contains(key))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!inMonth || key > today)
+                    .accessibilityIdentifier("progress.day.\(key)")
                 }
             }
             calendarLegend
@@ -112,6 +143,7 @@ struct ProgressScreen: View {
         .padding(16)
         .background(SetupTheme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(SetupTheme.border))
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("progress.calendar")
     }
 
@@ -216,7 +248,7 @@ struct ProgressScreen: View {
 
     private var history: some View {
         VStack(alignment: .leading, spacing: 12) {
-            AppSectionTitle(title: "Notes with doses")
+            AppSectionTitle(title: "Dose history")
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     FilterChip(title: "All", selected: selectedPeptide == nil) { selectedPeptide = nil }
@@ -227,17 +259,25 @@ struct ProgressScreen: View {
                     }
                 }
             }
-            if noted.isEmpty {
+            let records = historyLogs
+            if records.isEmpty {
                 AppCard {
-                    Text("Notes you add when logging a dose appear here.")
+                    Text("Doses you log appear here, including entries without notes.")
                         .font(.subheadline).foregroundStyle(SetupTheme.muted)
                 }
             } else {
-                ForEach(noted.prefix(20)) { log in
-                    NoteRow(log: log, peptideName: store.peptide(log.peptideID)?.name ?? "Peptide")
+                LazyVStack(spacing: 12) {
+                    ForEach(records.prefix(historyLimit)) { log in historyRow(log) }
+                }
+                if records.count > historyLimit {
+                    Button("Show older doses") { historyLimit += 20 }
                 }
             }
         }
+    }
+
+    private func historyRow(_ log: DoseLog) -> some View {
+        DoseHistoryRow(log: log, peptideName: store.peptide(log.peptideID)?.name ?? "Peptide")
     }
 
     private var weightSection: some View {
@@ -280,26 +320,13 @@ struct ProgressScreen: View {
         return calendar.date(byAdding: .month, value: monthOffset, to: calendar.date(from: calendar.dateComponents([.year, .month], from: base))!) ?? base
     }
 
-    private func monthDays(around monthStart: Date) -> [String] {
-        let calendar = Calendar.current
-        guard let range = calendar.range(of: .day, in: .month, for: monthStart),
-              let first = calendar.date(from: calendar.dateComponents([.year, .month], from: monthStart)) else { return [] }
-        let weekday = calendar.component(.weekday, from: first)
-        // Monday-first padding.
-        let leading = (weekday + 5) % 7
-        let start = calendar.date(byAdding: .day, value: -leading, to: first) ?? first
-        return (0..<(leading + range.count)).compactMap { offset in
-            calendar.date(byAdding: .day, value: offset, to: start).flatMap { DayIdentity.key(for: $0) }
-        }
-    }
-
     private func isInDisplayedMonth(_ key: String, _ monthStart: Date) -> Bool {
         guard let date = DayIdentity.date(for: key) else { return false }
         return Calendar.current.isDate(date, equalTo: monthStart, toGranularity: .month)
     }
 
     private func fraction(on key: String) -> Double? {
-        let due = store.slots(on: key).filter { !$0.isExtra }
+        let due = store.slots(on: key).filter { !$0.isExtra && (selectedPeptide == nil || $0.peptide.id == selectedPeptide) }
         guard !due.isEmpty, key <= today else { return nil }
         return Double(due.filter(\.isTaken).count) / Double(due.count)
     }
@@ -339,6 +366,7 @@ private struct DayCell: View {
     var inMonth: Bool
     /// Peptides with a taken dose this day, in protocol order.
     var taken: [TrackedPeptide] = []
+    var hasSkipped = false
     private static let maximumDots = 3
 
     var body: some View {
@@ -351,6 +379,9 @@ private struct DayCell: View {
             }
             .frame(width: 30, height: 30)
             HStack(spacing: 2) {
+                if hasSkipped && inMonth {
+                    Image(systemName: "minus").font(.system(size: 7, weight: .bold)).foregroundStyle(SetupTheme.muted)
+                }
                 ForEach(shown.prefix(Self.maximumDots)) { PeptideDot(color: $0.displayColor, size: 5) }
                 if shown.count > Self.maximumDots {
                     Text("+").font(.system(size: 8, weight: .bold)).foregroundStyle(SetupTheme.muted)
@@ -366,8 +397,10 @@ private struct DayCell: View {
 
     private func label(for shown: [TrackedPeptide]) -> String {
         let date = DayIdentity.formatted(key: key, rawDate: .now, style: .dateTime.weekday(.wide).day().month(.wide))
-        guard !shown.isEmpty else { return date }
-        return "\(date), \(shown.map(\.name).joined(separator: ", ")) taken"
+        var description = date
+        if !shown.isEmpty { description += ", \(shown.map(\.name).joined(separator: ", ")) taken" }
+        if hasSkipped { description += ", skipped dose" }
+        return description
     }
 }
 
@@ -387,7 +420,7 @@ private struct FilterChip: View {
     }
 }
 
-private struct NoteRow: View {
+private struct DoseHistoryRow: View {
     var log: DoseLog
     var peptideName: String
     var body: some View {
@@ -398,15 +431,20 @@ private struct NoteRow: View {
                 Text(DayIdentity.formatted(key: log.dayKey, rawDate: log.takenAt, style: .dateTime.month(.abbreviated).day()))
                     .font(.caption).foregroundStyle(SetupTheme.muted)
             }
-            Text(log.note).font(.subheadline).foregroundStyle(SetupTheme.ink).fixedSize(horizontal: false, vertical: true)
-            if let amount = log.amountText {
-                Text(amount).font(.caption).foregroundStyle(SetupTheme.muted)
+            Text("\(log.status == .taken ? "Taken" : "Skipped") · \(log.takenAt.formatted(date: .omitted, time: .shortened))")
+                .font(.subheadline).foregroundStyle(SetupTheme.ink)
+            let details = [log.scheduledTime == nil ? "Extra dose" : nil, log.amountText, log.spot?.title ?? log.site?.title].compactMap { $0 }.joined(separator: " · ")
+            if !details.isEmpty { Text(details).font(.caption).foregroundStyle(SetupTheme.muted) }
+            if !log.note.isEmpty {
+                Text(log.note).font(.subheadline).foregroundStyle(SetupTheme.ink).fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(SetupTheme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(SetupTheme.border))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("progress.entry.\(log.id)")
     }
 }
 

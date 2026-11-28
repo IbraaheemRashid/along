@@ -126,7 +126,8 @@ struct SetupWeekCard: View {
             HStack {
                 Text(title).font(.headline).foregroundStyle(SetupTheme.ink)
                 Spacer()
-                Text(planned ? "\(pattern.filter { $0 }.count) dose days" : "\(min(revealed, pattern.filter { $0 }.count)) of \(pattern.filter { $0 }.count) logged")
+                let count = pattern.filter { $0 }.count
+                Text(planned ? "\(count) dose \(count == 1 ? "day" : "days")" : "\(min(revealed, count)) of \(count) logged")
                     .font(.footnote.weight(.medium)).foregroundStyle(SetupTheme.muted).contentTransition(.numericText())
             }
             HStack(spacing: 0) {
@@ -232,7 +233,7 @@ struct SetupBuildingView: View {
         [("Your goals", draft.goals.isEmpty ? "Ready" : SetupGoal.allCases.filter(draft.goals.contains).map(\.title).joined(separator: ", ")),
          ("Your peptides", draft.compounds.isEmpty ? "Add any time" : draft.compounds.joined(separator: ", ")),
          ("Weekly schedule", draft.frequency?.title ?? "Flexible"),
-         ("Reminders", draft.remindersRequested == true ? "Daily at \(draft.doseTimeText)" : "Off for now"),
+         ("Reminders", draft.reminderSummary),
          ("Progress tracking", draft.tracksWeightGoal ? "Goal \(draft.formattedWeight(draft.targetKg))" : "Every dose, from day one")]
     }
     private var status: String {
@@ -240,7 +241,7 @@ struct SetupBuildingView: View {
         case ..<0.2: "Applying your goals…"
         case ..<0.4: "Adding your peptides…"
         case ..<0.6: "Setting your schedule…"
-        case ..<0.8: "Scheduling reminders…"
+        case ..<0.8: "Saving reminder preferences…"
         default: "Finalising your protocol…"
         }
     }
@@ -303,6 +304,7 @@ struct SetupBuildingView: View {
 /// The payoff: the person's own answers arranged as a protocol.
 struct SetupPlanView: View {
     var draft: SetupDraft
+    var editSchedule: () -> Void
 
     var body: some View {
         SetupScrollPage {
@@ -317,30 +319,50 @@ struct SetupPlanView: View {
             SetupCard {
                 Text("Your protocol").font(.headline).foregroundStyle(SetupTheme.ink)
                 if draft.compounds.isEmpty {
-                    Text("Add your peptides whenever you’re ready. Your schedule and reminders are already set.")
+                    Text("Add your first peptide and its schedule in Your peptides whenever you’re ready.")
                         .font(.subheadline).foregroundStyle(SetupTheme.muted).padding(.top, 8)
                 } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(draft.compounds.enumerated()), id: \.offset) { index, name in
-                            if index > 0 { Divider() }
-                            HStack(spacing: 12) {
-                                Image(systemName: "syringe").font(.system(size: 14, weight: .medium)).foregroundStyle(SetupTheme.ink)
-                                    .frame(width: 34, height: 34).background(SetupTheme.surface, in: Circle())
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(name).font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
-                                    Text(Peptide.category(for: name)).font(.caption).foregroundStyle(SetupTheme.muted)
-                                }
-                                Spacer(minLength: 0)
-                            }.padding(.vertical, 10)
+                    TimelineView(.periodic(from: .now, by: 60)) { context in
+                        let peptides = draft.initialPeptides(startKey: DayIdentity.key(for: context.date) ?? "")
+                        VStack(spacing: 0) {
+                            ForEach(Array(peptides.enumerated()), id: \.element.name) { index, peptide in
+                                let name = peptide.name
+                                if index > 0 { Divider() }
+                                HStack(spacing: 12) {
+                                    Image(systemName: "syringe").font(.system(size: 14, weight: .medium)).foregroundStyle(SetupTheme.ink)
+                                        .frame(width: 34, height: 34).background(SetupTheme.surface, in: Circle())
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(name).font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
+                                        let schedule = draft.schedule(for: name)
+                                        Text(schedule.kind == .unscheduled ? "Set schedule in Your peptides" : "\(schedule.summary) · \(schedule.timesSummary)").font(.caption).foregroundStyle(SetupTheme.muted)
+                                        if let last = draft.lastInjections[name] {
+                                            Text("Last logged: \(DayIdentity.formatted(key: last.dayKey, rawDate: last.takenAt)) · \(last.takenAt.formatted(date: .omitted, time: .shortened))")
+                                                .font(.subheadline)
+                                                .accessibilityIdentifier("setup.last-logged.\(name)")
+                                        }
+                                        let logs = draft.lastInjections[name].map { [$0.log(for: peptide)] } ?? []
+                                        if schedule.kind != .unscheduled,
+                                           let next = ProtocolSchedule.nextDose(after: context.date, peptides: [peptide], logs: logs) {
+                                            Text("Next scheduled: \(next.at.formatted(.dateTime.weekday().month().day().hour().minute()))")
+                                                .font(.subheadline.weight(.semibold))
+                                                .accessibilityIdentifier("setup.next.\(name)")
+                                        }
+                                    }
+                                    Spacer(minLength: 0)
+                                }.padding(.vertical, 10)
+                            }
                         }
                     }.padding(.top, 8)
+                    Button("Edit schedule", action: editSchedule).font(.subheadline.weight(.semibold))
+                        .accessibilityIdentifier("setup.edit-schedule")
                 }
             }.padding(.top, 24)
 
-            SetupWeekCard(pattern: (draft.frequency ?? .daily).weekPattern, animated: false, title: "Your week",
-                          footnote: draft.remindersRequested == true ? "Reminder every day at \(draft.doseTimeText)" : "Reminders off · turn on any time",
-                          planned: true)
-                .padding(.top, 12)
+            if draft.hasScheduledPeptides {
+                SetupWeekCard(pattern: weekPattern, animated: false, title: "Your week",
+                              footnote: draft.reminderSummary, planned: true)
+                    .padding(.top, 12)
+            }
 
             if draft.tracksWeightGoal {
                 SetupCard {
@@ -377,7 +399,17 @@ struct SetupPlanView: View {
         .accessibilityIdentifier("setup.plan")
     }
 
-    private var headline: String { "Your protocol is ready" }
+    private var headline: String {
+        draft.compounds.isEmpty || draft.compounds.contains { draft.schedule(for: $0).kind == .unscheduled }
+            ? "Your protocol so far" : "Your protocol is ready"
+    }
+
+    private var weekPattern: [Bool] {
+        let schedules = draft.compounds.map { draft.schedule(for: $0) }
+        return [2, 3, 4, 5, 6, 7, 1].map { day in
+            schedules.contains { $0.kind == .daily || $0.weekdays.contains(day) }
+        }
+    }
 
     private var summary: String {
         let peptides = draft.compounds.isEmpty ? "Add peptides any time" : draft.compounds.prefix(3).joined(separator: " + ") + (draft.compounds.count > 3 ? " + \(draft.compounds.count - 3) more" : "")
@@ -386,7 +418,7 @@ struct SetupPlanView: View {
 
     private func answer(for obstacle: SetupObstacle) -> String {
         switch obstacle {
-        case .forgetting: draft.remindersRequested == true ? "Reminders at \(draft.doseTimeText)" : "Reminders, whenever you turn them on"
+        case .forgetting: draft.remindersRequested == true ? draft.reminderSummary : "Reminders, whenever you turn them on"
         case .schedules: "Each peptide on its own schedule"
         case .tracking: "A one-tap log: peptide, amount and time"
         case .response: "A quick note with any dose"

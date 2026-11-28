@@ -2,7 +2,25 @@
 
 Updated 23 November 2026. Working name: Along. Along is a peptide protocol tracker (supporting tool, not medical advice). The GLP-1 journal and Pip companion are retired. **Market Gate A is not passed.**
 
-## Latest — peptide colours, 25 November 2026
+## Tracker walkthrough and competitive research, 28 November 2026
+
+The [six-app comparison](tracking-ux-research.md) explains the changes to setup, Today and Progress. Weekly schedules now require the person’s own weekday. Setup can carry a previous injection into the journal once, including entries without notes. Today shows the saved time and Progress opens individual calendar days. A skipped day, an unscheduled peptide and an extra dose remain distinguishable.
+
+The reminder planner respects future start dates and keeps long-running intervals anchored to the original date. The checked-in Xcode project opens without a private Firebase plist, and auth startup checks for configuration before accessing Firebase Auth. A configured build uses the existing project generator after adding its own plist so the resource and Google URL scheme match that build.
+
+**Verification**
+
+- The repository check script passed 30 API and web tests, 218 domain checks, 101 protocol checks, 49 billing checks, 51 reminder checks, 60 Debug backup checks, 61 Release backup checks and 66 civil-date checks. The reminder and billing checks use test clients. The optional Vite build was skipped because the web dependencies were absent in this checkout.
+- The Swift sources compiled and linked directly for the arm64 iOS Simulator in Debug and Release, using the optional-service fallback paths. The XCTest source type-checked against the simulator SDK. The project file passed `plutil -lint`.
+- Xcode UI tests were attempted twice. The host denied the SwiftPM manifest-cache write, and the CoreSimulator service was unavailable. The new end-to-end case records a dose from Today, checks its time, and opens that note-free entry from the calendar. Its runtime result is pending.
+
+**Account switching fixed, 28 November.** Each authenticated UID opens a separate local journal. The previous shared file stays available through the on-device journal choice. A new checkout may transfer the setup the person just submitted. Returning accounts open their own saved records. Firestore writes compare the server revision inside a transaction. A failed read leaves uploads paused, and competing changes prompt a choice before either copy is replaced.
+
+The account suite uses real journal files and a controlled in-memory cloud client. It exercises two existing accounts, a new buyer, sign-out and cold launch, interrupted reads and writes, offline edits, retries, and choosing either side of a conflict. A reminder regression also covers signing out during a pending schedule update. The full suite now passes 669 checks, including 32 account checks and 52 reminder checks. Debug and Release sources compile and link for arm64 iOS Simulator with optional services disabled. A separate compiler check enabled the real Firebase Auth and Firestore 11.15.0 interfaces and Google Sign-In for the iOS app sources. The host could not connect to CoreSimulator or write SwiftPM’s manifest cache for the dependency-linked build.
+
+**Before paid release**, run the same two-account walkthrough against a test Firebase project on an iPhone, then verify sandbox purchase and restore and real notification delivery.
+
+## Peptide colours, 25 November 2026
 
 Branch `feature/peptide-colours`: people pick a colour for each peptide from 10 swatches (`PeptideColor`) in the add/edit screen, and it shows on the badge in Today and the peptide list, the Next dose card, the dose-sheet chips, and as up to three dots per day (then "+") with a legend on the Progress calendar. `TrackedPeptide.color` is optional; nil follows `PeptideColor.default(for:)`, which reproduces the old category tints exactly, so existing peptides look the same. Backups accept `color` and reject unknown values. Colour is for recognition only, and the monogram stays so colour is never the only cue. The 3D site picker is unchanged.
 

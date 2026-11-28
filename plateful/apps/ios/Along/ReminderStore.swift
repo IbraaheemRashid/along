@@ -16,6 +16,7 @@ import UserNotifications
     private let storageKey = "along.reminders.preferences.v1"
     private var readablePreferences = true
     private var stateRevision = 0
+    private var resyncAfterSave = false
     /// Last peptide sources used for scheduling, so protocol edits can refresh.
     private var sources: [DoseReminderSource] = []
     private var batchExpiries: [BatchExpiryReminderSource] = []
@@ -76,7 +77,12 @@ import UserNotifications
                                  batchExpiries: [BatchExpiryReminderSource] = []) async -> Bool {
         self.sources = sources
         self.batchExpiries = batchExpiries
-        guard deliveryEnabled, preferences.isEnabled, readablePreferences else { return preferences.isEnabled }
+        guard deliveryEnabled, readablePreferences else { return preferences.isEnabled }
+        if isBusy {
+            resyncAfterSave = true
+            return false
+        }
+        guard preferences.isEnabled else { return false }
         return await save(preferences, sources: sources, batchExpiries: batchExpiries)
     }
 
@@ -97,7 +103,13 @@ import UserNotifications
         }
         isBusy = true
         stateRevision += 1
-        defer { isBusy = false }
+        defer {
+            isBusy = false
+            if resyncAfterSave {
+                resyncAfterSave = false
+                Task { await sync(sources: self.sources, batchExpiries: self.batchExpiries) }
+            }
+        }
         message = nil
         if !requested.isEnabled {
             await client.removeAllAlongReminders()
@@ -221,7 +233,8 @@ private enum ReminderSchedulingError: Error { case incomplete }
         let pending = await center.pendingNotificationRequests()
         let ours = pending.map(\.identifier).filter(ReminderStore.isAlongReminder)
         center.removePendingNotificationRequests(withIdentifiers: ours + ReminderPlanner.legacyIDs)
-        center.removeDeliveredNotifications(withIdentifiers: ours + ReminderPlanner.legacyIDs)
+        let delivered = await center.deliveredNotifications().map { $0.request.identifier }.filter(ReminderStore.isAlongReminder)
+        center.removeDeliveredNotifications(withIdentifiers: delivered)
     }
 }
 

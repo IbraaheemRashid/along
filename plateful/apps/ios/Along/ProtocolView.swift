@@ -75,8 +75,10 @@ struct PeptideCard: View {
                     Text(peptide.name).font(.system(.body, weight: .semibold)).foregroundStyle(SetupTheme.ink)
                     Text([peptide.amountText ?? "Dose not set", peptide.schedule.summary].joined(separator: " · "))
                         .font(.footnote).foregroundStyle(SetupTheme.muted)
-                    Text(peptide.isPaused ? "Paused" : peptide.schedule.timesSummary)
-                        .font(.footnote).foregroundStyle(SetupTheme.muted)
+                    if peptide.isPaused || !peptide.schedule.times.isEmpty {
+                        Text(peptide.isPaused ? "Paused" : peptide.schedule.timesSummary)
+                            .font(.footnote).foregroundStyle(SetupTheme.muted)
+                    }
                     if let expiry = peptide.batchExpirySummary {
                         Text(expiry).font(.footnote.weight(.medium)).foregroundStyle(SetupTheme.ink.opacity(0.7))
                     }

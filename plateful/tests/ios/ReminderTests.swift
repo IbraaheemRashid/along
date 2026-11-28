@@ -10,6 +10,8 @@ import Foundation
     var failPermission = false
     var failAfterFirstSchedule = false
     var pretendSuccessWithoutScheduling = false
+    var holdNextReplace = false
+    var inFlightReplace: CheckedContinuation<Void, Never>?
     enum Failure: Error { case expected }
     func state() async -> ReminderSystemState { ReminderSystemState(permission: permission, pendingIDs: pending) }
     func requestPermission() async throws -> Bool {
@@ -20,6 +22,10 @@ import Foundation
     }
     func replace(with schedules: [ReminderSchedule]) async throws {
         replaceCount += 1
+        if holdNextReplace {
+            holdNextReplace = false
+            await withCheckedContinuation { inFlightReplace = $0 }
+        }
         pending = pending.filter { !ReminderStore.isAlongReminder($0) }
         if pretendSuccessWithoutScheduling { return }
         for schedule in schedules {
@@ -67,6 +73,24 @@ import Foundation
         expect(oneshots.count == ReminderPlanner.intervalHorizon && oneshots.allSatisfy { !$0.repeats }, "Interval peptides pre-schedule upcoming one-shot reminders")
         expect(oneshots.first?.dateComponents.hour == 9 && oneshots.first?.dateComponents.minute == 30, "Interval reminders keep the chosen clock time")
 
+        var futureDaily = daily
+        futureDaily.startKey = "2026-01-08"
+        var futureWeekly = weekly
+        futureWeekly.startKey = "2026-01-08"
+        for (source, firstDay) in [(futureDaily, 8), (futureWeekly, 9)] {
+            let upcoming = ReminderPlanner.schedules(for: preferences, sources: [source], now: now, calendar: calendar)
+            expect(upcoming.count == ReminderPlanner.intervalHorizon && upcoming.allSatisfy { !$0.repeats },
+                   "Future starts use dated notifications until the schedule becomes active")
+            expect(upcoming.first?.dateComponents.day == firstDay, "The first reminder respects the start date and weekday")
+        }
+        let later = calendar.date(byAdding: .day, value: 900, to: now)!
+        let laterPlans = ReminderPlanner.schedules(for: preferences, sources: [interval], now: later, calendar: calendar)
+        expect(laterPlans.count == ReminderPlanner.intervalHorizon, "A long-running interval continues after 900 days")
+        let firstLater = calendar.date(from: laterPlans[0].dateComponents)!
+        let startDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+        expect(firstLater > later && calendar.dateComponents([.day], from: startDate, to: firstLater).day!.isMultiple(of: 3),
+               "The original interval anchor survives rolling the reminder window forward")
+
         let batch = BatchExpiryReminderSource(id: "batch-a", name: "BPC-157", expiryKey: "2026-01-10")
         let batchPlans = ReminderPlanner.schedules(for: preferences, batchExpiries: [batch], now: now, calendar: calendar)
         expect(batchPlans.count == 3 && batchPlans.allSatisfy { !$0.repeats }, "Batch expiry schedules lead days before the marked date")
@@ -104,6 +128,15 @@ import Foundation
         expect(reloaded.preferences == preferences && reloaded.hasSavedPreferences, "Saved preferences survive restart")
         expect(await reloaded.sync(sources: [daily, weekly]) && reloaded.isScheduled && fake.requestCount == 1, "Sync reschedules without prompting again")
         expect(await store.save(preferences, sources: [daily, weekly]) && fake.requestCount == 1, "A second save with authorization does not ask again")
+
+        fake.holdNextReplace = true
+        let earlierProfile = Task { await store.sync(sources: [daily]) }
+        while fake.inFlightReplace == nil { await Task.yield() }
+        _ = await store.sync(sources: [])
+        fake.inFlightReplace?.resume()
+        _ = await earlierProfile.value
+        for _ in 0..<1000 where !fake.pending.isEmpty { await Task.yield() }
+        expect(fake.pending.isEmpty, "Sign-out clears the old profile’s notifications even during an earlier update")
 
         fake.failAfterFirstSchedule = true
         expect(!(await store.save(preferences, sources: [daily, weekly])), "Partial scheduling failures are reported")

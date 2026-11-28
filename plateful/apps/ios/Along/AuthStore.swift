@@ -22,7 +22,19 @@ struct AlongUser: Equatable {
 /// Firebase Auth for Apple, Google and email. No-ops until GoogleService-Info.plist
 /// is present and FirebaseAuth is linked. Does not change sign-in chrome.
 @MainActor @Observable final class AuthStore {
-    var user: AlongUser?
+    let journals: AccountJournals?
+    init(journals: AccountJournals? = nil) { self.journals = journals }
+
+    private(set) var user: AlongUser? {
+        didSet {
+            guard user?.id != oldValue?.id else { return }
+            journals?.select(user?.id)
+            emailDraft = ""
+            passwordDraft = ""
+            showsEmailForm = false
+            message = nil
+        }
+    }
     var isBusy = false
     var message: String?
     var emailDraft = ""
@@ -33,20 +45,26 @@ struct AlongUser: Equatable {
     private var appleSignInDelegate: AppleSignInCoordinator?
 
     var isConfigured: Bool {
-        Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil
+        #if DEBUG
+        guard journals != nil, !ProcessInfo.processInfo.arguments.contains("--ui-testing") else { return false }
+        #endif
+        return Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil
     }
 
     var isSignedIn: Bool { user != nil }
 
     func start() {
+        guard isConfigured else { return }
         FirebaseBootstrap.configureIfNeeded()
         #if canImport(FirebaseAuth)
         if let current = Auth.auth().currentUser {
             user = map(current)
         }
-        _ = Auth.auth().addStateDidChangeListener { [weak self] _, firebaseUser in
+        _ = Auth.auth().addStateDidChangeListener { [weak self] _, _ in
             Task { @MainActor in
-                self?.user = firebaseUser.map { self?.map($0) ?? AlongUser(id: $0.uid, email: $0.email, displayName: $0.displayName, provider: "firebase") }
+                guard let self else { return }
+                // A previously queued callback may arrive after a sign-out or a second sign-in.
+                self.user = Auth.auth().currentUser.map(self.map)
             }
         }
         #endif
@@ -59,10 +77,11 @@ struct AlongUser: Equatable {
         #endif
     }
 
-    func signInWithApple() async {
+    @discardableResult func signInWithApple() async -> String? {
+        guard !isBusy else { return nil }
         guard isConfigured else {
             message = "Add GoogleService-Info.plist from Firebase to enable accounts."
-            return
+            return nil
         }
         #if canImport(FirebaseAuth)
         isBusy = true
@@ -84,13 +103,15 @@ struct AlongUser: Equatable {
                   let idToken = String(data: tokenData, encoding: .utf8),
                   let appleNonce else {
                 message = "Apple Sign In didn’t return a token. Please try again."
-                return
+                return nil
             }
             let oauth = OAuthProvider.appleCredential(withIDToken: idToken, rawNonce: appleNonce, fullName: credential.fullName)
             let result = try await Auth.auth().signIn(with: oauth)
+            guard Auth.auth().currentUser?.uid == result.user.uid else { return nil }
             user = map(result.user)
             message = nil
             showsEmailForm = false
+            return result.user.uid
         } catch {
             appleSignInDelegate = nil
             message = friendly(error)
@@ -98,12 +119,14 @@ struct AlongUser: Equatable {
         #else
         message = "Firebase Auth isn’t linked in this build."
         #endif
+        return nil
     }
 
-    func signInWithGoogle() async {
+    @discardableResult func signInWithGoogle() async -> String? {
+        guard !isBusy else { return nil }
         guard isConfigured else {
             message = "Add GoogleService-Info.plist from Firebase to enable accounts."
-            return
+            return nil
         }
         #if canImport(FirebaseAuth) && canImport(GoogleSignIn)
         isBusy = true
@@ -111,25 +134,28 @@ struct AlongUser: Equatable {
         defer { isBusy = false }
         guard let presenter = topViewController() else {
             message = "Couldn’t open Google Sign In from this screen."
-            return
+            return nil
         }
         do {
             let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: presenter)
             guard let idToken = result.user.idToken?.tokenString else {
                 message = "Google Sign In didn’t return a token. Please try again."
-                return
+                return nil
             }
             let credential = GoogleAuthProvider.credential(withIDToken: idToken, accessToken: result.user.accessToken.tokenString)
             let authResult = try await Auth.auth().signIn(with: credential)
+            guard Auth.auth().currentUser?.uid == authResult.user.uid else { return nil }
             user = map(authResult.user)
             message = nil
             showsEmailForm = false
+            return authResult.user.uid
         } catch {
             message = friendly(error)
         }
         #else
         message = "Google Sign In isn’t linked in this build."
         #endif
+        return nil
     }
 
     func beginEmailSignIn() {
@@ -148,31 +174,31 @@ struct AlongUser: Equatable {
     /// session, or create/sign-in from credentials staged during the account step.
     /// Never blocks app access when Auth isn’t configured.
     @discardableResult
-    func ensureSignedInAfterPurchase(email: String? = nil) async -> Bool {
-        if isSignedIn { return true }
-        if !isConfigured { return true }
+    func ensureSignedInAfterPurchase(email: String? = nil) async -> String? {
+        if let user { return user.id }
+        if !isConfigured { return nil }
         if let email {
             let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty { emailDraft = trimmed }
         }
         guard emailDraft.contains("@"), passwordDraft.count >= 6 else {
             message = "Your email and password from setup are needed to create the account. Go back one step and enter them again."
-            return false
+            return nil
         }
-        await submitEmailSignIn(clearPasswordOnSuccess: true)
-        return isSignedIn
+        return await submitEmailSignIn(clearPasswordOnSuccess: true)
     }
 
-    func submitEmailSignIn(clearPasswordOnSuccess: Bool = true) async {
+    @discardableResult func submitEmailSignIn(clearPasswordOnSuccess: Bool = true) async -> String? {
+        guard !isBusy else { return nil }
         let email = emailDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         let password = passwordDraft
         guard isConfigured else {
             message = "Add GoogleService-Info.plist from Firebase to enable accounts."
-            return
+            return nil
         }
         guard email.contains("@"), password.count >= 6 else {
             message = "Use a valid email and a password of at least 6 characters."
-            return
+            return nil
         }
         #if canImport(FirebaseAuth)
         isBusy = true
@@ -180,9 +206,11 @@ struct AlongUser: Equatable {
         defer { isBusy = false }
         do {
             let result = try await Auth.auth().signIn(withEmail: email, password: password)
+            guard Auth.auth().currentUser?.uid == result.user.uid else { return nil }
             user = map(result.user)
             if clearPasswordOnSuccess { passwordDraft = "" }
             showsEmailForm = false
+            return result.user.uid
         } catch {
             let ns = error as NSError
             let missingUser = ns.code == AuthErrorCode.userNotFound.rawValue
@@ -191,10 +219,12 @@ struct AlongUser: Equatable {
             if missingUser {
                 do {
                     let created = try await Auth.auth().createUser(withEmail: email, password: password)
+                    guard Auth.auth().currentUser?.uid == created.user.uid else { return nil }
                     user = map(created.user)
                     if clearPasswordOnSuccess { passwordDraft = "" }
                     showsEmailForm = false
                     message = nil
+                    return created.user.uid
                 } catch {
                     message = friendly(error)
                 }
@@ -205,6 +235,7 @@ struct AlongUser: Equatable {
         #else
         message = "Firebase Auth isn’t linked in this build."
         #endif
+        return nil
     }
 
     func signOut() {
