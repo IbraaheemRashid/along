@@ -4,10 +4,12 @@ import UIKit
 
 final class AlongUITests: XCTestCase {
     private var app: XCUIApplication!
+    private var journalSession = UUID()
 
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
+        journalSession = UUID()
     }
 
     override func tearDownWithError() throws {
@@ -29,7 +31,7 @@ final class AlongUITests: XCTestCase {
 
     /// Every launch, including persistence checks, stays in the UI-test data directory.
     private func launchSandbox(reset: Bool = true, arguments: [String] = []) {
-        app.launchArguments = ["--ui-testing"] + (reset ? ["--reset-demo"] : []) + arguments
+        app.launchArguments = ["--ui-testing", "--test-journal", journalSession.uuidString] + (reset ? ["--reset-demo"] : []) + arguments
         app.launch()
     }
 
@@ -619,8 +621,13 @@ final class AlongUITests: XCTestCase {
         let loaded = expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: action)
         await fulfillment(of: [loaded], timeout: 30)
         tap("setup.subscribe")
-        XCTAssertTrue(navigationTab("Today").waitForExistence(timeout: 40))
-        tap("today.log-extra")
+        guard navigationTab("Today").waitForExistence(timeout: 40) else { return XCTFail("Checkout must open Today") }
+        // A signed simulator offers to save the new disposable login in Passwords.
+        let prompt = app.sheets["Save Password?"]
+        if prompt.waitForExistence(timeout: 6) { prompt.buttons["Not Now"].tap() }
+        let extra = app.buttons["today.log-extra"]
+        guard extra.isHittable else { return XCTFail("The logged-in journal must offer an extra dose") }
+        extra.tap()
         XCTAssertFalse(app.buttons["dose.save"].isEnabled)
         tap("dose.peptide.BPC-157")
         tap("site.skip")
