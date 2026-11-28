@@ -61,16 +61,22 @@ jobs:
         with:
           path: ${{ runner.temp }}/Along-build
           key: ${{ steps.build-cache.outputs.cache-primary-key }}
+      - name: Verify checkout, cloud backup and account deletion
+        working-directory: plateful/apps/ios
+        run: |
+          xcodebuild -project Along.xcodeproj -scheme Along -destination "id=$DEVICE" \
+            -parallel-testing-enabled NO -derivedDataPath "$RUNNER_TEMP/Along-build" -resultBundlePath "$RUNNER_TEMP/Account.xcresult" \
+            -only-testing:AlongUITests/AlongUITests/testAccountCheckoutBackupAndDeletion \
+            CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=ALONGUITST test-without-building
       - name: Walk through setup, logging, history and persistence
         working-directory: plateful/apps/ios
         run: |
           xcodebuild -project Along.xcodeproj -scheme Along -destination "id=$DEVICE" \
-            -parallel-testing-enabled NO -derivedDataPath "$RUNNER_TEMP/Along-build" -resultBundlePath "$RUNNER_TEMP/Along.xcresult" \
+            -parallel-testing-enabled NO -derivedDataPath "$RUNNER_TEMP/Along-build" -resultBundlePath "$RUNNER_TEMP/Tracker.xcresult" \
             -only-testing:AlongUITests/AlongUITests/testFullSetupStopsAtPaywallAndCanOpenExplicitDesignPreview \
             -only-testing:AlongUITests/AlongUITests/testNextDoseOpensItsPlannedDay \
             -only-testing:AlongUITests/AlongUITests/testOneTapDoseShowsActualTimeAndAppearsInCalendarWithoutANote \
             -only-testing:AlongUITests/AlongUITests/testReturningAccountCanRecoverPasswordAndSignIn \
-            -only-testing:AlongUITests/AlongUITests/testAccountCheckoutBackupAndDeletion \
             -only-testing:AlongUITests/AlongUITests/testLocalStoreKitCheckoutAndRelaunch \
             -only-testing:AlongUITests/AlongUITests/testUnconnectedPurchaseAndRestoreNeverUnlockApp \
             -only-testing:AlongUITests/AlongUITests/testWelcomeSignInSheetExplainsAccountsAndOffersRestore \
@@ -78,6 +84,14 @@ jobs:
             -only-testing:AlongUITests/AlongUITests/testTodayLogsDosesAndDoseSheetSavesDetails \
             -only-testing:AlongUITests/AlongUITests/testPeptideColourPersistsAfterEditing \
             CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=ALONGUITST test-without-building
+      - name: Gather native test results
+        if: always()
+        run: |
+          if test -d "$RUNNER_TEMP/Tracker.xcresult" && test -d "$RUNNER_TEMP/Account.xcresult"; then
+            xcrun xcresulttool merge --output-path "$RUNNER_TEMP/Along.xcresult" "$RUNNER_TEMP/Account.xcresult" "$RUNNER_TEMP/Tracker.xcresult"
+          elif test -d "$RUNNER_TEMP/Account.xcresult"; then
+            mv "$RUNNER_TEMP/Account.xcresult" "$RUNNER_TEMP/Along.xcresult"
+          fi
       - name: Check that the walkthrough ran without skips
         run: |
           xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/Along.xcresult" > "$RUNNER_TEMP/walkthrough-summary.json"

@@ -617,14 +617,25 @@ final class AlongUITests: XCTestCase {
         passwordField.tap()
         passwordField.typeText(password + "\n")
         let action = app.buttons["setup.subscribe"]
-        XCTAssertTrue(action.waitForExistence(timeout: 8))
-        let loaded = expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: action)
-        await fulfillment(of: [loaded], timeout: 30)
-        tap("setup.subscribe")
-        guard navigationTab("Today").waitForExistence(timeout: 40) else { return XCTFail("Checkout must open Today") }
-        // A signed simulator offers to save the new disposable login in Passwords.
+        guard action.waitForExistence(timeout: 8) else { return XCTFail("The account form must lead to checkout") }
+        // Passwords can offer to save the login when the secure field disappears, before or after checkout.
         let prompt = app.sheets["Save Password?"]
-        if prompt.waitForExistence(timeout: 6) { prompt.buttons["Not Now"].tap() }
+        if prompt.waitForExistence(timeout: 8) { prompt.buttons["Not Now"].tap() }
+        for _ in 0..<30 {
+            if prompt.exists { prompt.buttons["Not Now"].tap() }
+            if action.isEnabled && action.isHittable { break }
+            try await Task.sleep(for: .seconds(1))
+        }
+        guard action.isEnabled && action.isHittable else { return XCTFail("Checkout must be ready to open") }
+        action.tap()
+        let today = navigationTab("Today")
+        for _ in 0..<40 {
+            if prompt.exists { prompt.buttons["Not Now"].tap() }
+            if today.exists && today.isHittable { break }
+            try await Task.sleep(for: .seconds(1))
+        }
+        guard today.exists && today.isHittable else { return XCTFail("Checkout must open Today") }
+        if prompt.waitForExistence(timeout: 2) { prompt.buttons["Not Now"].tap() }
         let extra = app.buttons["today.log-extra"]
         guard extra.isHittable else { return XCTFail("The logged-in journal must offer an extra dose") }
         extra.tap()
