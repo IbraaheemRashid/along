@@ -50,10 +50,11 @@ jobs:
         with:
           path: ${{ runner.temp }}/Along-build
           key: along-iphone-26.3-v1-${{ runner.arch }}-${{ hashFiles('plateful/apps/ios/**/Package.resolved') }}
+      # Simulator-only ad hoc signing gives the app its own Keychain for the real Auth SDK.
       - name: Build the shipping project for testing
         working-directory: plateful/apps/ios
         run: |
-          xcodebuild -quiet -project Along.xcodeproj -scheme Along -destination "id=$DEVICE" -derivedDataPath "$RUNNER_TEMP/Along-build" CODE_SIGNING_ALLOWED=NO build-for-testing
+          xcodebuild -quiet -project Along.xcodeproj -scheme Along -destination "id=$DEVICE" -derivedDataPath "$RUNNER_TEMP/Along-build" CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=ALONGUITST build-for-testing
       - uses: actions/cache/save@v4
         continue-on-error: true
         if: steps.build-cache.outputs.cache-hit != 'true'
@@ -76,7 +77,7 @@ jobs:
             -only-testing:AlongUITests/AlongUITests/testIncompleteSetupResumesAtSavedStep \
             -only-testing:AlongUITests/AlongUITests/testTodayLogsDosesAndDoseSheetSavesDetails \
             -only-testing:AlongUITests/AlongUITests/testPeptideColourPersistsAfterEditing \
-            CODE_SIGNING_ALLOWED=NO test-without-building
+            CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=ALONGUITST test-without-building
       - name: Check that the walkthrough ran without skips
         run: |
           xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/Along.xcresult" > "$RUNNER_TEMP/walkthrough-summary.json"
@@ -84,7 +85,7 @@ jobs:
       - name: Compile the Release app with linked services
         working-directory: plateful/apps/ios
         run: |
-          xcodebuild -quiet -project Along.xcodeproj -scheme Along -configuration Release -destination "id=$DEVICE" -derivedDataPath "$RUNNER_TEMP/Along-build" CODE_SIGNING_ALLOWED=NO build
+          xcodebuild -quiet -project Along.xcodeproj -scheme Along -configuration Release -destination "id=$DEVICE" -derivedDataPath "$RUNNER_TEMP/Along-build" CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=ALONGUITST build
       - name: Collect walkthrough screenshots and results
         if: always()
         run: |
