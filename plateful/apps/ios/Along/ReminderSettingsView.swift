@@ -8,7 +8,7 @@ struct ReminderSettingsView: View {
     @State private var draft = ReminderPreferences()
     @State private var loaded = false
 
-    private var sources: [DoseReminderSource] { store.journal.reminderSources }
+    private var sources: [DoseReminderSource] { store.reminderSources }
     private var batches: [BatchExpiryReminderSource] { store.journal.batchExpiryReminderSources }
     private var planned: [ReminderSchedule] {
         ReminderPlanner.schedules(for: draft, sources: sources, batchExpiries: batches)

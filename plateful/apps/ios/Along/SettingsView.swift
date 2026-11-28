@@ -65,6 +65,8 @@ struct SettingsView: View {
                 } else if cloudSync.message != nil {
                     SettingsRow(title: "Retry backup", symbol: "arrow.clockwise") { Task { await cloudSync.prepare() } }
                 }
+                AccountDeletionControl()
+                SettingsDivider()
                 SettingsRow(title: "Sign out", symbol: "rectangle.portrait.and.arrow.right", destructive: true, showsChevron: false) {
                     auth.signOut()
                 }
@@ -363,5 +365,58 @@ struct PrivacyView: View {
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(SetupTheme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+struct AccountDeletionControl: View {
+    @State private var showing = false
+    var body: some View {
+        Button("Delete account", role: .destructive) { showing = true }
+            .frame(minHeight: 44)
+            .sheet(isPresented: $showing) { AccountDeletionView() }
+    }
+}
+
+struct AccountDeletionView: View {
+    @Environment(AuthStore.self) private var auth
+    @Environment(ReminderStore.self) private var reminders
+    @Environment(\.dismiss) private var dismiss
+    @State private var password = ""
+    private var pending: Bool { auth.journals?.deletionPending == true }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text(pending
+                         ? "Your deletion request is saved. Confirm your identity to finish removing this account."
+                         : "This permanently removes your Along account, cloud backup and this account’s journal on this iPhone. You can export a copy before continuing.")
+                    Text("Manage any active subscription separately in your Apple Account.")
+                    if let email = auth.user?.email { Text(email).font(.headline) }
+                    if auth.user?.provider == "password" {
+                        SecureField("Account password", text: $password).textContentType(.password)
+                    }
+                    if auth.isBusy { ProgressView("Deleting account…") }
+                    else {
+                        Button(pending ? "Finish deleting account" : "Permanently delete account", role: .destructive) {
+                            let entered = password
+                            password = ""
+                            Task { await auth.deleteAccount(password: entered, reminders: reminders) }
+                        }
+                        .disabled(auth.user?.provider == "password" && password.isEmpty)
+                    }
+                    if let message = auth.message { Text(message).font(.footnote) }
+                }
+            }
+            .navigationTitle("Delete account")
+            .toolbar {
+                if !pending {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(auth.isBusy) }
+                } else if !auth.isBusy {
+                    ToolbarItem(placement: .cancellationAction) { Button("Sign out") { auth.signOut() } }
+                }
+            }
+            .interactiveDismissDisabled(auth.isBusy)
+        }
     }
 }

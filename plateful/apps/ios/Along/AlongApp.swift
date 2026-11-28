@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 #if canImport(FirebaseCore)
 import FirebaseCore
 #endif
@@ -6,7 +7,27 @@ import FirebaseCore
 import GoogleSignIn
 #endif
 
+@MainActor @Observable final class ReminderInbox {
+    static let shared = ReminderInbox()
+    var pending: ReminderDestination?
+}
+
+final class AlongNotificationDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+        return true
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+              let destination = ReminderDestination(identifier: response.notification.request.identifier,
+                                                    deliveredAt: response.notification.date) else { return }
+        await MainActor.run { ReminderInbox.shared.pending = destination }
+    }
+}
+
 @main struct AlongApp: App {
+    @UIApplicationDelegateAdaptor(AlongNotificationDelegate.self) private var notificationDelegate
     @State private var journals: AccountJournals
     @State private var reminders: ReminderStore
     @State private var previewReminders: ReminderStore
@@ -18,7 +39,8 @@ import GoogleSignIn
 
     private struct ReminderSelection: Equatable {
         let profile: ObjectIdentifier
-        let peptides: [TrackedPeptide]
+        let sources: [DoseReminderSource]
+        let batches: [BatchExpiryReminderSource]
         let enabledForProfile: Bool
     }
 
@@ -42,9 +64,10 @@ import GoogleSignIn
     var body: some Scene {
         WindowGroup {
             let store = journals.active
-            let ownsReminders = !journals.chooseDeviceJournal && store.journal.isDesignPreview != true && !store.journal.hasSampleData
+            let ownsReminders = !journals.deletionPending && !journals.chooseDeviceJournal && store.journal.isDesignPreview != true && !store.journal.hasSampleData
             Group {
-                if journals.chooseDeviceJournal {
+                if journals.deletionPending { AccountDeletionView() }
+                else if journals.chooseDeviceJournal {
                     DeviceJournalChoice(openLocal: journals.openDeviceJournal)
                 } else { RootView() }
             }
@@ -57,10 +80,10 @@ import GoogleSignIn
                 .environment(auth)
                 .environment(journals.sync)
                 .tint(Theme.accent)
-                .task(id: ReminderSelection(profile: ObjectIdentifier(store), peptides: store.journal.protocolPeptides,
-                                            enabledForProfile: ownsReminders)) {
-                    guard !Task.isCancelled else { return }
-                    _ = await reminders.sync(sources: ownsReminders ? store.journal.reminderSources : [],
+                .task(id: ReminderSelection(profile: ObjectIdentifier(store), sources: store.reminderSources,
+                                            batches: store.journal.batchExpiryReminderSources, enabledForProfile: ownsReminders)) {
+                    guard !Task.isCancelled, !journals.deletionPending else { return }
+                    _ = await reminders.sync(sources: ownsReminders ? store.reminderSources : [],
                                              batchExpiries: ownsReminders ? store.journal.batchExpiryReminderSources : [])
                 }
                 .onOpenURL { url in
@@ -102,6 +125,7 @@ struct RootView: View {
     @Environment(CloudSync.self) private var cloudSync
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.alongReducedMotion) private var reduceMotion
+    @State private var reminderSheet: DoseSheet.Mode?
     var showsDevTools = true
     #if DEBUG
     @State private var showDevLab = false
@@ -132,10 +156,28 @@ struct RootView: View {
                     SettingsView().tabItem { Label("Settings", systemImage: "gearshape") }.tag(2)
                 }
                 .tint(SetupTheme.ink)
+                .sheet(item: $reminderSheet) { DoseSheet(mode: $0) }
+                .onChange(of: ReminderInbox.shared.pending, initial: true) { _, destination in
+                    guard let destination else { return }
+                    ReminderInbox.shared.pending = nil
+                    guard destination.profile == store.reminderProfile, destination.dayKey <= store.todayKey,
+                          let slot = store.slots(on: destination.dayKey).first(where: {
+                              $0.peptide.id == destination.peptideID && $0.time?.minutes == destination.minutes
+                          }) else { return }
+                    store.selectedTab = 0
+                    reminderSheet = .slot(slot)
+                }
             } else if store.journal.hasOnboarded { MembershipView(canClose: false) }
             else { SetupFlowView() }
         }
         .safeAreaInset(edge: .top) {
+            if previewAccess && store.journal.hasOnboarded {
+                Text(store.journal.hasSampleData ? "Design preview · sample records" : "Design preview · local journal")
+                    .font(.caption.weight(.medium))
+                    .frame(maxWidth: .infinity).padding(.vertical, 4)
+                    .background(SetupTheme.tile)
+                    .accessibilityIdentifier("journal.preview")
+            }
             if cloudSync.conflict != nil && !store.journal.hasOnboarded {
                 AccountBackupChoice().padding(.horizontal)
             }
@@ -159,7 +201,7 @@ struct RootView: View {
                     await reminders.refresh()
                     guard auth.journals == nil || auth.journals?.active === store else { return }
                     if reminders.preferences.isEnabled {
-                        _ = await reminders.sync(sources: store.journal.reminderSources,
+                        _ = await reminders.sync(sources: store.reminderSources,
                                                 batchExpiries: store.journal.batchExpiryReminderSources)
                     }
                 }

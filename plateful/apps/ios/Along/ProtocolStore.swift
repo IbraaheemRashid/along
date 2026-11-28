@@ -11,7 +11,7 @@ extension JournalStore {
 
     func peptide(_ id: UUID) -> TrackedPeptide? { journal.protocolPeptides.first { $0.id == id } }
 
-    @discardableResult func savePeptide(_ peptide: TrackedPeptide) -> Bool {
+    @discardableResult func savePeptide(_ peptide: TrackedPeptide, effectiveFrom: String? = nil) -> Bool {
         var item = peptide
         item.name = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
         item.note = item.note.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -20,6 +20,26 @@ extension JournalStore {
         guard item.isValid else { error = "Add a name, a schedule with at least one time and, if you like, a dose above zero."; return false }
         let peptides = journal.protocolPeptides
         let existing = peptides.firstIndex { $0.id == item.id }
+        if let existing {
+            let old = peptides[existing]
+            item.previousSchedules = old.previousSchedules
+            if old.schedule != item.schedule || old.isPaused != item.isPaused || old.startKey != item.startKey {
+                let day = effectiveFrom ?? todayKey
+                var history = old.previousSchedules ?? []
+                guard DayIdentity.isValid(day), day >= min(old.startKey, todayKey), day <= todayKey, history.last.map({ day >= $0.until }) ?? true else {
+                    error = "Choose a date from the most recent schedule change through today."
+                    return false
+                }
+                if history.last?.until != day {
+                    guard history.count < 1024 else { error = "This protocol has reached its schedule history limit."; return false }
+                    history.append(PreviousSchedule(until: day, startKey: old.startKey, schedule: old.schedule, isPaused: old.isPaused))
+                }
+                item.previousSchedules = history.isEmpty ? nil : history
+                if old.schedule != item.schedule && item.schedule.kind == .interval && old.startKey == item.startKey && day >= old.startKey {
+                    item.startKey = day
+                }
+            }
+        }
         if peptides.contains(where: { $0.id != item.id && $0.name.caseInsensitiveCompare(item.name) == .orderedSame }) {
             error = "\(item.name) is already in your protocol."; return false
         }
@@ -34,8 +54,9 @@ extension JournalStore {
     }
 
     @discardableResult func setPaused(_ id: UUID, _ paused: Bool) -> Bool {
-        guard let index = journal.protocolPeptides.firstIndex(where: { $0.id == id }) else { return false }
-        return updateJournal { $0.peptides?[index].isPaused = paused }
+        guard var item = peptide(id) else { return false }
+        item.isPaused = paused
+        return savePeptide(item)
     }
 
     /// Removes the peptide and its dose history. Pausing keeps history.

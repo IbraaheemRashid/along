@@ -120,22 +120,29 @@ struct HomeView: View {
         let calendar = Calendar.current
         let when = calendar.isDateInToday(moment) ? moment.formatted(date: .omitted, time: .shortened)
             : moment.formatted(.dateTime.weekday(.abbreviated).hour().minute())
-        return HStack(spacing: 12) {
-            Image(systemName: "clock").font(.system(size: 15, weight: .semibold)).foregroundStyle(SetupTheme.ink)
-                .frame(width: 36, height: 36).background(SetupTheme.surface, in: Circle())
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Next dose").font(.caption).foregroundStyle(SetupTheme.muted)
-                HStack(spacing: 6) {
-                    PeptideDot(color: slot.peptide.displayColor)
-                    Text([slot.peptide.name, slot.peptide.amountText].compactMap { $0 }.joined(separator: " · "))
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
+        return Button {
+            if slot.dayKey == today { sheet = .slot(slot) }
+            else { selectedDay = slot.dayKey }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "clock").font(.system(size: 15, weight: .semibold)).foregroundStyle(SetupTheme.ink)
+                    .frame(width: 36, height: 36).background(SetupTheme.surface, in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Next dose").font(.caption).foregroundStyle(SetupTheme.muted)
+                    HStack(spacing: 6) {
+                        PeptideDot(color: slot.peptide.displayColor)
+                        Text([slot.peptide.name, slot.peptide.amountText].compactMap { $0 }.joined(separator: " · "))
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
+                    }
                 }
+                Spacer()
+                Text(when).font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(SetupTheme.muted)
             }
-            Spacer()
-            Text(when).font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
+            .padding(12)
+            .background(SetupTheme.iconTile, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
-        .padding(12)
-        .background(SetupTheme.iconTile, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("today.next")
     }
@@ -269,7 +276,10 @@ struct DayStrip: View {
     var fraction: (String) -> Double?
     var select: (String) -> Void
 
-    private var days: [String] { (-27...3).compactMap { ProtocolSchedule.key(today, adding: $0) } }
+    private var days: [String] {
+        let nearby = (-27...3).compactMap { ProtocolSchedule.key(today, adding: $0) }
+        return nearby.contains(selected) ? nearby : (nearby + [selected]).sorted()
+    }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {

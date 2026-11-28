@@ -197,6 +197,13 @@ enum PeptideColor: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+struct PreviousSchedule: Codable, Equatable {
+    var until: String
+    var startKey: String
+    var schedule: DoseSchedule
+    var isPaused: Bool
+}
+
 struct TrackedPeptide: Codable, Identifiable, Equatable {
     static let nameLimit = 40
     static let noteLimit = 300
@@ -217,6 +224,19 @@ struct TrackedPeptide: Codable, Identifiable, Equatable {
     /// The person's chosen colour. Nil follows the category default, so data
     /// saved before colours existed keeps the colour it always showed.
     var color: PeptideColor?
+
+    var previousSchedules: [PreviousSchedule]?
+
+    func scheduleOn(_ day: String) -> PreviousSchedule {
+        previousSchedules?.first { day < $0.until }
+            ?? PreviousSchedule(until: "9999-12-31", startKey: startKey, schedule: schedule, isPaused: isPaused)
+    }
+
+    private var validHistory: Bool {
+        let history = previousSchedules ?? []
+        return history.count <= 1024 && history.allSatisfy { DayIdentity.isValid($0.until) && DayIdentity.isValid($0.startKey) && $0.schedule.isValid }
+            && zip(history, history.dropFirst()).allSatisfy { $0.until < $1.until }
+    }
 
     var category: String { Peptide.category(for: name) }
     var displayColor: PeptideColor { color ?? .default(for: category) }
@@ -242,7 +262,7 @@ struct TrackedPeptide: Codable, Identifiable, Equatable {
     var isValid: Bool {
         JournalValidation.text(name, limit: Self.nameLimit, required: true)
             && JournalValidation.text(note, limit: Self.noteLimit)
-            && DayIdentity.isValid(startKey) && schedule.isValid
+            && DayIdentity.isValid(startKey) && schedule.isValid && validHistory
             && amount.map { $0.isFinite && $0 > 0 && $0 <= Self.maximumAmount } ?? true
             && (batchExpiryKey.map(DayIdentity.isValid) ?? true)
     }
@@ -327,14 +347,15 @@ enum ProtocolSchedule {
     }
 
     static func isDue(_ peptide: TrackedPeptide, on dayKey: String) -> Bool {
-        guard !peptide.isPaused, dayKey >= peptide.startKey, peptide.schedule.isValid else { return false }
-        switch peptide.schedule.kind {
+        let plan = peptide.scheduleOn(dayKey)
+        guard !plan.isPaused, dayKey >= plan.startKey, plan.schedule.isValid else { return false }
+        switch plan.schedule.kind {
         case .unscheduled: return false
         case .daily: return true
-        case .weekdays: return weekday(of: dayKey).map(peptide.schedule.weekdays.contains) ?? false
+        case .weekdays: return weekday(of: dayKey).map(plan.schedule.weekdays.contains) ?? false
         case .interval:
-            guard let offset = days(from: peptide.startKey, to: dayKey) else { return false }
-            return offset % peptide.schedule.intervalDays == 0
+            guard let offset = days(from: plan.startKey, to: dayKey) else { return false }
+            return offset % plan.schedule.intervalDays == 0
         }
     }
 
@@ -343,7 +364,7 @@ enum ProtocolSchedule {
         let dayLogs = logs.filter { $0.dayKey == dayKey }
         var result: [DoseSlot] = []
         for peptide in peptides where isDue(peptide, on: dayKey) {
-            for time in peptide.schedule.sortedTimes {
+            for time in peptide.scheduleOn(dayKey).schedule.sortedTimes {
                 let log = dayLogs.first { $0.peptideID == peptide.id && $0.scheduledTime == time }
                 result.append(DoseSlot(peptide: peptide, dayKey: dayKey, time: time, log: log))
             }

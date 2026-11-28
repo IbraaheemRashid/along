@@ -898,7 +898,7 @@ struct SetupFlowView: View {
                 VStack(spacing: 0) { paywallLinks }
             }.font(.caption).foregroundStyle(SetupTheme.muted).tint(SetupTheme.muted).frame(minHeight: 32)
             #if DEBUG
-            Button("Continue without paying · temporary") {
+            Button("Open design preview") {
                 Task { await completeSkippedPaywall() }
             }
             .font(.caption.weight(.semibold))

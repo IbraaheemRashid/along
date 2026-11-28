@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Data ownership and reminder controls remain available outside paid access.
 struct LocalDataView: View {
+    @Environment(AuthStore.self) private var auth
     @Environment(JournalStore.self) private var store
     @Environment(ReminderStore.self) private var reminders
     @Environment(\.dismiss) private var dismiss
@@ -21,6 +22,7 @@ struct LocalDataView: View {
                         ShareLink(item: store.exportText) { Label("Export readable copy", systemImage: "square.and.arrow.up").frame(minHeight: 44) }
                         SettingsAction(title: "Backup & restore", symbol: "externaldrive") { backup = true }
                         SettingsAction(title: "Privacy & your data", symbol: "lock") { privacy = true }
+                        if auth.isSignedIn { AccountDeletionControl() }
                         SettingsAction(title: "Delete all local data", symbol: "trash", destructive: true) { confirmDelete = true }
                     }
                     ReminderSettingsView()

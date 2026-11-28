@@ -18,6 +18,7 @@ struct AccountBackupRecord {
 
 @MainActor protocol AccountBackupClient {
     func read(userID: String) async throws -> AccountBackupRecord?
+    func remove(userID: String) async throws
     func write(_ value: AccountBackup, userID: String, replacing revision: String?) async throws -> String
 }
 
@@ -38,6 +39,7 @@ private enum BackupError: Error { case unavailable, invalid, changed }
     private var opening: Task<Void, Never>?
     private var debounce: Task<Void, Never>?
     private var writing = false
+    private var writeWaiters: [CheckedContinuation<Void, Never>] = []
 
     private struct Checkpoint: Codable {
         var revision: String
@@ -53,6 +55,12 @@ private enum BackupError: Error { case unavailable, invalid, changed }
         closed = true
         debounce?.cancel()
         opening?.cancel()
+    }
+
+    func closeAndWait() async {
+        close()
+        if let opening { await opening.value }
+        if writing { await withCheckedContinuation { writeWaiters.append($0) } }
     }
 
     func prepare() async {
@@ -131,7 +139,12 @@ private enum BackupError: Error { case unavailable, invalid, changed }
         guard !closed, ready, !writing, let store, let id = store.accountID else { return }
         writing = true
         isSyncing = true
-        defer { writing = false; isSyncing = false }
+        defer {
+            writing = false
+            isSyncing = false
+            writeWaiters.forEach { $0.resume() }
+            writeWaiters.removeAll()
+        }
         // An edit made during a network write is sent in order against the new revision.
         while !closed && store.canSyncJournal && store.journal.hasOnboarded &&
               !store.journal.hasSampleData && store.journal.isDesignPreview != true {
@@ -182,6 +195,15 @@ struct FirebaseAccountBackup: AccountBackupClient {
         return SHA256.hash(data: Data((journal + "." + setup).utf8)).map { String(format: "%02x", $0) }.joined()
     }
     #endif
+
+    func remove(userID: String) async throws {
+        #if canImport(FirebaseFirestore) && canImport(FirebaseAuth)
+        let ref = try reference(userID)
+        try await ref.delete()
+        #else
+        throw BackupError.unavailable
+        #endif
+    }
 
     func read(userID: String) async throws -> AccountBackupRecord? {
         #if canImport(FirebaseFirestore) && canImport(FirebaseAuth)

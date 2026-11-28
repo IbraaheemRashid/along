@@ -485,6 +485,24 @@ import Foundation
         expect(protocolStore.journal.protocolLogs.count == 2, "Pausing keeps dose history")
         expect(protocolStore.removeDose(duplicate.id) && protocolStore.journal.protocolLogs.count == 1, "Doses can be deleted")
         expect(protocolStore.removePeptide(firstPeptide.id) && protocolStore.peptide(firstPeptide.id) == nil && protocolStore.journal.protocolLogs.isEmpty, "Removing a peptide removes its history")
+        let changes = JournalStore(directory: testRoot.appendingPathComponent("protocol-changes"), arguments: [], clearCredentials: {})
+        changes.referenceDate = ISO8601DateFormatter().date(from: "2026-11-20T12:00:00Z")!
+        let initial = TrackedPeptide(name: "Example", schedule: .on([2], at: morning), startKey: "2026-10-01")
+        expect(changes.savePeptide(initial), "Record the original Monday routine")
+        let logAt = ISO8601DateFormatter().date(from: "2026-11-02T10:00:00Z")!
+        let beforeChange = changes.slots(on: "2026-11-02")[0]
+        expect(changes.logDose(beforeChange, at: logAt), "The original Monday is logged")
+        let originalAdherence = ProtocolSchedule.adherence(from: "2026-11-01", to: "2026-11-08", peptides: changes.journal.protocolPeptides, logs: changes.journal.protocolLogs, now: changes.referenceDate)
+        var thursdays = initial
+        thursdays.schedule = .on([5], at: evening)
+        expect(changes.savePeptide(thursdays, effectiveFrom: "2026-11-09"), "Save the effective date of the revised schedule")
+        expect(changes.slots(on: "2026-11-02").first?.isTaken == true && changes.slots(on: "2026-11-05").isEmpty, "Old Monday remains scheduled and the previous Thursday stays empty")
+        expect(changes.slots(on: "2026-11-09").isEmpty && changes.slots(on: "2026-11-12").first?.time == evening, "The new Thursday plan starts on its effective date")
+        let unchangedAdherence = ProtocolSchedule.adherence(from: "2026-11-01", to: "2026-11-08", peptides: changes.journal.protocolPeptides, logs: changes.journal.protocolLogs, now: changes.referenceDate)
+        expect(originalAdherence == unchangedAdherence && originalAdherence.taken == 1, "Changing weekdays preserves historic adherence")
+        expect(changes.setPaused(initial.id, true) && changes.slots(on: "2026-11-12").count == 1 && changes.slots(on: "2026-11-26").isEmpty, "Pausing today preserves prior Thursdays")
+        let revisedBackup = try JournalBackup.decode(JournalBackup.make(from: changes.journal).encoded()).restoring(into: Journal())
+        expect(revisedBackup.protocolPeptides == changes.journal.protocolPeptides, "Schedule revisions survive backup and restore")
         let reloaded = JournalStore(directory: setupRoot, arguments: [], clearCredentials: {})
         expect(reloaded.journal.protocolPeptides == protocolStore.journal.protocolPeptides, "Protocol changes persist across launches")
 

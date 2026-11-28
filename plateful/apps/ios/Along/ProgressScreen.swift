@@ -277,7 +277,7 @@ struct ProgressScreen: View {
     }
 
     private func historyRow(_ log: DoseLog) -> some View {
-        DoseHistoryRow(log: log, peptideName: store.peptide(log.peptideID)?.name ?? "Peptide")
+        DoseHistoryRow(log: log, peptide: store.peptide(log.peptideID))
     }
 
     private var weightSection: some View {
@@ -422,11 +422,24 @@ private struct FilterChip: View {
 
 private struct DoseHistoryRow: View {
     var log: DoseLog
-    var peptideName: String
+    var peptide: TrackedPeptide?
+    @State private var editor: DoseSheet.Mode?
+
     var body: some View {
+        Button {
+            guard let peptide else { return }
+            editor = .slot(DoseSlot(peptide: peptide, dayKey: log.dayKey, time: log.scheduledTime, log: log))
+        } label: { content }
+        .buttonStyle(.plain)
+        .accessibilityHint("Edit this dose record")
+        .accessibilityIdentifier("progress.entry.\(log.id)")
+        .sheet(item: $editor) { DoseSheet(mode: $0) }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(peptideName).font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
+                Text(peptide?.name ?? "Peptide").font(.subheadline.weight(.semibold)).foregroundStyle(SetupTheme.ink)
                 Spacer()
                 Text(DayIdentity.formatted(key: log.dayKey, rawDate: log.takenAt, style: .dateTime.month(.abbreviated).day()))
                     .font(.caption).foregroundStyle(SetupTheme.muted)
@@ -444,7 +457,6 @@ private struct DoseHistoryRow: View {
         .background(SetupTheme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(SetupTheme.border))
         .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("progress.entry.\(log.id)")
     }
 }
 

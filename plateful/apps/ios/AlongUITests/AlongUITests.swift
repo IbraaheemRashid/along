@@ -511,8 +511,32 @@ final class AlongUITests: XCTestCase {
         XCTAssertTrue(app.buttons["setup.restore"].exists)
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label CONTAINS[cd] %@", "trial")).count, 0,
                        "The paywall must not contain a trial CTA")
-        XCTAssertTrue(app.buttons["setup.skip-paywall"].waitForExistence(timeout: 3), "Temporary paywall skip while StoreKit isn’t wired")
+        XCTAssertTrue(app.buttons["setup.skip-paywall"].waitForExistence(timeout: 3), "The development build offers an explicit preview")
         capture("setup-completed-paywall")
+        tap("setup.skip-paywall")
+        XCTAssertTrue(element("journal.preview").waitForExistence(timeout: 10))
+        tap("today.log-extra")
+        tap("dose.save")
+        navigationTab("Progress").tap()
+        let entry = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "progress.entry.")).firstMatch
+        reveal(entry)
+        XCTAssertTrue(entry.label.contains("BPC-157"))
+        entry.tap()
+        XCTAssertTrue(app.buttons["dose.delete"].exists)
+        let note = element("dose.note")
+        reveal(note)
+        note.tap()
+        note.typeText("Walkthrough record")
+        tap("dose.save")
+        XCTAssertTrue(entry.label.contains("Walkthrough record"))
+        capture("progress-edited-history")
+        app.terminate()
+        launchSandbox(reset: false)
+        navigationTab("Progress").tap()
+        reveal(entry)
+        XCTAssertTrue(entry.label.contains("Walkthrough record"))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "progress.entry.")).count, 1)
+
     }
 
     func testSetupWithoutWeightGoalSkipsWeightScreens() {
@@ -789,6 +813,15 @@ final class AlongUITests: XCTestCase {
         let entry = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "progress.entry.", "BPC-157")).firstMatch
         XCTAssertTrue(entry.waitForExistence(timeout: 5))
         XCTAssertTrue(entry.label.contains("Taken"))
+        entry.tap()
+        XCTAssertTrue(app.buttons["dose.save"].waitForExistence(timeout: 5))
+        let note = element("dose.note")
+        reveal(note)
+        note.tap()
+        note.typeText("Calendar correction")
+        tap("dose.save")
+        XCTAssertTrue(entry.label.contains("Calendar correction"))
+        capture("calendar-corrected-dose")
     }
 
     func testTodayLogsDosesAndDoseSheetSavesDetails() {

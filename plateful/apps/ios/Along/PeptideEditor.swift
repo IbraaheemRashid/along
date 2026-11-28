@@ -51,6 +51,14 @@ struct PeptideEditor: View {
     private var schedule: DoseSchedule {
         kind == .unscheduled ? .unscheduled : DoseSchedule(kind: kind, weekdays: kind == .weekdays ? weekdays : [], intervalDays: intervalDays, times: times)
     }
+    @State private var effectiveDate = Date.now
+    private var effectiveRange: ClosedRange<Date> {
+        let today = Calendar.current.startOfDay(for: .now)
+        let key = editing?.previousSchedules?.last?.until ?? editing?.startKey
+        let first = key.flatMap { DayIdentity.date(for: $0) }.map(Calendar.current.startOfDay(for:)) ?? today
+        return min(first, today)...Date.now
+    }
+
     private var startKey: String { DayIdentity.key(for: startDate) ?? store.todayKey }
     private var canSave: Bool {
         SetupDraft.validCompound(name.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -74,6 +82,10 @@ struct PeptideEditor: View {
                         startPicker
                     }
                     if !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { colorPicker }
+                    if let editing, editing.schedule != schedule || editing.isPaused != isPaused || editing.startKey != startKey {
+                        DatePicker("Change applies from", selection: $effectiveDate, in: effectiveRange, displayedComponents: .date)
+                            .accessibilityIdentifier("peptide.effective-date")
+                    }
                     batchExpiryField
                     noteField
                     if Peptide.library.contains(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
@@ -441,7 +453,7 @@ struct PeptideEditor: View {
         peptide.note = note
         peptide.isPaused = isPaused
         peptide.color = pickedColor
-        if store.savePeptide(peptide) {
+        if store.savePeptide(peptide, effectiveFrom: DayIdentity.key(for: effectiveDate)) {
             store.showToast(editing == nil ? "\(trimmed) added" : "Saved")
             dismiss()
         }

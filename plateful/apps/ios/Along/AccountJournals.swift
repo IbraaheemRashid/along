@@ -7,6 +7,8 @@ import Observation
     private(set) var chooseDeviceJournal: Bool
     private(set) var active: JournalStore
     private(set) var sync: CloudSync
+    private(set) var deletionPending = false
+    private static let deletionMarker = "account-deletion-pending"
     private let backend: any AccountBackupClient
 
     init(device: JournalStore, backend: any AccountBackupClient = FirebaseAccountBackup()) {
@@ -21,14 +23,43 @@ import Observation
     func select(_ userID: String?) {
         guard active.accountID != userID else { return }
         sync.close()
+        deletionPending = false
         chooseDeviceJournal = userID == nil && device.hasPersonalRecords
         if let userID, !userID.isEmpty {
             active = JournalStore(directory: device.storageDirectory, accountID: userID, arguments: [])
             sync = CloudSync(store: active, backend: backend)
+            deletionPending = FileManager.default.fileExists(atPath: active.storageDirectory.appendingPathComponent(Self.deletionMarker).path)
+            if deletionPending { sync.close() }
         } else {
             active = device
             sync = CloudSync()
         }
+    }
+
+    /// The marker is scoped to the UID and survives an interrupted network deletion.
+    /// Old writes finish before cloud removal. A failed deletion can only resume for this UID.
+    func eraseAccount(_ uid: String, prepareIdentity: () async throws -> Void,
+                      deleteIdentity: () async throws -> Void) async throws {
+        let store = active
+        let session = sync
+        guard store.accountID == uid else { throw CocoaError(.userCancelled) }
+        let directory = store.storageDirectory
+        let marker = directory.appendingPathComponent(Self.deletionMarker)
+        try Data().write(to: marker, options: JournalStore.writeOptions)
+        deletionPending = true
+        await session.closeAndWait()
+        guard active === store else { throw CocoaError(.userCancelled) }
+        try await prepareIdentity()
+        guard active === store else { throw CocoaError(.userCancelled) }
+        try await backend.remove(userID: uid)
+        guard active === store else { throw CocoaError(.userCancelled) }
+        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        for file in files where file.lastPathComponent != Self.deletionMarker {
+            try FileManager.default.removeItem(at: file)
+        }
+        try await deleteIdentity()
+        try FileManager.default.removeItem(at: marker)
+        if active === store { select(nil) }
     }
 
     func openDeviceJournal() {

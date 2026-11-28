@@ -238,6 +238,75 @@ struct AlongUser: Equatable {
         return nil
     }
 
+    /// Reauthenticate the same user before removing any journal data.
+    func deleteAccount(password: String, reminders: ReminderStore) async {
+        guard !isBusy, let journals, let uid = user?.id, journals.active.accountID == uid else { return }
+        #if canImport(FirebaseAuth)
+        guard isConfigured, let current = Auth.auth().currentUser, current.uid == uid else { return }
+        isBusy = true
+        message = nil
+        defer { isBusy = false }
+        do {
+            let provider = user?.provider
+            let credential: AuthCredential
+            var appleCode: String?
+            switch provider {
+            case "apple.com":
+                let nonce = randomNonce()
+                let request = ASAuthorizationAppleIDProvider().createRequest()
+                request.nonce = sha256(nonce)
+                let coordinator = AppleSignInCoordinator()
+                appleSignInDelegate = coordinator
+                defer { appleSignInDelegate = nil }
+                let authorization = try await coordinator.perform(request)
+                guard let apple = authorization.credential as? ASAuthorizationAppleIDCredential,
+                      let data = apple.identityToken, let token = String(data: data, encoding: .utf8),
+                      let codeData = apple.authorizationCode, let code = String(data: codeData, encoding: .utf8) else {
+                    message = "Apple could not confirm this account. Try again."
+                    return
+                }
+                credential = OAuthProvider.appleCredential(withIDToken: token, rawNonce: nonce, fullName: apple.fullName)
+                appleCode = code
+            case "google.com":
+                #if canImport(GoogleSignIn)
+                guard let presenter = topViewController() else { message = "Open this screen again to confirm with Google."; return }
+                let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: presenter)
+                guard let token = result.user.idToken?.tokenString else { message = "Google could not confirm this account."; return }
+                credential = GoogleAuthProvider.credential(withIDToken: token, accessToken: result.user.accessToken.tokenString)
+                #else
+                message = "Google Sign In is unavailable in this build."
+                return
+                #endif
+            case "password":
+                guard let email = current.email, !password.isEmpty else { message = "Enter your password to confirm."; return }
+                credential = EmailAuthProvider.credential(withEmail: email, password: password)
+            default:
+                message = "Reopen the app and sign in again to confirm your account."
+                return
+            }
+            let verified = try await current.reauthenticate(with: credential)
+            guard verified.user.uid == uid, Auth.auth().currentUser?.uid == uid else { throw CocoaError(.userCancelled) }
+            try await journals.eraseAccount(uid) {
+                guard Auth.auth().currentUser?.uid == uid else { throw CocoaError(.userCancelled) }
+                if let appleCode { try await Auth.auth().revokeToken(withAuthorizationCode: appleCode) }
+                if reminders.deliveryEnabled, !(await reminders.reset()) { throw CocoaError(.fileWriteUnknown) }
+            } deleteIdentity: {
+                guard Auth.auth().currentUser?.uid == uid else { throw CocoaError(.userCancelled) }
+                try await current.delete()
+            }
+            if Auth.auth().currentUser == nil {
+                #if canImport(GoogleSignIn)
+                GIDSignIn.sharedInstance.signOut()
+                #endif
+                TokenVault.clear()
+                user = nil
+            }
+        } catch { message = error.localizedDescription }
+        #else
+        message = "Accounts are unavailable in this build."
+        #endif
+    }
+
     func signOut() {
         #if canImport(FirebaseAuth)
         do {
@@ -258,7 +327,8 @@ struct AlongUser: Equatable {
 
     #if canImport(FirebaseAuth)
     private func map(_ user: User) -> AlongUser {
-        let provider = user.providerData.first?.providerID ?? "firebase"
+        let providers = user.providerData.map(\.providerID)
+        let provider = ["apple.com", "google.com", "password"].first(where: providers.contains) ?? "firebase"
         return AlongUser(id: user.uid, email: user.email, displayName: user.displayName, provider: provider)
     }
     #endif
