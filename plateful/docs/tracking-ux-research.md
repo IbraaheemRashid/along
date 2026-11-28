@@ -29,7 +29,11 @@ I reviewed UK App Store listings, release notes, individual customer reviews, Ap
 
 Apple Health gives scheduled and recorded medications separate places on the same day. GoodRx puts the two answers directly on the reminder. Apple’s Design Award profile of Gentler Streak highlights a summary that puts activity in the context of the person’s own history. For Along, that makes a practical test possible. After a user records an early dose, the reminder, Today row and calendar should all agree. If they change next week’s schedule, the previous week should still read the same. [Apple Health](https://support.apple.com/guide/iphone/track-your-medications-iph811670c81/ios) · [GoodRx screen on Mobbin](https://mobbin.com/screens/95f9bc43-c218-4b83-b008-5a451404b138) · [2024 Apple Design Awards](https://developer.apple.com/design/awards/2024/)
 
-The next-dose card opens the scheduled entry or its future day. A taken or skipped entry silences its outstanding reminder. A person can mute one peptide while continuing to log it. The calendar opens the saved record for correction, and schedule edits carry an effective date. These behaviors can be verified with a test journal. Whether people return and choose to pay still needs observation with prospective users.
+The next-dose card opens the scheduled entry or its future day. Extra doses require a peptide choice when multiple peptides are tracked, so an accidental tap cannot silently attribute an entry to the first one. A taken or skipped entry silences its outstanding reminder. A person can mute one peptide while continuing to log it. The calendar opens the saved record for correction, and schedule edits carry an effective date. These behaviors can be verified with a test journal. Whether people return and choose to pay still needs observation with prospective users.
+
+## The remaining product question
+
+The everyday loop has three actions: find what is due, record it, and retrieve it later. The longest path is before the first record. Acquisition source, product previews and an optional referral step all come before checkout. The next comparison to run with prospective users is the current setup versus one that gets to the person’s protocol earlier. Keep the same membership offer in both versions. Measure whether people can name their next due date, record the first dose unaided and return on the next scheduled day. Along has no observed retention or conversion data yet.
 
 ## What to watch in the next usability session
 

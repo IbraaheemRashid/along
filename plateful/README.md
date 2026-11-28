@@ -12,7 +12,7 @@ Setup is a peptide-specific onboarding that ends in a direct subscription offer 
 xcrun simctl launch booted dev.along.prototype --setup-step paywall
 ```
 
-The build plan and its current state are in [docs/peptide-tracker-plan.md](docs/peptide-tracker-plan.md).
+See [the iPhone walkthrough](docs/iphone-walkthrough.md) for screenshots and a downloadable simulator build.
 
 ## Dev Lab
 
@@ -20,7 +20,7 @@ In a Debug build, the wrench on the welcome screen (or the Dev Lab bar inside th
 
 ## What is connected
 
-**iOS works locally.** Records are not sent to a server, model or analytics system. Sign in with Apple, Google and email are shown in setup but not connected. Native Superwall/StoreKit billing is implemented but needs App Store Connect products and account configuration. No production deployment, purchase, trial, cloud sync or TestFlight distribution has occurred.
+The default build keeps journal data on the device. You can export, restore or delete it. A configured account build can store a backup for the signed-in user. The automated walkthrough runs checkout against local StoreKit and account operations against local Firebase emulators. Live sign-in, subscription products, billing configuration and signed-device delivery still need release verification.
 
 ## Local commands
 
