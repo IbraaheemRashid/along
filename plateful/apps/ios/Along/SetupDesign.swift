@@ -512,31 +512,45 @@ struct SetupSignInSheet: View {
 }
 
 struct WeekdayPicker: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .subheadline) private var dayWidth: CGFloat = 44
     @Binding var selection: Set<Int>
     var single = false
     var identifier: String
 
     var body: some View {
-        let calendar = Calendar.current
-        HStack(spacing: 4) {
-            ForEach(DayIdentity.weekdays(in: calendar), id: \.self) { day in
-                let selected = selection.contains(day)
-                Button {
-                    if selected { selection.remove(day) }
-                    else if single { selection = [day] }
-                    else { selection.insert(day) }
-                } label: {
-                    Text(calendar.veryShortWeekdaySymbols[day - 1])
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(selected ? SetupTheme.inverseInk : SetupTheme.ink)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(selected ? SetupTheme.ink : SetupTheme.tile, in: Capsule())
-                }
-                .buttonStyle(SetupPressStyle())
-                .accessibilityLabel(calendar.weekdaySymbols[day - 1])
-                .accessibilityAddTraits(selected ? .isSelected : [])
-                .accessibilityIdentifier("\(identifier).\(day)")
+        if typeSize.isAccessibilitySize {
+            VStack(spacing: 4) { dayButtons }
+        } else {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 4) { dayButtons }.fixedSize(horizontal: true, vertical: false)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 4), spacing: 4) { dayButtons }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var dayButtons: some View {
+        let calendar = Calendar.current
+        return ForEach(DayIdentity.weekdays(in: calendar), id: \.self) { day in
+            let selected = selection.contains(day)
+            let title = typeSize.isAccessibilitySize ? calendar.weekdaySymbols[day - 1] : calendar.shortWeekdaySymbols[day - 1]
+            Button {
+                if selected { selection.remove(day) }
+                else if single { selection = [day] }
+                else { selection.insert(day) }
+            } label: {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(selected ? SetupTheme.inverseInk : SetupTheme.ink)
+                    .frame(minWidth: max(44, dayWidth), maxWidth: .infinity, minHeight: 44)
+                    .background(selected ? SetupTheme.ink : SetupTheme.tile, in: Capsule())
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(SetupPressStyle())
+            .accessibilityLabel(calendar.weekdaySymbols[day - 1])
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            .accessibilityIdentifier("\(identifier).\(day)")
         }
     }
 }

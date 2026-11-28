@@ -800,6 +800,24 @@ dialog::backdrop {
     max-height:110px
   }
 }
+
+.setup-path {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border: 1px solid #d4d6cf;
+  border-radius: 13px;
+  background: #fff;
+}
+.setup-path summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 650;
+}
+.chapterhead .setup-path p {
+  margin: 10px 0 0;
+  max-width: 72ch;
+  font-size: 14px;
+}
 </style>
   </head>
   <body>
@@ -1328,7 +1346,13 @@ dialog::backdrop {
           <section class="chapter" id="setup">
             <header class="chapterhead">
               <h2>Setup &amp; membership</h2>
-              <p>Show the person their own schedule before asking them to pay.</p>
+              <p>Preview the person’s own schedule before account and membership.</p>
+              <details class="setup-path">
+                <summary>Compare the two onboarding paths</summary>
+                <p><strong>Set up my tracker.</strong> Confirm you’re 18 or older, then choose a peptide. If you set a schedule, Along shows its days and time before offering reminders. You can add a previous injection or go straight to your schedule preview.</p>
+                <p><strong>Add a peptide later.</strong> From the peptide picker, this opens the empty plan. Along can create the tracker without inventing a schedule, requesting notification permission or adding a dose record.</p>
+                <p><strong>Walk me through Along.</strong> The guided welcome includes the app tour, goals and optional personalisation. Returning drafts resume on the path the person chose.</p>
+              </details>
             </header>
             <div class="grid">
               <article class="card" data-state="Keep">

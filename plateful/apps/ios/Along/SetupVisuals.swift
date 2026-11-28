@@ -210,7 +210,7 @@ struct SetupPlanView<Referral: View>: View {
             SetupCard {
                 Text("Your protocol").font(.headline).foregroundStyle(SetupTheme.ink)
                 if draft.compounds.isEmpty {
-                    Text("Add your first peptide and its schedule in Your peptides whenever you’re ready.")
+                    Text("Open Today and tap Add a peptide to enter your first one.")
                         .font(.subheadline).foregroundStyle(SetupTheme.muted).padding(.top, 8)
                 } else {
                     TimelineView(.periodic(from: .now, by: 60)) { context in
@@ -293,7 +293,8 @@ struct SetupPlanView<Referral: View>: View {
     }
 
     private var headline: String {
-        draft.compounds.isEmpty || draft.compounds.contains { draft.schedule(for: $0).kind == .unscheduled }
+        if draft.compounds.isEmpty { return "Your tracker is ready" }
+        return draft.compounds.contains { draft.schedule(for: $0).kind == .unscheduled }
             ? "Your protocol so far" : "Your protocol is ready"
     }
 
@@ -305,8 +306,11 @@ struct SetupPlanView<Referral: View>: View {
     }
 
     private var summary: String {
-        let peptides = draft.compounds.isEmpty ? "Add peptides any time" : draft.compounds.prefix(3).joined(separator: " + ") + (draft.compounds.count > 3 ? " + \(draft.compounds.count - 3) more" : "")
-        return "\(peptides) · \(draft.frequency?.title ?? "Flexible schedule")"
+        guard !draft.compounds.isEmpty else { return "You can add a peptide when you’re ready." }
+        let names = draft.compounds.prefix(3).joined(separator: " + ")
+        let peptides = draft.compounds.count > 3 ? "\(names) + \(draft.compounds.count - 3) more" : names
+        guard draft.hasScheduledPeptides, let frequency = draft.frequency else { return "\(peptides) · No schedule yet" }
+        return "\(peptides) · \(frequency.title)"
     }
 
     private func answer(for obstacle: SetupObstacle) -> String {

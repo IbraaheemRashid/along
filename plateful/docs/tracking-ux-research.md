@@ -35,6 +35,20 @@ The next-dose card opens the scheduled entry or its future day. Extra doses requ
 
 The everyday loop has three actions: find what is due, record it, and retrieve it later. The longest path is before the first record. Acquisition source, product previews and an optional referral step all come before checkout. The next comparison to run with prospective users is the current setup versus one that gets to the person’s protocol earlier. Keep the same membership offer in both versions. Measure whether people can name their next due date, record the first dose unaided and return on the next scheduled day. Along has no observed retention or conversion data yet.
 
+## First-run setup for iPhone
+
+Apple recommends giving people an early chance to do the task they came for and making extended instruction optional. Apple Health asks people to enter their own schedule, review the details, and skip optional customisation. Pep AI’s published feature list also gives each tracked medication its own schedule and reminder times. These references support getting to a real next date early. They do not report how Along users behave. [Apple onboarding guidance](https://developer.apple.com/design/human-interface-guidelines/onboarding) · [Apple Health medication setup](https://support.apple.com/en-us/105064) · [Pep AI](https://apps.apple.com/us/app/pep-ai-glp-1-tracker-app/id6758682710)
+
+Along’s earlier flow always asked how someone heard about the app. Even someone who chose to add their first peptide later had to pick a frequency and visit a dose-time screen. The reminders illustration looked like a permission alert and its “Don’t Allow” text did nothing. The final schedule was already available while a timed loading animation played.
+
+**Set up my tracker** takes a new user through adult confirmation, the peptides they want to track, and the timing they actually know. Someone with a weekly schedule sees their selected day, an optional reminder, an optional previous injection and then the schedule preview. Someone with no peptide goes directly from the selection screen to the empty plan. **Walk me through Along** keeps the guided introduction and personalisation. Both routes reach the existing account and membership screens after preview.
+
+Flo’s iOS pill log places “Set up reminders” underneath the pill group. A later screen in the flow shows the pill and time together on Today. That placement makes the reminder’s purpose clear. [Flo’s pill reminder flow on Mobbin](https://mobbin.com/flows/1cc0ba40-e029-47a6-afae-5df7bdcdc67a?tab=screens)
+
+The reminder decision now shows the person's own schedule. Only an explicit opt-in can request iOS permission. New users can confirm they are adults without providing a date of birth. [Apple notification-permission guidance](https://developer.apple.com/documentation/usernotifications/asking-permission-to-use-notifications) · [Apple privacy guidance](https://developer.apple.com/design/human-interface-guidelines/privacy)
+
+For a first-time usability check, give a participant a fictional weekly schedule. Ask them to set it up, decline reminders and say their next scheduled date aloud before checkout. Give a second participant no schedule and see whether they can defer it without inventing a day. Record wrong dates, requests for help and any moment someone believes they have subscribed. Completing automated tests confirms navigation and saved state. Unaided task completion still needs to be observed.
+
 ## What to watch in the next usability session
 
 Give each participant a fictional protocol with a weekly day different from the signup day. Ask them to predict the next date before continuing, log a dose at a different time from its schedule, then find yesterday’s entry without writing a note. Also show an off day and ask what Along expects them to do. Record where they hesitate, take a wrong turn or need help. Successful unaided retrieval and correct interpretation of the next date are better tests of this change than how many screens they visited.

@@ -4,7 +4,13 @@ Along helps someone following their own protocol answer three questions: what’
 
 ## 1. Choose a schedule
 
-Add the peptide you want to track and enter your own days and times. The plan shows the next scheduled occurrence before checkout. You can leave a peptide unscheduled or opt out of reminders.
+Choose **Set up my tracker** for the short route. Confirm you’re 18 or older and select the peptide you want to track. **Walk me through Along** opens the longer guided introduction. New users can take either route without entering their date of birth.
+
+| What you know today | What Along shows before checkout |
+| --- | --- |
+| Your peptide, day and time | Your schedule, optional reminders, an optional previous injection, and the next scheduled occurrence. |
+| Your peptide only | Choose **Set my schedule later**. You can still record a previous injection. The plan has no due time. |
+| You’ll add a peptide later | **Add a peptide later** opens the empty plan. Once you enter Today, **Add a peptide** starts the first entry. |
 
 <img src="screenshots/walkthrough/setup-plan.png" width="270" alt="The setup plan showing the schedule before checkout">
 
